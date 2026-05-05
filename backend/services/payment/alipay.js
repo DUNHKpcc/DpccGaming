@@ -11,6 +11,12 @@ const escapeHtml = (value = '') => String(value)
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;');
 
+const appendQueryParams = (url = '', params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  if (!query) return url;
+  return `${url}${String(url).includes('?') ? '&' : '?'}${query}`;
+};
+
 const formatAlipayTimestamp = (date = new Date()) => {
   const pad = (value) => String(value).padStart(2, '0');
   return [
@@ -72,6 +78,17 @@ const buildAlipayPagePayForm = ({ config = {}, order = {} } = {}) => {
     throw new Error('支付宝网关未配置');
   }
 
+  const bizContent = {
+    out_trade_no: order.orderNo,
+    product_code: 'FAST_INSTANT_TRADE_PAY',
+    total_amount: order.amount,
+    subject: order.subject,
+    body: order.body
+  };
+  if (order.expiresInMinutes) {
+    bizContent.timeout_express = `${Number(order.expiresInMinutes)}m`;
+  }
+
   const params = {
     app_id: config.appId,
     method: ALIPAY_PAGE_PAY_METHOD,
@@ -82,25 +99,21 @@ const buildAlipayPagePayForm = ({ config = {}, order = {} } = {}) => {
     version: '1.0',
     return_url: config.returnUrl,
     notify_url: config.notifyUrl,
-    biz_content: JSON.stringify({
-      out_trade_no: order.orderNo,
-      product_code: 'FAST_INSTANT_TRADE_PAY',
-      total_amount: order.amount,
-      subject: order.subject,
-      body: order.body
-    })
+    biz_content: JSON.stringify(bizContent)
   };
 
   params.sign = signParams(params, config.privateKey);
 
   const inputs = Object.keys(params)
+    .filter((key) => key !== 'charset')
     .map((key) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(params[key])}">`)
     .join('');
+  const actionUrl = appendQueryParams(config.gatewayUrl, { charset: ALIPAY_CHARSET });
 
   return [
     '<!doctype html><html><head><meta charset="utf-8"><title>Alipay Redirect</title></head>',
     '<body>',
-    `<form id="alipay-submit-form" action="${escapeHtml(config.gatewayUrl)}" method="post">${inputs}</form>`,
+    `<form id="alipay-submit-form" action="${escapeHtml(actionUrl)}" method="post" accept-charset="${ALIPAY_CHARSET}">${inputs}</form>`,
     '<script>document.getElementById("alipay-submit-form").submit();</script>',
     '</body></html>'
   ].join('');
