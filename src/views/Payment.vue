@@ -6,7 +6,7 @@
           <img src="/favicon.png" alt="DPCC API" class="payment-logo" />
           <div>
             <h1>DPCC API</h1>
-            <p class="payment-kicker">月卡充值中心</p>
+            <p class="payment-kicker">{{ pageKicker }}</p>
           </div>
         </div>
 
@@ -23,13 +23,34 @@
         <section class="plan-area" aria-labelledby="payment-title">
           <div class="section-heading">
             <div>
-              <h2 id="payment-title">选择支付款项</h2>
-              <p>金额、到账额度和订单号由服务端创建并签名，前端只负责确认和跳转。</p>
+              <h2 id="payment-title">{{ paymentTitle }}</h2>
+              <p>{{ paymentDescription }}</p>
             </div>
-            <span class="lock-pill">订单已锁价 05:00</span>
+            <span class="lock-pill" :class="{ expired: isOrderLockExpired }">{{ lockPillText }}</span>
           </div>
 
-          <div class="plan-grid">
+          <div class="product-switch" role="tablist" aria-label="支付类型">
+            <button
+              type="button"
+              :class="{ active: productMode === 'subscription' }"
+              :aria-selected="productMode === 'subscription'"
+              role="tab"
+              @click="selectProductMode('subscription')"
+            >
+              月卡订阅
+            </button>
+            <button
+              type="button"
+              :class="{ active: productMode === 'recharge' }"
+              :aria-selected="productMode === 'recharge'"
+              role="tab"
+              @click="selectProductMode('recharge')"
+            >
+              额度充值
+            </button>
+          </div>
+
+          <div v-if="isSubscriptionMode" class="plan-grid">
             <button
               v-for="plan in plans"
               :key="plan.id"
@@ -50,8 +71,30 @@
             </button>
           </div>
 
+          <div v-else class="recharge-scroller">
+            <div class="recharge-scroll-hint">向右滑动查看更多额度</div>
+            <div class="plan-grid recharge-grid" aria-label="额度充值规格，可横向滚动">
+              <button
+                v-for="pack in rechargePackages"
+                :key="pack.id"
+                type="button"
+                class="plan-card"
+                :class="{ selected: pack.id === selectedRechargePackageId }"
+                :aria-pressed="pack.id === selectedRechargePackageId"
+                @click="selectRechargePackage(pack.id)"
+              >
+                <span class="plan-name">{{ pack.name }}</span>
+                <strong>{{ pack.priceText }}</strong>
+                <span class="daily-quota">{{ pack.quotaText }}</span>
+                <span class="plan-divider"></span>
+                <span class="plan-feature">✅到账余额 · ⚡调用扣费</span>
+                <span class="plan-feature">🔒服务端锁定金额和额度</span>
+              </button>
+            </div>
+          </div>
+
           <div class="payment-config">
-            <section class="config-panel" aria-labelledby="duration-title">
+            <section v-if="isSubscriptionMode" class="config-panel" aria-labelledby="duration-title">
               <h3 id="duration-title">开通周期</h3>
               <div class="duration-options">
                 <button
@@ -59,7 +102,7 @@
                   :key="duration.id"
                   type="button"
                   :class="{ active: duration.id === selectedDurationId }"
-                  @click="selectedDurationId = duration.id"
+                  @click="selectDuration(duration.id)"
                 >
                   {{ duration.label }}
                 </button>
@@ -106,7 +149,7 @@
           <section class="amount-box">
             <span>支付宝应付金额</span>
             <strong>{{ orderAmountText }}</strong>
-            <p>{{ selectedPlan.name }} · {{ selectedDuration.label }} · {{ selectedPlan.dailyQuota }}</p>
+            <p>{{ orderSummaryText }}</p>
           </section>
 
           <section class="order-details">
@@ -114,11 +157,15 @@
             <dl>
               <div>
                 <dt>商品</dt>
-                <dd>{{ selectedPlan.name }}</dd>
+                <dd>{{ selectedProductName }}</dd>
               </div>
-              <div>
+              <div v-if="isSubscriptionMode">
                 <dt>周期</dt>
                 <dd>{{ selectedDuration.label }}</dd>
+              </div>
+              <div v-else>
+                <dt>到账</dt>
+                <dd>{{ selectedRechargePackage.quotaText }}</dd>
               </div>
               <div>
                 <dt>订单</dt>
@@ -139,7 +186,7 @@
           <button
             type="button"
             class="pay-button"
-            :disabled="isCreatingOrder || !selectedPlan.id || !selectedDuration.id"
+            :disabled="isPayDisabled"
             @click="redirectToAlipay"
           >
             {{ isCreatingOrder ? '正在创建订单...' : `跳转支付宝支付 ${orderAmountText}` }}
@@ -152,36 +199,45 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { apiCall } from '../utils/api'
+
+const ORDER_LOCK_SECONDS = 5 * 60
 
 const planPresentation = {
   bronze: {
-    features: ['适合轻量试用', '每日凌晨自动发放', '额度用完后按余额扣费']
+    features: ['✅适合轻量试用', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费','💰月等值150$']
   },
   gold: {
     recommended: true,
-    features: ['多数用户选择', '支付后自动发放', '订单金额不可被前端改写']
+    features: ['✅适合日常编码', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费','💰月等值450$']
   },
   platinum: {
-    features: ['高频调用与团队共享', 'VIP 支付通道', '到账状态实时回写']
+    features: ['✅适合高频调用', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费','💰月等值1500$']
   }
 }
 
 const formatMoney = (amount) => `¥${Number(amount || 0).toFixed(2)}`
 const formatQuota = (quota) => `每日 $${Number(quota || 0).toFixed(0)} 免费额度`
+const formatRechargeQuota = (quota) => `到账 $${Number(quota || 0).toFixed(0)} 普通额度`
 
+const productMode = ref('subscription')
 const plans = ref([])
 const durations = ref([])
+const rechargePackages = ref([])
 const paymentError = ref('')
 const isCreatingOrder = ref(false)
+const orderExpiresAt = ref('')
+const countdownNow = ref(Date.now())
+let countdownTimerId = null
 const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度' }
 const emptyDuration = { label: '加载中', months: 1 }
+const emptyRechargePackage = { name: '加载中', price: 0, quotaText: '正在加载额度' }
 
 const securitySteps = [
   { title: '1 创建订单', description: '服务端生成订单号与签名' },
   { title: '2 跳转支付宝', description: '仅提交签名后的支付令牌' },
-  { title: '3 到账回写', description: '异步通知校验后发放额度' }
+  { title: '3 到账回写', description: '异步通知校验后发放CDK' }
 ]
 
 const checklist = [
@@ -193,16 +249,102 @@ const checklist = [
 
 const selectedPlanId = ref('gold')
 const selectedDurationId = ref('1m')
+const selectedRechargePackageId = ref('usd-6')
+
+const selectProductMode = (mode) => {
+  productMode.value = mode
+  paymentError.value = ''
+  clearOrderLock()
+}
 
 const selectPlan = (planId) => {
   selectedPlanId.value = planId
+  clearOrderLock()
 }
 
+const selectDuration = (durationId) => {
+  selectedDurationId.value = durationId
+  clearOrderLock()
+}
+
+const selectRechargePackage = (packageId) => {
+  selectedRechargePackageId.value = packageId
+  clearOrderLock()
+}
+
+const isSubscriptionMode = computed(() => productMode.value === 'subscription')
 const selectedPlan = computed(() => plans.value.find((plan) => plan.id === selectedPlanId.value) || plans.value[0] || emptyPlan)
 const selectedDuration = computed(() => durations.value.find((duration) => duration.id === selectedDurationId.value) || durations.value[0] || emptyDuration)
-const orderAmount = computed(() => Number(selectedPlan.value.price || 0) * Number(selectedDuration.value.months || 1))
+const selectedRechargePackage = computed(() => (
+  rechargePackages.value.find((pack) => pack.id === selectedRechargePackageId.value) || rechargePackages.value[0] || emptyRechargePackage
+))
+const pageKicker = computed(() => (isSubscriptionMode.value ? '月卡充值中心' : '普通额度充值中心'))
+const paymentTitle = computed(() => (isSubscriptionMode.value ? '选择月卡款项' : '选择充值额度'))
+const paymentDescription = computed(() => (
+  isSubscriptionMode.value
+    ? '月卡不支持退款，所有月卡用户均享受VIP渠道，PRO号池，最快的响应速度'
+    : '普通额度一次性到账，按实际调用消耗，不改变当前月卡订阅状态'
+))
+const orderAmount = computed(() => (
+  isSubscriptionMode.value
+    ? Number(selectedPlan.value.price || 0) * Number(selectedDuration.value.months || 1)
+    : Number(selectedRechargePackage.value.price || 0)
+))
 const orderAmountText = computed(() => formatMoney(orderAmount.value))
+const selectedProductName = computed(() => (isSubscriptionMode.value ? selectedPlan.value.name : selectedRechargePackage.value.name))
+const orderSummaryText = computed(() => (
+  isSubscriptionMode.value
+    ? `${selectedPlan.value.name} · ${selectedDuration.value.label} · ${selectedPlan.value.dailyQuota}`
+    : `${selectedRechargePackage.value.name} · ${selectedRechargePackage.value.quotaText}`
+))
 const orderId = computed(() => `服务端创建后锁定`)
+const isPayDisabled = computed(() => (
+  isCreatingOrder.value
+  || (isSubscriptionMode.value && (!selectedPlan.value.id || !selectedDuration.value.id))
+  || (!isSubscriptionMode.value && !selectedRechargePackage.value.id)
+))
+const orderLockRemainingMs = computed(() => {
+  if (!orderExpiresAt.value) return ORDER_LOCK_SECONDS * 1000
+  const expiresAt = new Date(orderExpiresAt.value).getTime()
+  if (!Number.isFinite(expiresAt)) return 0
+  return Math.max(0, expiresAt - countdownNow.value)
+})
+const orderLockCountdownText = computed(() => {
+  const totalSeconds = Math.ceil(orderLockRemainingMs.value / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+})
+const isOrderLockExpired = computed(() => Boolean(orderExpiresAt.value) && orderLockRemainingMs.value <= 0)
+const lockPillText = computed(() => {
+  if (!orderExpiresAt.value) return `下单后锁价 ${orderLockCountdownText.value}`
+  if (isOrderLockExpired.value) return '订单锁价已过期'
+  return `订单已锁价 ${orderLockCountdownText.value}`
+})
+
+const stopCountdown = () => {
+  if (countdownTimerId) {
+    window.clearInterval(countdownTimerId)
+    countdownTimerId = null
+  }
+}
+
+const startCountdown = () => {
+  stopCountdown()
+  countdownNow.value = Date.now()
+  countdownTimerId = window.setInterval(() => {
+    countdownNow.value = Date.now()
+    if (orderLockRemainingMs.value <= 0) {
+      stopCountdown()
+    }
+  }, 1000)
+}
+
+const clearOrderLock = () => {
+  orderExpiresAt.value = ''
+  countdownNow.value = Date.now()
+  stopCountdown()
+}
 
 const loadPaymentCatalog = async () => {
   try {
@@ -218,6 +360,11 @@ const loadPaymentCatalog = async () => {
       features: planPresentation[plan.id]?.features || []
     }))
     durations.value = catalog.durations || []
+    rechargePackages.value = (catalog.rechargePackages || []).map((pack) => ({
+      ...pack,
+      priceText: formatMoney(pack.price),
+      quotaText: formatRechargeQuota(pack.quotaUsd)
+    }))
   } catch (error) {
     paymentError.value = error.message || '支付款项加载失败'
   }
@@ -243,11 +390,24 @@ const redirectToAlipay = async () => {
   try {
     const result = await apiCall('/payments/alipay/orders', {
       method: 'POST',
-      body: JSON.stringify({
-        planId: selectedPlanId.value,
-        durationId: selectedDurationId.value
-      })
+      body: JSON.stringify(isSubscriptionMode.value
+        ? {
+            productType: 'subscription',
+            planId: selectedPlanId.value,
+            durationId: selectedDurationId.value
+          }
+        : {
+            productType: 'recharge',
+            rechargePackageId: selectedRechargePackageId.value
+          })
     })
+    if (result.expiresAt) {
+      orderExpiresAt.value = result.expiresAt
+      startCountdown()
+    }
+    if (result.orderNo) {
+      sessionStorage.setItem('lastPaymentOrderNo', result.orderNo)
+    }
     submitAlipayForm(result.formHtml)
   } catch (error) {
     paymentError.value = error.message || '创建支付订单失败'
@@ -256,14 +416,19 @@ const redirectToAlipay = async () => {
 }
 
 onMounted(loadPaymentCatalog)
+onBeforeUnmount(stopCountdown)
 </script>
 
 <style scoped>
 .payment-page {
-  min-height: calc(100vh - 4rem);
+  width: 100%;
+  max-width: 100%;
+  height: calc(100vh - 4rem);
+  overflow: hidden;
+  box-sizing: border-box;
   background: var(--bg-primary);
   color: var(--text-primary);
-  padding: 4rem 2.5rem 2.5rem;
+  padding: 2.75rem 2.5rem 0;
 }
 
 :global([data-theme="light"]) .payment-page {
@@ -272,7 +437,13 @@ onMounted(loadPaymentCatalog)
 
 .payment-shell {
   width: min(1280px, 100%);
+  max-width: 100%;
+  height: 100%;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  transform: translateX(1.5rem);
 }
 
 .payment-header,
@@ -280,6 +451,7 @@ onMounted(loadPaymentCatalog)
 .payment-header-actions,
 .payment-brand,
 .payment-config,
+.product-switch,
 .section-heading,
 .flow-heading,
 .order-head,
@@ -292,7 +464,8 @@ onMounted(loadPaymentCatalog)
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
-  margin-bottom: 2rem;
+  flex: 0 0 auto;
+  margin-bottom: 1rem;
 }
 
 .payment-brand,
@@ -371,6 +544,7 @@ onMounted(loadPaymentCatalog)
 }
 
 .duration-options button,
+.product-switch button,
 .plan-card,
 .method-tile,
 .pay-button {
@@ -390,25 +564,63 @@ onMounted(loadPaymentCatalog)
   color: var(--bg-primary);
 }
 
+.product-switch {
+  width: fit-content;
+  max-width: 100%;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+  padding: 0.3rem;
+}
+
+.product-switch button {
+  min-width: 7rem;
+  min-height: 2.55rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-weight: 900;
+}
+
+.product-switch button.active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
 .payment-workspace {
   align-items: stretch;
   gap: 1.5rem;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .plan-area {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  width: 0;
+  max-width: 100%;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .section-heading {
   align-items: end;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  flex: 0 0 auto;
+  margin-bottom: 0.85rem;
 }
 
 .section-heading h2 {
-  font-size: clamp(1.8rem, 3vw, 2.35rem);
+  font-size: clamp(1.55rem, 2.4vw, 2rem);
   line-height: 1.08;
 }
 
@@ -419,7 +631,7 @@ onMounted(loadPaymentCatalog)
 
 .section-heading p {
   max-width: 42rem;
-  margin: 0.5rem 0 0;
+  margin: 0.35rem 0 0;
   font-weight: 700;
 }
 
@@ -433,6 +645,11 @@ onMounted(loadPaymentCatalog)
   font-weight: 800;
 }
 
+.lock-pill.expired {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
 .plan-grid,
 .duration-options,
 .flow-steps {
@@ -442,7 +659,38 @@ onMounted(loadPaymentCatalog)
 .plan-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
-  margin-bottom: 1rem;
+  flex: 0 0 auto;
+  margin-bottom: 0.85rem;
+}
+
+.recharge-scroller {
+  flex: 0 0 auto;
+}
+
+.recharge-scroll-hint {
+  margin: -0.2rem 0 0.45rem;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.recharge-grid {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  gap: 1rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 0 0.55rem;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.recharge-grid::-webkit-scrollbar {
+  display: none;
 }
 
 .plan-card {
@@ -450,7 +698,7 @@ onMounted(loadPaymentCatalog)
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-height: 18.25rem;
+  min-height: 19rem;
   padding: 1.875rem 1.5rem 1.5rem;
   border: 1px solid var(--border-primary);
   border-radius: 0.5rem;
@@ -458,6 +706,11 @@ onMounted(loadPaymentCatalog)
   color: var(--text-primary);
   text-align: left;
   transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.recharge-grid .plan-card {
+  flex: 0 0 calc((100% - 2rem) / 3);
+  scroll-snap-align: start;
 }
 
 .plan-card.selected {
@@ -529,7 +782,8 @@ onMounted(loadPaymentCatalog)
 
 .payment-config {
   gap: 1rem;
-  margin-bottom: 1rem;
+  flex: 0 0 auto;
+  margin-bottom: 0.85rem;
 }
 
 .config-panel,
@@ -542,7 +796,7 @@ onMounted(loadPaymentCatalog)
 
 .config-panel {
   flex: 1 1 0;
-  padding: 1.125rem;
+  padding: 0.95rem 1rem;
 }
 
 .config-panel h3,
@@ -554,11 +808,11 @@ onMounted(loadPaymentCatalog)
 .duration-options {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.625rem;
-  margin-top: 0.875rem;
+  margin-top: 0.65rem;
 }
 
 .duration-options button {
-  min-height: 3.4rem;
+  min-height: 3rem;
   border-radius: 0.5rem;
   border: 1px solid var(--border-primary);
   background: var(--bg-tertiary);
@@ -568,7 +822,7 @@ onMounted(loadPaymentCatalog)
 .payment-method-icons {
   align-items: center;
   gap: 1.15rem;
-  margin-top: 0.875rem;
+  margin-top: 0.65rem;
 }
 
 .method-tile {
@@ -611,7 +865,8 @@ onMounted(loadPaymentCatalog)
 }
 
 .security-flow {
-  padding: 1.125rem;
+  flex: 0 0 auto;
+  padding: 0.95rem 1rem;
 }
 
 .flow-heading,
@@ -631,11 +886,11 @@ onMounted(loadPaymentCatalog)
 .flow-steps {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
-  margin-top: 0.875rem;
+  margin-top: 0.65rem;
 }
 
 .flow-step {
-  min-height: 4.6rem;
+  min-height: 3.85rem;
   border-radius: 0.5rem;
   background: var(--bg-tertiary);
   padding: 0.8rem;
@@ -658,15 +913,17 @@ onMounted(loadPaymentCatalog)
   flex: 0 0 24.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1.5rem 1.5rem 0.8125rem;
+  gap: 0.85rem;
+  min-height: 0;
+  overflow: hidden;
+  padding: 1.25rem;
 }
 
 .amount-box,
 .security-checklist {
   background: var(--bg-tertiary);
   border-radius: 0.5rem;
-  padding: 1.125rem;
+  padding: 1rem;
 }
 
 .amount-box {
@@ -685,14 +942,14 @@ onMounted(loadPaymentCatalog)
 
 .amount-box strong {
   display: block;
-  margin-top: 0.45rem;
-  font-size: 3rem;
+  margin-top: 0.35rem;
+  font-size: clamp(2.25rem, 4vw, 2.8rem);
   line-height: 1;
 }
 
 .amount-box p,
 .security-checklist p {
-  margin: 0.65rem 0 0;
+  margin: 0.45rem 0 0;
   color: var(--text-secondary);
   font-weight: 700;
   line-height: 1.5;
@@ -701,13 +958,13 @@ onMounted(loadPaymentCatalog)
 .order-details {
   border: 1px solid var(--border-primary);
   border-radius: 0.5rem;
-  padding: 1rem;
+  padding: 0.95rem 1rem;
 }
 
 .order-details dl {
   display: grid;
   gap: 0.55rem;
-  margin: 0.85rem 0 0;
+  margin: 0.65rem 0 0;
 }
 
 .order-details dl > div {
@@ -730,7 +987,7 @@ onMounted(loadPaymentCatalog)
 }
 
 .security-checklist h3 {
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.5rem;
 }
 
 .security-checklist p {
@@ -738,7 +995,7 @@ onMounted(loadPaymentCatalog)
 }
 
 .pay-button {
-  min-height: 3.65rem;
+  min-height: 3.35rem;
   border: 0;
   border-radius: 0.5rem;
   background: var(--text-primary);
@@ -760,7 +1017,7 @@ onMounted(loadPaymentCatalog)
   line-height: 1.45;
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 860px) {
   .payment-page {
     padding: 3rem 1.5rem 1.5rem;
   }
@@ -797,6 +1054,10 @@ onMounted(loadPaymentCatalog)
 
   .plan-card {
     min-height: 0;
+  }
+
+  .recharge-grid .plan-card {
+    flex-basis: 100%;
   }
 }
 </style>

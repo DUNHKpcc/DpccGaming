@@ -8,11 +8,13 @@ const Account = () => import('../views/Account.vue')
 const AdminPanel = () => import('../components/AdminPanel.vue')
 const UserManagement = () => import('../components/UserManagement.vue')
 const GameManagement = () => import('../components/GameManagement.vue')
+const RedeemCodeManagement = () => import('../components/RedeemCodeManagement.vue')
 const CodingMode = () => import('../views/CodingMode.vue')
 const DocsPlaceholder = () => import('../views/DocsPlaceholder.vue')
 const DiscussionMode = () => import('../views/DiscussionMode.vue')
 const CookiePolicy = () => import('../views/CookiePolicy.vue')
 const Payment = () => import('../views/Payment.vue')
+const PaymentResult = () => import('../views/PaymentResult.vue')
 
 const routes = [
   {
@@ -60,6 +62,12 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true, hideSidebar: true, hideTopbar: true, hideOverlays: true }
   },
   {
+    path: '/admin/redeem-codes',
+    name: 'RedeemCodeManagement',
+    component: RedeemCodeManagement,
+    meta: { requiresAuth: true, requiresAdmin: true, hideSidebar: true, hideTopbar: true, hideOverlays: true }
+  },
+  {
     path: '/coding/:id',
     name: 'CodingMode',
     component: CodingMode,
@@ -92,6 +100,11 @@ const routes = [
     path: '/payment',
     name: 'Payment',
     component: Payment
+  },
+  {
+    path: '/payment/result',
+    name: 'PaymentResult',
+    component: PaymentResult
   },
   {
     path: '/:pathMatch(.*)*',

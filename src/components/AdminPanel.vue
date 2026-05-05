@@ -14,6 +14,10 @@
                 class="bg-green-500/90 hover:bg-green-500 backdrop-blur-sm border border-green-400/30 text-white px-4 py-2 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl">
                 <i class="fa fa-gamepad mr-2"></i>游戏管理
               </router-link>
+              <router-link to="/admin/redeem-codes"
+                class="bg-purple-500/90 hover:bg-purple-500 backdrop-blur-sm border border-purple-400/30 text-white px-4 py-2 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl">
+                <i class="fa fa-ticket mr-2"></i>兑换码管理
+              </router-link>
               <button @click="refreshPendingGames" 
                 class="bg-primary/90 hover:bg-primary backdrop-blur-sm border border-primary/30 text-white px-4 py-2 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl">
                 <i class="fa fa-refresh mr-2"></i>刷新
