@@ -5,6 +5,7 @@ const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
 router.get('/catalog', paymentController.getPaymentCatalog);
+router.get('/orders/:orderNo', authenticateToken, paymentController.getPaymentOrderResult);
 router.post('/alipay/orders', authenticateToken, paymentController.createAlipayOrder);
 router.post('/alipay/notify', paymentController.handleAlipayNotify);
 

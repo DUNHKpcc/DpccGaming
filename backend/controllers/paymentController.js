@@ -8,8 +8,10 @@ const createAlipayOrder = async (req, res) => {
   try {
     const result = await paymentService.createAlipayOrder({
       userId: req.user.userId,
+      productType: req.body?.productType,
       planId: req.body?.planId,
-      durationId: req.body?.durationId
+      durationId: req.body?.durationId,
+      rechargePackageId: req.body?.rechargePackageId
     });
 
     res.json(result);
@@ -17,6 +19,21 @@ const createAlipayOrder = async (req, res) => {
     console.error('创建支付宝订单失败:', error);
     res.status(error.statusCode || 500).json({
       message: error.message || '创建支付订单失败'
+    });
+  }
+};
+
+const getPaymentOrderResult = async (req, res) => {
+  try {
+    const result = await paymentService.getPaymentOrderResult({
+      userId: req.user.userId,
+      orderNo: req.params.orderNo
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      message: error.message || '查询支付结果失败'
     });
   }
 };
@@ -34,5 +51,6 @@ const handleAlipayNotify = async (req, res) => {
 module.exports = {
   getPaymentCatalog,
   createAlipayOrder,
+  getPaymentOrderResult,
   handleAlipayNotify
 };
