@@ -3,6 +3,7 @@ const router = express.Router();
 
 const adminGameController = require('../controllers/adminGameController');
 const adminUserController = require('../controllers/adminUserController');
+const adminRedeemCodeController = require('../controllers/adminRedeemCodeController');
 const { authenticateToken, checkAdminPermission } = require('../middleware/auth');
 
 router.post('/games/:gameId/review', authenticateToken, checkAdminPermission, adminGameController.reviewGame);
@@ -15,5 +16,9 @@ router.get('/users', authenticateToken, checkAdminPermission, adminUserControlle
 router.post('/users/:userId/role', authenticateToken, checkAdminPermission, adminUserController.updateUserRole);
 router.post('/users/:userId/ban', authenticateToken, checkAdminPermission, adminUserController.toggleUserBan);
 router.delete('/users/:userId/delete', authenticateToken, checkAdminPermission, adminUserController.deleteUser);
+
+router.get('/redeem-codes/catalog', authenticateToken, checkAdminPermission, adminRedeemCodeController.getRedeemCodeCatalog);
+router.get('/redeem-codes', authenticateToken, checkAdminPermission, adminRedeemCodeController.listRedeemCodes);
+router.post('/redeem-codes/import', authenticateToken, checkAdminPermission, adminRedeemCodeController.importRedeemCodes);
 
 module.exports = router;
