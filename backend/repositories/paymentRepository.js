@@ -111,6 +111,11 @@ const ensurePaymentTables = async (pool) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
           throw error;
         });
+      await pool.execute('ALTER TABLE payment_orders ADD COLUMN api_username VARCHAR(96) DEFAULT NULL AFTER support_note')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
     })().catch((error) => {
       paymentTablesInitPromise = null;
       throw error;
@@ -280,6 +285,22 @@ const updatePaymentOrderFulfillment = async (executor, payload = {}) => executor
   ]
 );
 
+const updatePaymentOrderApiUsername = async (executor, payload = {}) => executor.execute(
+  `
+    UPDATE payment_orders
+    SET api_username = ?,
+        fulfillment_status = 'username_submitted'
+    WHERE order_no = ? AND user_id = ? AND status = 'paid'
+      AND api_username IS NULL
+      AND fulfillment_status = 'username_required'
+  `,
+  [
+    payload.apiUsername,
+    payload.orderNo,
+    payload.userId
+  ]
+);
+
 const createRedeemCode = async (executor, payload = {}) => executor.execute(
   `
     INSERT IGNORE INTO redeem_codes
@@ -342,6 +363,7 @@ module.exports = {
   addUserBalance,
   assignRedeemCodeToOrder,
   updatePaymentOrderFulfillment,
+  updatePaymentOrderApiUsername,
   createRedeemCode,
   listRedeemCodes,
   getRedeemCodeStats

@@ -423,12 +423,14 @@ onBeforeUnmount(stopCountdown)
 .payment-page {
   width: 100%;
   max-width: 100%;
-  height: calc(100vh - 4rem);
-  overflow: hidden;
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100svh - 4rem);
+  overflow-x: hidden;
+  overflow-y: auto;
   box-sizing: border-box;
   background: var(--bg-primary);
   color: var(--text-primary);
-  padding: 2.75rem 2.5rem 0;
+  padding: clamp(1rem, 3vh, 2.75rem) clamp(1rem, 3vw, 2.5rem) clamp(1.25rem, 3vh, 2.5rem);
 }
 
 :global([data-theme="light"]) .payment-page {
@@ -438,12 +440,11 @@ onBeforeUnmount(stopCountdown)
 .payment-shell {
   width: min(1280px, 100%);
   max-width: 100%;
-  height: 100%;
+  min-height: 100%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  transform: translateX(1.5rem);
 }
 
 .payment-header,
@@ -465,7 +466,7 @@ onBeforeUnmount(stopCountdown)
   justify-content: space-between;
   gap: 1.5rem;
   flex: 0 0 auto;
-  margin-bottom: 1rem;
+  margin-bottom: clamp(0.75rem, 1.8vh, 1rem);
 }
 
 .payment-brand,
@@ -592,11 +593,11 @@ onBeforeUnmount(stopCountdown)
 
 .payment-workspace {
   align-items: stretch;
-  gap: 1.5rem;
-  flex: 0 0 auto;
+  gap: clamp(1rem, 2vw, 1.5rem);
+  flex: 1 1 auto;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
   min-height: 0;
 }
 
@@ -608,7 +609,7 @@ onBeforeUnmount(stopCountdown)
   max-width: 100%;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .section-heading {
@@ -698,8 +699,8 @@ onBeforeUnmount(stopCountdown)
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-height: 19rem;
-  padding: 1.875rem 1.5rem 1.5rem;
+  min-height: clamp(15.75rem, 34vh, 19rem);
+  padding: clamp(1.25rem, 2.5vh, 1.875rem) clamp(1rem, 2vw, 1.5rem) clamp(1rem, 2vh, 1.5rem);
   border: 1px solid var(--border-primary);
   border-radius: 0.5rem;
   background: var(--bg-secondary);
@@ -756,7 +757,7 @@ onBeforeUnmount(stopCountdown)
 
 .plan-card strong {
   margin-top: 0.7rem;
-  font-size: clamp(2.1rem, 4vw, 2.75rem);
+  font-size: clamp(1.95rem, 3.6vw, 2.75rem);
   line-height: 1;
 }
 
@@ -910,13 +911,13 @@ onBeforeUnmount(stopCountdown)
 }
 
 .order-panel {
-  flex: 0 0 24.5rem;
+  flex: 0 0 clamp(20.5rem, 31vw, 24.5rem);
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   min-height: 0;
-  overflow: hidden;
-  padding: 1.25rem;
+  overflow: visible;
+  padding: clamp(1rem, 2vw, 1.25rem);
 }
 
 .amount-box,
@@ -943,7 +944,7 @@ onBeforeUnmount(stopCountdown)
 .amount-box strong {
   display: block;
   margin-top: 0.35rem;
-  font-size: clamp(2.25rem, 4vw, 2.8rem);
+  font-size: clamp(2rem, 3.6vw, 2.8rem);
   line-height: 1;
 }
 
@@ -1019,11 +1020,16 @@ onBeforeUnmount(stopCountdown)
 
 @media (max-width: 860px) {
   .payment-page {
-    padding: 3rem 1.5rem 1.5rem;
+    padding: 1.5rem;
   }
 
   .payment-workspace {
     flex-direction: column;
+  }
+
+  .plan-area {
+    flex: 0 0 auto;
+    width: 100%;
   }
 
   .order-panel {
@@ -1031,9 +1037,60 @@ onBeforeUnmount(stopCountdown)
   }
 }
 
+@media (max-height: 760px) and (min-width: 861px) {
+  .payment-page {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .payment-logo {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .payment-brand h1 {
+    font-size: 1.45rem;
+  }
+
+  .section-heading p,
+  .security-checklist {
+    display: none;
+  }
+
+  .plan-grid,
+  .payment-config {
+    gap: 0.75rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .plan-card {
+    min-height: 13.25rem;
+  }
+
+  .plan-divider {
+    margin: 0.75rem 0;
+  }
+
+  .security-flow,
+  .config-panel,
+  .order-details,
+  .amount-box {
+    padding: 0.8rem;
+  }
+
+  .flow-step {
+    min-height: 3.2rem;
+    padding: 0.65rem;
+  }
+
+  .order-panel {
+    gap: 0.65rem;
+  }
+}
+
 @media (max-width: 760px) {
   .payment-page {
-    padding: 2rem 1rem 1rem;
+    padding: 1rem;
   }
 
   .payment-header,
@@ -1047,8 +1104,26 @@ onBeforeUnmount(stopCountdown)
     justify-content: flex-start;
   }
 
+  .payment-secure-pill {
+    width: 100%;
+    justify-content: center;
+  }
+
   .plan-grid,
   .flow-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .product-switch {
+    width: 100%;
+  }
+
+  .product-switch button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .duration-options {
     grid-template-columns: 1fr;
   }
 

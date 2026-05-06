@@ -19,6 +19,7 @@ const PAYMENT_ORDER_LOCK_MINUTES = 5;
 const PAYMENT_SUPPORT_WECHAT = '15160701051';
 const PAYMENT_SUPPORT_NOTE = '售后和技术支持添加微信 15160701051';
 const PAYMENT_REDEEM_URL = 'https://api.dpccgaming.xyz/console/topup';
+const PAYMENT_API_USERNAME_WAIT_NOTE = '已收到 DPCC-API 平台用户名，请等待 5 分钟。';
 
 const toMysqlDateTime = (date = new Date()) => {
   const pad = (value) => String(value).padStart(2, '0');
@@ -55,11 +56,37 @@ const ensureAlipayCreateConfig = () => {
   const missing = [];
   if (!paymentConfig.alipay.appId) missing.push('ALIPAY_APP_ID');
   if (!paymentConfig.alipay.privateKey) missing.push('ALIPAY_PRIVATE_KEY');
+  if (!paymentConfig.alipay.alipayPublicKey) missing.push('ALIPAY_PUBLIC_KEY');
   if (!paymentConfig.alipay.gatewayUrl) missing.push('ALIPAY_GATEWAY_URL');
+  if (!paymentConfig.alipay.notifyUrl) missing.push('ALIPAY_NOTIFY_URL');
+  if (process.env.NODE_ENV === 'production' && !paymentConfig.alipay.sellerId) {
+    missing.push('ALIPAY_SELLER_ID');
+  }
   if (missing.length > 0) {
     const error = new Error(`支付宝支付未配置：${missing.join(', ')}`);
     error.statusCode = 500;
     throw error;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    let notifyUrl;
+    try {
+      notifyUrl = new URL(paymentConfig.alipay.notifyUrl);
+    } catch {
+      const error = new Error('支付宝支付未配置：ALIPAY_NOTIFY_URL 必须是公网 HTTPS 地址');
+      error.statusCode = 500;
+      throw error;
+    }
+    const hostname = notifyUrl.hostname.toLowerCase();
+    if (
+      notifyUrl.protocol !== 'https:'
+      || hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname === '::1'
+    ) {
+      const error = new Error('支付宝支付未配置：ALIPAY_NOTIFY_URL 必须是公网 HTTPS 地址');
+      error.statusCode = 500;
+      throw error;
+    }
   }
 };
 
@@ -71,11 +98,6 @@ const getCatalog = () => ({
 
 const getRedeemCodeCatalog = () => ({
   products: [
-    ...listPaymentPlans().map((plan) => ({
-      productType: 'subscription',
-      skuId: plan.id,
-      label: plan.name
-    })),
     ...listRechargePackages().map((pack) => ({
       productType: 'recharge',
       skuId: pack.id,
@@ -85,11 +107,9 @@ const getRedeemCodeCatalog = () => ({
 });
 
 const normalizeRedeemProduct = (productType = '', skuId = '') => {
-  const normalizedProductType = productType === 'recharge' ? 'recharge' : 'subscription';
+  const normalizedProductType = productType === 'recharge' ? 'recharge' : '';
   const normalizedSkuId = String(skuId || '').trim();
-  const product = normalizedProductType === 'recharge'
-    ? getRechargePackage(normalizedSkuId)
-    : getPaymentPlan(normalizedSkuId);
+  const product = normalizedProductType === 'recharge' ? getRechargePackage(normalizedSkuId) : null;
   if (!product) {
     const error = new Error('兑换码档位无效');
     error.statusCode = 400;
@@ -132,6 +152,25 @@ const assignPaymentFulfillment = async (connection, order = {}, productType = 's
     redeemUrl: PAYMENT_REDEEM_URL,
     supportWechat: PAYMENT_SUPPORT_WECHAT,
     supportNote: PAYMENT_SUPPORT_NOTE
+  };
+};
+
+const setSubscriptionUsernameRequired = async (connection, order = {}) => {
+  await repository.updatePaymentOrderFulfillment(connection, {
+    orderNo: order.order_no,
+    fulfillmentStatus: 'username_required',
+    redeemCode: null,
+    redeemUrl: null,
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote: PAYMENT_API_USERNAME_WAIT_NOTE
+  });
+
+  return {
+    fulfillmentStatus: 'username_required',
+    redeemCode: null,
+    redeemUrl: '',
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote: PAYMENT_API_USERNAME_WAIT_NOTE
   };
 };
 
@@ -288,13 +327,94 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}) => {
     currency: order.currency || 'CNY',
     status: order.status,
     fulfillmentStatus: order.fulfillment_status || 'pending',
-    redeemCode: order.status === 'paid' ? (order.redeem_code || '') : '',
+    apiUsername: order.api_username || '',
+    redeemCode: order.status === 'paid' && productType === 'recharge' ? (order.redeem_code || '') : '',
     redeemUrl: order.redeem_url || PAYMENT_REDEEM_URL,
     supportWechat: order.support_wechat || PAYMENT_SUPPORT_WECHAT,
     supportNote: order.support_note || PAYMENT_SUPPORT_NOTE,
     paidAt: order.paid_at || null,
     expiresAt: order.expires_at || null,
     createdAt: order.created_at || null
+  };
+};
+
+const normalizeApiUsername = (apiUsername = '') => String(apiUsername || '').trim();
+
+const parseAlipayPaymentDate = (value = '') => {
+  const normalized = String(value || '').trim();
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+  if (!match) return new Date();
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6])
+  );
+};
+
+const submitPaymentOrderApiUsername = async ({ userId, orderNo, apiUsername } = {}, pool = getPool()) => {
+  const normalizedOrderNo = String(orderNo || '').trim();
+  const normalizedApiUsername = normalizeApiUsername(apiUsername);
+  if (!normalizedOrderNo) {
+    const error = new Error('订单号不能为空');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!normalizedApiUsername) {
+    const error = new Error('请输入 DPCC-API 平台用户名');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (normalizedApiUsername.length > 96) {
+    const error = new Error('DPCC-API 平台用户名不能超过 96 个字符');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await repository.ensurePaymentTables(pool);
+  const order = await repository.getPaymentOrderForUser(pool, {
+    orderNo: normalizedOrderNo,
+    userId
+  });
+  if (!order) {
+    const error = new Error('支付订单不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (order.status !== 'paid') {
+    const error = new Error('订单支付完成后才能填写 DPCC-API 平台用户名');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (order.product_type === 'recharge') {
+    const error = new Error('普通额度订单不需要填写 DPCC-API 平台用户名');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (order.api_username || order.fulfillment_status === 'username_submitted') {
+    const error = new Error('DPCC-API 平台用户名已经提交');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const [result] = await repository.updatePaymentOrderApiUsername(pool, {
+    orderNo: normalizedOrderNo,
+    userId,
+    apiUsername: normalizedApiUsername
+  });
+  if (!result || result.affectedRows !== 1) {
+    const error = new Error('保存 DPCC-API 平台用户名失败');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  return {
+    orderNo: normalizedOrderNo,
+    apiUsername: normalizedApiUsername,
+    fulfillmentStatus: 'username_submitted',
+    message: '已提交，请等待 5 分钟'
   };
 };
 
@@ -322,6 +442,11 @@ const handlePaidOrder = async (pool, payload = {}) => {
       await connection.commit();
       return { status: 'paid', orderNo: order.order_no, alreadyPaid: true };
     }
+    if (order.status !== 'pending') {
+      const error = new Error('支付订单不是待支付状态');
+      error.statusCode = 400;
+      throw error;
+    }
 
     const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
     const plan = getPaymentPlan(order.plan_id);
@@ -334,12 +459,19 @@ const handlePaidOrder = async (pool, payload = {}) => {
       paidAt: toMysqlDateTime(paidAt)
     });
     if (!markResult || markResult.affectedRows !== 1) {
-      await connection.commit();
-      return { status: 'paid', orderNo: order.order_no, alreadyPaid: true };
+      const latestOrder = await repository.getPaymentOrderByNoForUpdate(connection, payload.orderNo);
+      if (latestOrder?.status === 'paid') {
+        await connection.commit();
+        return { status: 'paid', orderNo: order.order_no, alreadyPaid: true };
+      }
+      const error = new Error('支付订单不是待支付状态');
+      error.statusCode = 400;
+      throw error;
     }
-    const fulfillment = await assignPaymentFulfillment(connection, order, productType, paidAt);
 
     if (productType === 'recharge') {
+      const fulfillment = await assignPaymentFulfillment(connection, order, productType, paidAt);
+
       if (!rechargePackage) {
         const error = new Error('订单充值配置不存在');
         error.statusCode = 500;
@@ -386,6 +518,8 @@ const handlePaidOrder = async (pool, payload = {}) => {
       await repository.insertMembership(connection, membership);
     }
 
+    const fulfillment = await setSubscriptionUsernameRequired(connection, order);
+
     await connection.commit();
     return { status: 'paid', orderNo: order.order_no, alreadyPaid: false, ...fulfillment };
   } catch (error) {
@@ -409,6 +543,12 @@ const handleAlipayNotify = async (params = {}) => {
     throw error;
   }
 
+  if (paymentConfig.alipay.sellerId && params.seller_id !== paymentConfig.alipay.sellerId) {
+    const error = new Error('支付宝 SELLER_ID 不匹配');
+    error.statusCode = 400;
+    throw error;
+  }
+
   if (!['TRADE_SUCCESS', 'TRADE_FINISHED'].includes(params.trade_status)) {
     return { status: 'ignored' };
   }
@@ -417,7 +557,7 @@ const handleAlipayNotify = async (params = {}) => {
     orderNo: params.out_trade_no,
     alipayTradeNo: params.trade_no,
     totalAmount: params.total_amount,
-    paidAt: new Date()
+    paidAt: parseAlipayPaymentDate(params.gmt_payment || params.notify_time)
   });
 };
 
@@ -427,9 +567,11 @@ module.exports = {
   importRedeemCodes,
   listRedeemCodes,
   getPaymentOrderResult,
+  submitPaymentOrderApiUsername,
   createAlipayOrder,
   handleAlipayNotify,
   handlePaidOrder,
+  parseAlipayPaymentDate,
   toMysqlDateTime,
   PAYMENT_SUPPORT_WECHAT,
   PAYMENT_SUPPORT_NOTE,

@@ -35,9 +35,17 @@
               <dt>商品</dt>
               <dd>{{ orderResult.productName }}</dd>
             </div>
+            <div v-if="orderResult.createdAt">
+              <dt>下单时间</dt>
+              <dd>{{ formattedCreatedAt }}</dd>
+            </div>
             <div v-if="orderResult.amount">
               <dt>金额</dt>
               <dd>¥{{ orderResult.amount }}</dd>
+            </div>
+            <div>
+              <dt>DPCC-API 用户名</dt>
+              <dd>{{ apiUsernameText }}</dd>
             </div>
           </dl>
           <button type="button" class="primary-action" :disabled="isLoading || !orderNo" @click="loadOrderResult">
@@ -47,27 +55,50 @@
         </div>
 
         <div class="result-panel redeem-panel">
-          <h2>兑换码</h2>
-          <div v-if="canRedeem" class="redeem-code-row">
-            <code>{{ orderResult.redeemCode }}</code>
-            <button type="button" @click="copyRedeemCode">复制</button>
-          </div>
-          <p v-else class="muted-copy">{{ redeemPlaceholderText }}</p>
+          <template v-if="isSubscriptionPaid">
+            <h2>DPCC-API 平台用户名</h2>
+            <form v-if="needsApiUsername" class="api-username-form" @submit.prevent="submitApiUsername">
+              <label>
+                用户名
+                <input
+                  v-model="apiUsernameInput"
+                  type="text"
+                  maxlength="96"
+                  autocomplete="off"
+                  placeholder="请输入你在 DPCC-API 平台的用户名"
+                />
+              </label>
+              <button type="submit" :disabled="isSubmittingApiUsername">
+                {{ isSubmittingApiUsername ? '提交中...' : '提交用户名' }}
+              </button>
+            </form>
+            <p v-else class="muted-copy">已提交 {{ orderResult.apiUsername }}，请等待 5 分钟。</p>
+            <p v-if="apiUsernameMessage" class="success-message">{{ apiUsernameMessage }}</p>
+          </template>
 
-          <a
-            class="redeem-link"
-            :href="redeemUrl"
-            target="_blank"
-            rel="noopener"
-          >
-            前往兑换网站
-            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-          </a>
+          <template v-else>
+            <h2>兑换码</h2>
+            <div v-if="canRedeem" class="redeem-code-row">
+              <code>{{ orderResult.redeemCode }}</code>
+              <button type="button" @click="copyRedeemCode">复制</button>
+            </div>
+            <p v-else class="muted-copy">{{ redeemPlaceholderText }}</p>
+
+            <a
+              class="redeem-link"
+              :href="redeemUrl"
+              target="_blank"
+              rel="noopener"
+            >
+              前往兑换网站
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+            </a>
+          </template>
         </div>
 
         <div class="support-panel">
           <h2>售后和技术支持</h2>
-          <p>添加微信 {{ supportWechat }}，请同时提供订单号和兑换码。</p>
+          <p>{{ supportCopy }}</p>
           <button type="button" @click="copySupportWechat">复制微信号</button>
         </div>
       </section>
@@ -86,21 +117,41 @@ const route = useRoute()
 const orderResult = ref({})
 const errorMessage = ref('')
 const isLoading = ref(false)
+const apiUsernameInput = ref('')
+const apiUsernameMessage = ref('')
+const isSubmittingApiUsername = ref(false)
 let pollTimerId = null
 
 const queryOrderNo = computed(() => String(route.query.out_trade_no || route.query.orderNo || '').trim())
 const orderNo = computed(() => queryOrderNo.value || sessionStorage.getItem('lastPaymentOrderNo') || '')
 const supportWechat = computed(() => orderResult.value.supportWechat || '15160701051')
 const redeemUrl = computed(() => orderResult.value.redeemUrl || 'https://api.dpccgaming.xyz/console/topup')
-const canRedeem = computed(() => orderResult.value.status === 'paid' && Boolean(orderResult.value.redeemCode))
-const isManualRequired = computed(() => orderResult.value.status === 'paid' && orderResult.value.fulfillmentStatus === 'manual_required')
+const isPaid = computed(() => orderResult.value.status === 'paid')
+const isSubscriptionOrder = computed(() => orderResult.value.productType === 'subscription')
+const isSubscriptionPaid = computed(() => isPaid.value && isSubscriptionOrder.value)
+const needsApiUsername = computed(() => isSubscriptionPaid.value && !orderResult.value.apiUsername)
+const canRedeem = computed(() => isPaid.value && orderResult.value.productType === 'recharge' && Boolean(orderResult.value.redeemCode))
+const isManualRequired = computed(() => isPaid.value && orderResult.value.productType === 'recharge' && orderResult.value.fulfillmentStatus === 'manual_required')
 const isExpiredPending = computed(() => {
   if (orderResult.value.status !== 'pending' || !orderResult.value.expiresAt) return false
   const expiresAt = new Date(orderResult.value.expiresAt).getTime()
   return Number.isFinite(expiresAt) && expiresAt <= Date.now()
 })
+const formattedCreatedAt = computed(() => formatDateTime(orderResult.value.createdAt))
+const apiUsernameText = computed(() => {
+  if (orderResult.value.apiUsername) return orderResult.value.apiUsername
+  if (isSubscriptionPaid.value) return '待填写'
+  return '-'
+})
+const supportCopy = computed(() => (
+  isSubscriptionPaid.value
+    ? `添加微信 ${supportWechat.value}，请同时提供订单号和 DPCC-API 用户名。`
+    : `添加微信 ${supportWechat.value}，请同时提供订单号和兑换码。`
+))
 
 const titleText = computed(() => {
+  if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '支付成功，等待处理'
+  if (needsApiUsername.value) return '支付成功，填写用户名'
   if (canRedeem.value) return '支付成功'
   if (isManualRequired.value) return '支付成功，等待发码'
   if (isExpiredPending.value) return '支付未完成'
@@ -108,6 +159,7 @@ const titleText = computed(() => {
 })
 
 const statusTone = computed(() => {
+  if (isSubscriptionPaid.value) return 'success'
   if (canRedeem.value) return 'success'
   if (isManualRequired.value) return 'warning'
   if (isExpiredPending.value) return 'warning'
@@ -116,6 +168,8 @@ const statusTone = computed(() => {
 })
 
 const statusIcon = computed(() => {
+  if (isSubscriptionPaid.value && orderResult.value.apiUsername) return 'fa-solid fa-clock'
+  if (needsApiUsername.value) return 'fa-solid fa-user'
   if (canRedeem.value) return 'fa-solid fa-check'
   if (isManualRequired.value) return 'fa-solid fa-headset'
   if (isExpiredPending.value) return 'fa-solid fa-clock-rotate-left'
@@ -124,6 +178,8 @@ const statusIcon = computed(() => {
 })
 
 const statusHeading = computed(() => {
+  if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '用户名已提交，请等待 5 分钟'
+  if (needsApiUsername.value) return '已确认支付，请填写 DPCC-API 用户名'
   if (canRedeem.value) return '已确认支付并发放兑换码'
   if (isManualRequired.value) return '已确认支付，库存待人工处理'
   if (isExpiredPending.value) return '订单未完成支付'
@@ -132,6 +188,8 @@ const statusHeading = computed(() => {
 })
 
 const statusDescription = computed(() => {
+  if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '我们会按你提交的平台用户名处理月卡订阅。'
+  if (needsApiUsername.value) return '月卡订阅不提供兑换码，请提交你在另一个平台的用户名。'
   if (canRedeem.value) return '复制兑换码后前往外部兑换网站完成充值。'
   if (isManualRequired.value) return '请添加售后微信，我们会根据订单号补发兑换码。'
   if (isExpiredPending.value) return '这笔订单没有收到支付成功通知，请返回支付页重新下单。'
@@ -154,6 +212,19 @@ const redeemPlaceholderText = computed(() => (
       ? '订单未完成支付，不会发放兑换码。'
     : '支付确认后这里会显示兑换码。'
 ))
+
+const formatDateTime = (value) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 
 const stopPolling = () => {
   if (pollTimerId) {
@@ -188,6 +259,7 @@ const loadOrderResult = async (options = {}) => {
       method: 'GET',
       suppressErrorLogging: true
     })
+    apiUsernameInput.value = orderResult.value.apiUsername || apiUsernameInput.value
     if (orderResult.value.status === 'paid') {
       stopPolling()
     }
@@ -198,6 +270,34 @@ const loadOrderResult = async (options = {}) => {
     errorMessage.value = error.message || '查询支付结果失败'
   } finally {
     isLoading.value = false
+  }
+}
+
+const submitApiUsername = async () => {
+  const apiUsername = apiUsernameInput.value.trim()
+  if (!apiUsername) {
+    errorMessage.value = '请输入 DPCC-API 平台用户名'
+    return
+  }
+
+  errorMessage.value = ''
+  apiUsernameMessage.value = ''
+  isSubmittingApiUsername.value = true
+  try {
+    const result = await apiCall(`/payments/orders/${encodeURIComponent(orderNo.value)}/api-username`, {
+      method: 'POST',
+      body: JSON.stringify({ apiUsername })
+    })
+    orderResult.value = {
+      ...orderResult.value,
+      apiUsername: result.apiUsername,
+      fulfillmentStatus: result.fulfillmentStatus
+    }
+    apiUsernameMessage.value = result.message || '已提交，请等待 5 分钟'
+  } catch (error) {
+    errorMessage.value = error.message || '保存 DPCC-API 平台用户名失败'
+  } finally {
+    isSubmittingApiUsername.value = false
   }
 }
 
@@ -248,7 +348,9 @@ onBeforeUnmount(stopPolling)
 .result-header h1,
 .result-panel h2,
 .support-panel h2,
-.support-panel p {
+.support-panel p,
+.api-username-form label,
+.success-message {
   margin: 0;
 }
 
@@ -267,6 +369,7 @@ onBeforeUnmount(stopPolling)
 .primary-action,
 .secondary-action,
 .redeem-code-row button,
+.api-username-form button,
 .support-panel button,
 .redeem-link {
   border-radius: 0.5rem;
@@ -386,6 +489,7 @@ onBeforeUnmount(stopPolling)
 .primary-action,
 .secondary-action,
 .redeem-code-row button,
+.api-username-form button,
 .support-panel button,
 .redeem-link {
   min-height: 2.75rem;
@@ -416,6 +520,41 @@ onBeforeUnmount(stopPolling)
   align-items: center;
   gap: 0.75rem;
   margin: 1rem 0;
+}
+
+.api-username-form {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.api-username-form label {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--text-tertiary);
+  font-weight: 800;
+}
+
+.api-username-form input {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 0.5rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 0 0.85rem;
+  font: inherit;
+}
+
+.api-username-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.success-message {
+  margin-top: 0.85rem;
+  color: #22c55e;
+  font-weight: 800;
 }
 
 .redeem-code-row code {
