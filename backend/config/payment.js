@@ -69,6 +69,7 @@ module.exports = {
     gatewayUrl: alipayGatewayUrl,
     privateKey: getPemConfig('ALIPAY_PRIVATE_KEY_PATH', 'ALIPAY_PRIVATE_KEY', 'PRIVATE KEY'),
     alipayPublicKey: getPemConfig('ALIPAY_PUBLIC_KEY_PATH', 'ALIPAY_PUBLIC_KEY', 'PUBLIC KEY'),
+    sellerId: getEnv('ALIPAY_SELLER_ID', getEnv('ALIPAY_PID', '')),
     returnUrl: getEnv('ALIPAY_RETURN_URL', `${publicUrl}/payment/result`),
     notifyUrl: getEnv('ALIPAY_NOTIFY_URL', `${publicUrl}/api/payments/alipay/notify`)
   }

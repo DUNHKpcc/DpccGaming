@@ -379,7 +379,7 @@ test('marks paid orders once and grants membership with a transaction', async ()
   assert.deepEqual(calls.at(-1), ['release']);
 });
 
-test('assigns an available redeem code when a subscription order is paid', async () => {
+test('requires api username when a subscription order is paid', async () => {
   const calls = [];
   const connection = {
     async beginTransaction() {
@@ -397,15 +397,6 @@ test('assigns an available redeem code when a subscription order is paid', async
           duration_id: '1m',
           amount: '69.90',
           status: 'pending'
-        }]];
-      }
-      if (/SELECT \* FROM redeem_codes/.test(sql)) {
-        return [[{
-          id: 21,
-          product_type: 'subscription',
-          sku_id: 'gold',
-          code: 'GOLD-CODE-001',
-          status: 'available'
         }]];
       }
       if (/SELECT \* FROM user_api_memberships/.test(sql)) {
@@ -440,16 +431,17 @@ test('assigns an available redeem code when a subscription order is paid', async
     paidAt: new Date('2026-05-04T08:00:00.000Z')
   });
 
-  assert.equal(result.redeemCode, 'GOLD-CODE-001');
+  assert.equal(result.fulfillmentStatus, 'username_required');
+  assert.equal(result.redeemCode, null);
   assert.equal(result.supportWechat, '15160701051');
-  assert.equal(result.redeemUrl, 'https://api.dpccgaming.xyz/console/topup');
-  assert.ok(calls.some(([sql, params]) => /UPDATE redeem_codes/.test(sql) && params.includes('DPCC202605040001')));
+  assert.equal(result.redeemUrl, '');
+  assert.equal(calls.some(([sql]) => /UPDATE redeem_codes/.test(sql)), false);
   assert.ok(calls.some(([sql, params]) => /UPDATE payment_orders/.test(sql) && params.includes('15160701051')));
   assert.deepEqual(calls.at(-2), ['commit']);
   assert.deepEqual(calls.at(-1), ['release']);
 });
 
-test('keeps paid order successful when redeem code inventory is empty', async () => {
+test('keeps paid subscription successful without redeem code inventory', async () => {
   const calls = [];
   const connection = {
     async beginTransaction() {
@@ -468,9 +460,6 @@ test('keeps paid order successful when redeem code inventory is empty', async ()
           amount: '69.90',
           status: 'pending'
         }]];
-      }
-      if (/SELECT \* FROM redeem_codes/.test(sql)) {
-        return [[]];
       }
       if (/SELECT \* FROM user_api_memberships/.test(sql)) {
         return [[]];
@@ -506,7 +495,7 @@ test('keeps paid order successful when redeem code inventory is empty', async ()
 
   assert.equal(result.status, 'paid');
   assert.equal(result.redeemCode, null);
-  assert.equal(result.fulfillmentStatus, 'manual_required');
+  assert.equal(result.fulfillmentStatus, 'username_required');
   assert.ok(calls.some(([sql, params]) => /UPDATE payment_orders/.test(sql) && params.includes('15160701051')));
   assert.equal(calls.some(([sql]) => /UPDATE redeem_codes/.test(sql)), false);
   assert.deepEqual(calls.at(-2), ['commit']);
@@ -574,6 +563,7 @@ test('marks paid recharge orders once and adds user balance with a transaction',
 
 test('does not grant membership when a duplicate callback loses the pending update', async () => {
   const calls = [];
+  let orderSelectCount = 0;
   const connection = {
     async beginTransaction() {
       calls.push(['begin']);
@@ -581,6 +571,7 @@ test('does not grant membership when a duplicate callback loses the pending upda
     async execute(sql, params = []) {
       calls.push([sql, params]);
       if (/SELECT \* FROM payment_orders/.test(sql)) {
+        orderSelectCount += 1;
         return [[{
           id: 7,
           user_id: 12,
@@ -588,7 +579,7 @@ test('does not grant membership when a duplicate callback loses the pending upda
           plan_id: 'gold',
           duration_id: '1m',
           amount: '69.90',
-          status: 'pending'
+          status: orderSelectCount > 1 ? 'paid' : 'pending'
         }]];
       }
       if (/UPDATE payment_orders/.test(sql)) {

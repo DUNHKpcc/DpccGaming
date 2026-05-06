@@ -38,6 +38,22 @@ const getPaymentOrderResult = async (req, res) => {
   }
 };
 
+const submitPaymentOrderApiUsername = async (req, res) => {
+  try {
+    const result = await paymentService.submitPaymentOrderApiUsername({
+      userId: req.user.userId,
+      orderNo: req.params.orderNo,
+      apiUsername: req.body?.apiUsername
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      message: error.message || '保存 DPCC-API 平台用户名失败'
+    });
+  }
+};
+
 const handleAlipayNotify = async (req, res) => {
   try {
     await paymentService.handleAlipayNotify(req.body || {});
@@ -52,5 +68,6 @@ module.exports = {
   getPaymentCatalog,
   createAlipayOrder,
   getPaymentOrderResult,
+  submitPaymentOrderApiUsername,
   handleAlipayNotify
 };
