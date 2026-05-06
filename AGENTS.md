@@ -61,5 +61,9 @@ For multi-step tasks, state a brief plan:
 3. [Step] -> verify: [check]
 ```
 
+### 5. MCP&SKILL Policy
+
+
+
 Strong success criteria allow independent execution. Weak criteria like "make it work" require clarification.
 
