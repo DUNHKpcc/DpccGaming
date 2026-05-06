@@ -38,13 +38,7 @@
         <el-table-column label="游戏" min-width="320">
           <template #default="{ row }">
             <div class="admin-game-cell">
-              <img
-                v-if="row.thumbnail_url"
-                :src="row.thumbnail_url"
-                :alt="row.title"
-                class="admin-game-cover"
-              />
-              <div v-else class="admin-game-cover admin-game-cover-empty">
+              <div class="admin-game-cover" aria-hidden="true">
                 <i class="fa fa-gamepad"></i>
               </div>
               <div>
@@ -301,17 +295,15 @@ onMounted(async () => {
 
 .admin-game-cover {
   flex: 0 0 auto;
+  display: grid;
+  place-items: center;
   width: 3.5rem;
   height: 3.5rem;
   border-radius: 0.6rem;
-  object-fit: cover;
-}
-
-.admin-game-cover-empty {
-  display: grid;
-  place-items: center;
-  background: #eef2ff;
-  color: #4f46e5;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+  font-size: 1.35rem;
 }
 
 .admin-game-cell strong,

@@ -26,7 +26,6 @@
               <div>
                 <strong class="admin-username-row">
                   <span>{{ row.username }}</span>
-                  <UserLevelBadge :user-id="row.id" />
                 </strong>
                 <small>{{ row.email || '未设置邮箱' }}</small>
               </div>
@@ -99,7 +98,6 @@ import { onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { useNotificationStore } from '../../stores/notification'
-import UserLevelBadge from '../../components/UserLevelBadge.vue'
 
 const notificationStore = useNotificationStore()
 const users = ref([])
