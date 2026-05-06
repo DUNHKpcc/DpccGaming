@@ -4,6 +4,18 @@ import vue from '@vitejs/plugin-vue'
 const createManualChunk = (id) => {
   if (!id.includes('node_modules')) return undefined
 
+  if (
+    id.includes('/element-plus/')
+    || id.includes('/@element-plus/')
+    || id.includes('/@popperjs/')
+    || id.includes('/async-validator/')
+    || id.includes('/dayjs/')
+    || id.includes('/lodash-unified/')
+    || id.includes('/memoize-one/')
+    || id.includes('/normalize-wheel-es/')
+  ) {
+    return 'vendor-element-plus'
+  }
   if (id.includes('highlight.js')) return 'vendor-highlight'
   if (id.includes('gsap')) return 'vendor-gsap'
   if (
@@ -16,6 +28,7 @@ const createManualChunk = (id) => {
   if (
     id.includes('/vue/')
     || id.includes('/@vue/')
+    || id.includes('/@vueuse/')
     || id.includes('vue-router')
     || id.includes('pinia')
   ) {
