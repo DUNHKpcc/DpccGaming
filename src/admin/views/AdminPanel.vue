@@ -65,7 +65,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
+import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { useNotificationStore } from '../../stores/notification'
 import { categoryToZh } from '../../utils/category'

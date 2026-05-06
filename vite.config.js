@@ -2,35 +2,35 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 const createManualChunk = (id) => {
-  if (!id.includes('node_modules')) return undefined
+  const normalizedId = id.replaceAll('\\', '/')
+  if (!normalizedId.includes('node_modules')) return undefined
 
   if (
-    id.includes('/element-plus/')
-    || id.includes('/@element-plus/')
-    || id.includes('/@popperjs/')
-    || id.includes('/async-validator/')
-    || id.includes('/dayjs/')
-    || id.includes('/lodash-unified/')
-    || id.includes('/memoize-one/')
-    || id.includes('/normalize-wheel-es/')
+    normalizedId.includes('/element-plus/')
+    || normalizedId.includes('/@element-plus/')
+    || normalizedId.includes('/@popperjs/')
+    || normalizedId.includes('/dayjs/')
+    || normalizedId.includes('/lodash-unified/')
+    || normalizedId.includes('/memoize-one/')
+    || normalizedId.includes('/normalize-wheel-es/')
   ) {
     return 'vendor-element-plus'
   }
-  if (id.includes('highlight.js')) return 'vendor-highlight'
-  if (id.includes('gsap')) return 'vendor-gsap'
+  if (normalizedId.includes('highlight.js')) return 'vendor-highlight'
+  if (normalizedId.includes('gsap')) return 'vendor-gsap'
   if (
-    id.includes('socket.io-client')
-    || id.includes('engine.io-client')
-    || id.includes('socket.io-parser')
+    normalizedId.includes('socket.io-client')
+    || normalizedId.includes('engine.io-client')
+    || normalizedId.includes('socket.io-parser')
   ) {
     return 'vendor-realtime'
   }
   if (
-    id.includes('/vue/')
-    || id.includes('/@vue/')
-    || id.includes('/@vueuse/')
-    || id.includes('vue-router')
-    || id.includes('pinia')
+    normalizedId.includes('/vue/')
+    || normalizedId.includes('/@vue/')
+    || normalizedId.includes('/@vueuse/')
+    || normalizedId.includes('vue-router')
+    || normalizedId.includes('pinia')
   ) {
     return 'vendor-vue'
   }
@@ -55,6 +55,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
         manualChunks: createManualChunk

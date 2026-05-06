@@ -99,7 +99,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs'
+import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { useNotificationStore } from '../../stores/notification'
 import { categoryToCode, categoryToZh } from '../../utils/category'
