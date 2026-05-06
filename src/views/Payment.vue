@@ -125,19 +125,6 @@
               </div>
             </section>
           </div>
-
-          <section class="security-flow" aria-labelledby="flow-title">
-            <div class="flow-heading">
-              <h3 id="flow-title">交易安全链路</h3>
-              <span>不可修改金额</span>
-            </div>
-            <div class="flow-steps">
-              <div v-for="step in securitySteps" :key="step.title" class="flow-step">
-                <strong>{{ step.title }}</strong>
-                <span>{{ step.description }}</span>
-              </div>
-            </div>
-          </section>
         </section>
 
         <aside class="order-panel" aria-labelledby="order-title">
@@ -178,9 +165,9 @@
             </dl>
           </section>
 
-          <section class="security-checklist">
-            <h3>安全检查</h3>
-            <p v-for="item in checklist" :key="item">{{ item }}</p>
+          <section class="order-footer-note">
+            <h3>订单提示</h3>
+            <p>{{ orderFooterText }}</p>
           </section>
 
           <button
@@ -234,19 +221,6 @@ const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度
 const emptyDuration = { label: '加载中', months: 1 }
 const emptyRechargePackage = { name: '加载中', price: 0, quotaText: '正在加载额度' }
 
-const securitySteps = [
-  { title: '1 创建订单', description: '服务端生成订单号与签名' },
-  { title: '2 跳转支付宝', description: '仅提交签名后的支付令牌' },
-  { title: '3 到账回写', description: '异步通知校验后发放CDK' }
-]
-
-const checklist = [
-  '已锁定订单金额，前端不可改价',
-  '仅跳转官方支付宝收银台',
-  '回调验签后才发放额度',
-  '请勿通过私聊二维码或转账付款'
-]
-
 const selectedPlanId = ref('gold')
 const selectedDurationId = ref('1m')
 const selectedRechargePackageId = ref('usd-6')
@@ -296,6 +270,11 @@ const orderSummaryText = computed(() => (
   isSubscriptionMode.value
     ? `${selectedPlan.value.name} · ${selectedDuration.value.label} · ${selectedPlan.value.dailyQuota}`
     : `${selectedRechargePackage.value.name} · ${selectedRechargePackage.value.quotaText}`
+))
+const orderFooterText = computed(() => (
+  isSubscriptionMode.value
+    ? '支付完成后请在结果页提交 DPCC-API 用户名，人工确认后为你开通月卡。'
+    : '支付完成后结果页会展示兑换码；库存不足时请凭订单号联系售后处理。'
 ))
 const orderId = computed(() => `服务端创建后锁定`)
 const isPayDisabled = computed(() => (
@@ -425,6 +404,9 @@ onBeforeUnmount(stopCountdown)
   max-width: 100%;
   min-height: calc(100vh - 4rem);
   min-height: calc(100svh - 4rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   overflow-x: hidden;
   overflow-y: auto;
   box-sizing: border-box;
@@ -441,7 +423,7 @@ onBeforeUnmount(stopCountdown)
   width: min(1280px, 100%);
   max-width: 100%;
   min-height: 100%;
-  margin: 0 auto;
+  margin: auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -454,7 +436,6 @@ onBeforeUnmount(stopCountdown)
 .payment-config,
 .product-switch,
 .section-heading,
-.flow-heading,
 .order-head,
 .payment-method-icons,
 .payment-secure-pill {
@@ -490,7 +471,6 @@ onBeforeUnmount(stopCountdown)
 .payment-kicker,
 .section-heading h2,
 .config-panel h3,
-.security-flow h3,
 .order-panel h2,
 .order-panel h3 {
   margin: 0;
@@ -652,8 +632,7 @@ onBeforeUnmount(stopCountdown)
 }
 
 .plan-grid,
-.duration-options,
-.flow-steps {
+.duration-options {
   display: grid;
 }
 
@@ -788,7 +767,6 @@ onBeforeUnmount(stopCountdown)
 }
 
 .config-panel,
-.security-flow,
 .order-panel {
   border: 1px solid var(--border-primary);
   border-radius: 0.5rem;
@@ -801,7 +779,6 @@ onBeforeUnmount(stopCountdown)
 }
 
 .config-panel h3,
-.security-flow h3,
 .order-panel h3 {
   font-size: 1rem;
 }
@@ -865,49 +842,16 @@ onBeforeUnmount(stopCountdown)
   color: #000000;
 }
 
-.security-flow {
-  flex: 0 0 auto;
-  padding: 0.95rem 1rem;
-}
-
-.flow-heading,
 .order-head {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.flow-heading span,
 .order-head span {
   color: var(--text-tertiary);
   font-size: 0.78rem;
   font-weight: 900;
-}
-
-.flow-steps {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.65rem;
-}
-
-.flow-step {
-  min-height: 3.85rem;
-  border-radius: 0.5rem;
-  background: var(--bg-tertiary);
-  padding: 0.8rem;
-}
-
-.flow-step strong,
-.flow-step span {
-  display: block;
-}
-
-.flow-step span {
-  margin-top: 0.35rem;
-  color: var(--text-tertiary);
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.45;
 }
 
 .order-panel {
@@ -921,7 +865,7 @@ onBeforeUnmount(stopCountdown)
 }
 
 .amount-box,
-.security-checklist {
+.order-footer-note {
   background: var(--bg-tertiary);
   border-radius: 0.5rem;
   padding: 1rem;
@@ -949,7 +893,7 @@ onBeforeUnmount(stopCountdown)
 }
 
 .amount-box p,
-.security-checklist p {
+.order-footer-note p {
   margin: 0.45rem 0 0;
   color: var(--text-secondary);
   font-weight: 700;
@@ -987,11 +931,11 @@ onBeforeUnmount(stopCountdown)
   word-break: break-word;
 }
 
-.security-checklist h3 {
+.order-footer-note h3 {
   margin-bottom: 0.5rem;
 }
 
-.security-checklist p {
+.order-footer-note p {
   font-size: 0.84rem;
 }
 
@@ -1053,7 +997,7 @@ onBeforeUnmount(stopCountdown)
   }
 
   .section-heading p,
-  .security-checklist {
+  .order-footer-note {
     display: none;
   }
 
@@ -1071,16 +1015,10 @@ onBeforeUnmount(stopCountdown)
     margin: 0.75rem 0;
   }
 
-  .security-flow,
   .config-panel,
   .order-details,
   .amount-box {
     padding: 0.8rem;
-  }
-
-  .flow-step {
-    min-height: 3.2rem;
-    padding: 0.65rem;
   }
 
   .order-panel {
@@ -1109,8 +1047,7 @@ onBeforeUnmount(stopCountdown)
     justify-content: center;
   }
 
-  .plan-grid,
-  .flow-steps {
+  .plan-grid {
     grid-template-columns: 1fr;
   }
 
