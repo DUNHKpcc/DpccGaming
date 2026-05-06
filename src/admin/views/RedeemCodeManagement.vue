@@ -110,7 +110,7 @@
             <el-table-column type="selection" width="48" :selectable="isCodeSelectable" />
             <el-table-column label="兑换码" min-width="240">
               <template #default="{ row }">
-                <code class="redeem-code-text">{{ row.code }}</code>
+                <code class="redeem-code-text">{{ displayCode(row) }}</code>
               </template>
             </el-table-column>
             <el-table-column label="档位" min-width="160">
@@ -124,10 +124,37 @@
               </template>
             </el-table-column>
             <el-table-column label="订单" min-width="190">
-              <template #default="{ row }">{{ row.assignedOrderNo || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="96" fixed="right">
               <template #default="{ row }">
+                <RouterLink
+                  v-if="row.assignedOrderNo"
+                  class="redeem-order-link"
+                  :to="{ path: '/admin/orders', query: { orderNo: row.assignedOrderNo } }"
+                >
+                  {{ row.assignedOrderNo }}
+                </RouterLink>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="190" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  size="small"
+                  type="primary"
+                  link
+                  :loading="secretLoadingId === row.id"
+                  @click="toggleSecret(row)"
+                >
+                  {{ revealedCodes[row.id] ? '隐藏' : '显示' }}
+                </el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  link
+                  :loading="secretLoadingId === row.id"
+                  @click="copySecret(row)"
+                >
+                  复制
+                </el-button>
                 <el-button
                   size="small"
                   type="danger"
@@ -148,6 +175,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { apiCall } from '../../utils/api'
@@ -163,6 +191,8 @@ const importMessage = ref('')
 const isImporting = ref(false)
 const isDeleting = ref(false)
 const selectedCodes = ref([])
+const revealedCodes = ref({})
+const secretLoadingId = ref(null)
 
 const splitProductKey = (key = '') => {
   const [productType = '', skuId = ''] = String(key || '').split(':')
@@ -173,6 +203,8 @@ const productLabel = (productType, skuId) => {
   const key = `${productType}:${skuId}`
   return catalogProducts.value.find((item) => item.key === key)?.label || skuId
 }
+
+const displayCode = (row) => revealedCodes.value[row.id] || row.maskedCode || ''
 
 const activeProductLabel = computed(() => (
   catalogProducts.value.find((item) => item.key === filterProductKey.value)?.label || '请选择额度包'
@@ -234,6 +266,7 @@ const fetchCodes = async () => {
   codes.value = result.codes || []
   stats.value = result.stats || []
   selectedCodes.value = []
+  revealedCodes.value = {}
 }
 
 const selectProductFilter = async (productKey) => {
@@ -268,6 +301,45 @@ const isCodeSelectable = (row) => row.status === 'available'
 
 const handleSelectionChange = (selection) => {
   selectedCodes.value = selection
+}
+
+const fetchSecret = async (row, purpose) => {
+  secretLoadingId.value = row.id
+  try {
+    const params = new URLSearchParams({ purpose })
+    const result = await apiCall(`/admin/redeem-codes/${row.id}/secret?${params.toString()}`, {
+      method: 'GET'
+    })
+    return result.code || ''
+  } finally {
+    secretLoadingId.value = null
+  }
+}
+
+const toggleSecret = async (row) => {
+  if (revealedCodes.value[row.id]) {
+    const next = { ...revealedCodes.value }
+    delete next[row.id]
+    revealedCodes.value = next
+    return
+  }
+
+  try {
+    const code = await fetchSecret(row, 'reveal')
+    revealedCodes.value = { ...revealedCodes.value, [row.id]: code }
+  } catch (error) {
+    ElMessage.error(error.message || '读取兑换码失败')
+  }
+}
+
+const copySecret = async (row) => {
+  try {
+    const code = await fetchSecret(row, 'copy')
+    await navigator.clipboard.writeText(code)
+    ElMessage.success('兑换码已复制')
+  } catch (error) {
+    ElMessage.error(error.message || '复制兑换码失败')
+  }
 }
 
 const deleteCodes = async (ids = [], title = '删除兑换码') => {
@@ -448,6 +520,13 @@ onMounted(async () => {
   color: #111827;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   word-break: break-all;
+}
+
+.redeem-order-link {
+  color: #000;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
 .el-button i {

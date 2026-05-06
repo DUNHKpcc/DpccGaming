@@ -155,6 +155,54 @@ const getPaymentOrderByNo = async (executor, orderNo = '') => {
   return rows[0] || null;
 };
 
+const getPaymentOrderDetailByNo = async (executor, orderNo = '') => {
+  const [rows] = await executor.execute(
+    `
+      SELECT po.*, u.username, u.email
+      FROM payment_orders po
+      LEFT JOIN users u ON u.id = po.user_id
+      WHERE po.order_no = ?
+      LIMIT 1
+    `,
+    [orderNo]
+  );
+  return rows[0] || null;
+};
+
+const listPaymentOrders = async (executor, filters = {}) => {
+  const where = [];
+  const params = [];
+  if (filters.orderNo) {
+    where.push('po.order_no LIKE ?');
+    params.push(`%${filters.orderNo}%`);
+  }
+  if (filters.status) {
+    where.push('po.status = ?');
+    params.push(filters.status);
+  }
+
+  const [rows] = await executor.execute(
+    `
+      SELECT po.*, u.username, u.email
+      FROM payment_orders po
+      LEFT JOIN users u ON u.id = po.user_id
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY po.id DESC
+      LIMIT 100
+    `,
+    params
+  );
+  return rows;
+};
+
+const deleteUnpaidPaymentOrder = async (executor, orderNo = '') => executor.execute(
+  `
+    DELETE FROM payment_orders
+    WHERE order_no = ? AND status <> 'paid'
+  `,
+  [orderNo]
+);
+
 const getPaymentOrderByNoForUpdate = async (executor, orderNo = '') => {
   const [rows] = await executor.execute(
     'SELECT * FROM payment_orders WHERE order_no = ? LIMIT 1 FOR UPDATE',
@@ -350,6 +398,14 @@ const getRedeemCodeStats = async (executor) => {
   return rows;
 };
 
+const getRedeemCodeById = async (executor, id) => {
+  const [rows] = await executor.execute(
+    'SELECT * FROM redeem_codes WHERE id = ? LIMIT 1',
+    [id]
+  );
+  return rows[0] || null;
+};
+
 const deleteAvailableRedeemCodes = async (executor, ids = []) => {
   if (!ids.length) return [{ affectedRows: 0 }];
   const placeholders = ids.map(() => '?').join(', ');
@@ -366,6 +422,9 @@ module.exports = {
   ensurePaymentTables,
   createPaymentOrder,
   getPaymentOrderByNo,
+  getPaymentOrderDetailByNo,
+  listPaymentOrders,
+  deleteUnpaidPaymentOrder,
   getPaymentOrderByNoForUpdate,
   getPaymentOrderForUser,
   getMembershipByUserId,
@@ -379,5 +438,6 @@ module.exports = {
   createRedeemCode,
   listRedeemCodes,
   getRedeemCodeStats,
+  getRedeemCodeById,
   deleteAvailableRedeemCodes
 };

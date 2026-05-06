@@ -132,6 +132,15 @@ const normalizeRedeemCodeIds = (ids = []) => {
     .filter((id) => Number.isInteger(id) && id > 0))];
 };
 
+const maskRedeemCode = (code = '') => {
+  const normalized = String(code || '').trim();
+  if (!normalized) return '';
+  if (normalized.length <= 8) {
+    return `${normalized.slice(0, 2)}****${normalized.slice(-2)}`;
+  }
+  return `${normalized.slice(0, 4)}****${normalized.slice(-4)}`;
+};
+
 const assignPaymentFulfillment = async (connection, order = {}, productType = 'subscription', assignedAt = new Date()) => {
   const skuId = productType === 'recharge' ? order.plan_id : order.plan_id;
   const assignedCode = await repository.assignRedeemCodeToOrder(connection, {
@@ -267,8 +276,7 @@ const importRedeemCodes = async ({ productType, skuId, codes } = {}) => {
   };
 };
 
-const listRedeemCodes = async (filters = {}) => {
-  const pool = getPool();
+const listRedeemCodes = async (filters = {}, pool = getPool()) => {
   await repository.ensurePaymentTables(pool);
   const rows = await repository.listRedeemCodes(pool, {
     productType: filters.productType === 'recharge' || filters.productType === 'subscription'
@@ -284,7 +292,7 @@ const listRedeemCodes = async (filters = {}) => {
       id: row.id,
       productType: row.product_type,
       skuId: row.sku_id,
-      code: row.code,
+      maskedCode: maskRedeemCode(row.code),
       status: row.status,
       assignedOrderNo: row.assigned_order_no || '',
       assignedUserId: row.assigned_user_id || null,
@@ -297,6 +305,31 @@ const listRedeemCodes = async (filters = {}) => {
       status: row.status,
       count: Number(row.count || 0)
     }))
+  };
+};
+
+const getRedeemCodeSecret = async ({ id } = {}, pool = getPool()) => {
+  const normalizedIds = normalizeRedeemCodeIds([id]);
+  if (normalizedIds.length !== 1) {
+    const error = new Error('兑换码 ID 无效');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await repository.ensurePaymentTables(pool);
+  const row = await repository.getRedeemCodeById(pool, normalizedIds[0]);
+  if (!row) {
+    const error = new Error('兑换码不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return {
+    id: row.id,
+    productType: row.product_type,
+    skuId: row.sku_id,
+    status: row.status,
+    code: row.code
   };
 };
 
@@ -371,6 +404,110 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}) => {
     paidAt: order.paid_at || null,
     expiresAt: order.expires_at || null,
     createdAt: order.created_at || null
+  };
+};
+
+const resolvePaymentProductName = (order = {}) => {
+  const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
+  const product = productType === 'recharge'
+    ? getRechargePackage(order.plan_id)
+    : getPaymentPlan(order.plan_id);
+  return {
+    productType,
+    productName: product?.name || order.subject || order.plan_id
+  };
+};
+
+const mapAdminPaymentOrder = (order = {}) => {
+  const product = resolvePaymentProductName(order);
+  return {
+    orderNo: order.order_no,
+    userId: order.user_id,
+    username: order.username || '',
+    email: order.email || '',
+    provider: order.provider || 'alipay',
+    productType: product.productType,
+    skuId: order.plan_id,
+    durationId: order.duration_id,
+    quotaUsd: order.quota_usd || null,
+    productName: product.productName,
+    subject: order.subject || '',
+    amount: Number(order.amount || 0).toFixed(2),
+    currency: order.currency || 'CNY',
+    status: order.status,
+    fulfillmentStatus: order.fulfillment_status || 'pending',
+    apiUsername: order.api_username || '',
+    maskedRedeemCode: order.redeem_code ? maskRedeemCode(order.redeem_code) : '',
+    alipayTradeNo: order.alipay_trade_no || '',
+    paidAt: order.paid_at || null,
+    expiresAt: order.expires_at || null,
+    createdAt: order.created_at || null,
+    updatedAt: order.updated_at || null
+  };
+};
+
+const listAdminPaymentOrders = async (filters = {}, pool = getPool()) => {
+  await repository.ensurePaymentTables(pool);
+  const rows = await repository.listPaymentOrders(pool, {
+    orderNo: String(filters.orderNo || '').trim(),
+    status: ['pending', 'paid', 'closed'].includes(filters.status) ? filters.status : ''
+  });
+
+  return {
+    orders: rows.map(mapAdminPaymentOrder)
+  };
+};
+
+const getAdminPaymentOrderDetail = async ({ orderNo } = {}, pool = getPool()) => {
+  const normalizedOrderNo = String(orderNo || '').trim();
+  if (!normalizedOrderNo) {
+    const error = new Error('订单号不能为空');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await repository.ensurePaymentTables(pool);
+  const order = await repository.getPaymentOrderDetailByNo(pool, normalizedOrderNo);
+  if (!order) {
+    const error = new Error('支付订单不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return mapAdminPaymentOrder(order);
+};
+
+const deleteAdminPaymentOrder = async ({ orderNo } = {}, pool = getPool()) => {
+  const normalizedOrderNo = String(orderNo || '').trim();
+  if (!normalizedOrderNo) {
+    const error = new Error('订单号不能为空');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await repository.ensurePaymentTables(pool);
+  const order = await repository.getPaymentOrderDetailByNo(pool, normalizedOrderNo);
+  if (!order) {
+    const error = new Error('支付订单不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (order.status === 'paid') {
+    const error = new Error('已支付订单不能删除');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const [result] = await repository.deleteUnpaidPaymentOrder(pool, normalizedOrderNo);
+  if (!result || result.affectedRows !== 1) {
+    const error = new Error('删除订单失败');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  return {
+    deleted: 1,
+    order: mapAdminPaymentOrder(order)
   };
 };
 
@@ -602,9 +739,13 @@ module.exports = {
   getRedeemCodeCatalog,
   importRedeemCodes,
   listRedeemCodes,
+  getRedeemCodeSecret,
   deleteRedeemCode,
   deleteRedeemCodes,
   getPaymentOrderResult,
+  listAdminPaymentOrders,
+  getAdminPaymentOrderDetail,
+  deleteAdminPaymentOrder,
   submitPaymentOrderApiUsername,
   createAlipayOrder,
   handleAlipayNotify,

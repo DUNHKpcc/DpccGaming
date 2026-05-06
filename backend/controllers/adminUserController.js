@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { getPool } = require('../config/database');
+const { recordAdminAuditLog } = require('../utils/adminAudit');
 
 const resolveGamesRoot = () => process.env.GAMES_ROOT_PATH || path.join(process.cwd(), 'games');
 const resolveCodeRoot = () => process.env.CODE_ROOT_PATH || path.join(process.cwd(), 'uploads', 'code');
@@ -50,6 +51,14 @@ async function updateUserRole(req, res) {
     const { role } = req.body;
     const adminId = req.user.userId;
 
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: '只有超级管理员才能修改用户角色' });
+    }
+
+    if (Number(userId) === Number(adminId)) {
+      return res.status(400).json({ error: '不能修改自己的角色' });
+    }
+
     if (!['user', 'admin', 'super_admin'].includes(role)) {
       return res.status(400).json({ error: '无效的用户角色' });
     }
@@ -68,6 +77,19 @@ async function updateUserRole(req, res) {
       'UPDATE users SET role = ? WHERE id = ?',
       [role, userId]
     );
+
+    await recordAdminAuditLog(pool, {
+      adminUserId: adminId,
+      action: 'users.update_role',
+      resourceType: 'user',
+      resourceId: String(userId),
+      metadata: {
+        targetUsername: users[0].username,
+        newRole: role
+      },
+      ipAddress: req.ip || req.connection?.remoteAddress || '',
+      userAgent: req.headers?.['user-agent'] || ''
+    });
 
     console.log(`管理员 ${adminId} 将用户 ${users[0].username} 的角色更改为 ${role}`);
 

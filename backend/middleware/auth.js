@@ -123,6 +123,24 @@ async function checkAdminPermission(req, res, next) {
   }
 }
 
+function requireSuperAdminPermission(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      error: '未认证',
+      message: '请先登录'
+    });
+  }
+
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({
+      error: '权限不足',
+      message: '只有超级管理员才能访问此功能'
+    });
+  }
+
+  next();
+}
+
 function generateToken(user) {
   return jwt.sign(
     { userId: user.id, username: user.username },
@@ -171,6 +189,7 @@ module.exports = {
   authenticateToken,
   optionalAuthenticateToken,
   checkAdminPermission,
+  requireSuperAdminPermission,
   generateToken,
   verifyToken,
   extractToken,

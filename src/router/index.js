@@ -9,6 +9,7 @@ const AdminPanel = () => import('../admin/views/AdminPanel.vue')
 const UserManagement = () => import('../admin/views/UserManagement.vue')
 const GameManagement = () => import('../admin/views/GameManagement.vue')
 const RedeemCodeManagement = () => import('../admin/views/RedeemCodeManagement.vue')
+const OrderManagement = () => import('../admin/views/OrderManagement.vue')
 const CodingMode = () => import('../views/CodingMode.vue')
 const DocsPlaceholder = () => import('../views/DocsPlaceholder.vue')
 const DiscussionMode = () => import('../views/DiscussionMode.vue')
@@ -65,6 +66,12 @@ const routes = [
     path: '/admin/redeem-codes',
     name: 'RedeemCodeManagement',
     component: RedeemCodeManagement,
+    meta: { requiresAuth: true, requiresAdmin: true, hideSidebar: true, hideTopbar: true, hideOverlays: true }
+  },
+  {
+    path: '/admin/orders',
+    name: 'OrderManagement',
+    component: OrderManagement,
     meta: { requiresAuth: true, requiresAdmin: true, hideSidebar: true, hideTopbar: true, hideOverlays: true }
   },
   {

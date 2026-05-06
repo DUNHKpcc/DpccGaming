@@ -66,20 +66,15 @@ const pickDataPath = (envValue, defaults = []) => {
   return defaultCandidates[0];
 };
 
-app.set('trust proxy', true);
+const parsedTrustProxyHops = Number(process.env.TRUST_PROXY_HOPS || 0);
+const trustProxy = parsedTrustProxyHops > 0 ? parsedTrustProxyHops : 'loopback';
+app.set('trust proxy', trustProxy);
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
   message: '请求过于频繁，请稍后再试',
   keyGenerator: (req) => {
-    if (isWindows) {
-      return req.ip || req.connection.remoteAddress;
-    }
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-      return forwarded.split(',')[0].trim();
-    }
     return req.ip || req.connection.remoteAddress;
   }
 });
@@ -121,13 +116,14 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+app.use('/api/', generalLimiter);
+
+const apiBodyLimit = process.env.API_BODY_LIMIT || '10mb';
+app.use(bodyParser.json({ limit: apiBodyLimit }));
+app.use(bodyParser.urlencoded({ extended: true, limit: apiBodyLimit }));
 
 app.use('/uploads', express.static(process.env.UPLOADS_PATH));
 app.use('/games', express.static(process.env.GAMES_ROOT_PATH));
-
-app.use('/api/', generalLimiter);
 
 app.get('/health', (req, res) => {
   res.json({
