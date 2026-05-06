@@ -65,30 +65,38 @@
         <div class="redeem-inventory-toolbar">
           <div>
             <strong>库存列表</strong>
-            <span>最多显示最近 300 条兑换码</span>
+            <span>{{ activeProductLabel }}，最多显示最近 300 条兑换码</span>
           </div>
           <div class="redeem-filters">
-            <el-select v-model="filterProductKey" placeholder="全部档位" clearable @change="fetchCodes">
-              <el-option
-                v-for="product in catalogProducts"
-                :key="product.key"
-                :label="product.label"
-                :value="product.key"
-              />
-            </el-select>
             <el-select v-model="filterStatus" placeholder="全部状态" clearable @change="fetchCodes">
               <el-option label="未使用" value="available" />
               <el-option label="已分配" value="assigned" />
             </el-select>
+            <el-button
+              type="danger"
+              plain
+              :disabled="selectedAvailableIds.length === 0"
+              :loading="isDeleting"
+              @click="batchDeleteSelectedCodes"
+            >
+              批量删除 {{ selectedAvailableIds.length || '' }}
+            </el-button>
           </div>
         </div>
 
         <div class="redeem-stats-strip">
-          <div v-for="item in visibleStats" :key="item.key" class="redeem-stat-item">
+          <button
+            v-for="item in visibleStats"
+            :key="item.key"
+            class="redeem-stat-item"
+            :class="{ active: item.key === filterProductKey }"
+            type="button"
+            @click="selectProductFilter(item.key)"
+          >
             <span>{{ item.label }}</span>
             <strong>{{ item.available }}</strong>
             <small>可用 / {{ item.total }} 总数</small>
-          </div>
+          </button>
         </div>
 
         <div class="redeem-table-shell">
@@ -97,7 +105,9 @@
             height="100%"
             row-key="id"
             empty-text="暂无兑换码"
+            @selection-change="handleSelectionChange"
           >
+            <el-table-column type="selection" width="48" :selectable="isCodeSelectable" />
             <el-table-column label="兑换码" min-width="240">
               <template #default="{ row }">
                 <code class="redeem-code-text">{{ row.code }}</code>
@@ -116,6 +126,19 @@
             <el-table-column label="订单" min-width="190">
               <template #default="{ row }">{{ row.assignedOrderNo || '-' }}</template>
             </el-table-column>
+            <el-table-column label="操作" width="96" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  size="small"
+                  type="danger"
+                  link
+                  :disabled="row.status !== 'available' || isDeleting"
+                  @click="deleteSingleCode(row)"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </div>
       </el-card>
@@ -125,6 +148,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { apiCall } from '../../utils/api'
 
@@ -137,6 +161,8 @@ const codes = ref([])
 const stats = ref([])
 const importMessage = ref('')
 const isImporting = ref(false)
+const isDeleting = ref(false)
+const selectedCodes = ref([])
 
 const splitProductKey = (key = '') => {
   const [productType = '', skuId = ''] = String(key || '').split(':')
@@ -147,6 +173,14 @@ const productLabel = (productType, skuId) => {
   const key = `${productType}:${skuId}`
   return catalogProducts.value.find((item) => item.key === key)?.label || skuId
 }
+
+const activeProductLabel = computed(() => (
+  catalogProducts.value.find((item) => item.key === filterProductKey.value)?.label || '请选择额度包'
+))
+
+const selectedAvailableIds = computed(() => selectedCodes.value
+  .filter((item) => item.status === 'available')
+  .map((item) => item.id))
 
 const visibleStats = computed(() => {
   const groups = new Map()
@@ -169,7 +203,7 @@ const visibleStats = computed(() => {
       group.available += Number(item.count || 0)
     }
   }
-  return [...groups.values()].filter((item) => item.total > 0 || !filterProductKey.value || item.key === filterProductKey.value)
+  return [...groups.values()]
 })
 
 const fetchCatalog = async () => {
@@ -180,6 +214,9 @@ const fetchCatalog = async () => {
   }))
   if (!selectedProductKey.value && catalogProducts.value[0]) {
     selectedProductKey.value = catalogProducts.value[0].key
+  }
+  if (!filterProductKey.value && catalogProducts.value[0]) {
+    filterProductKey.value = catalogProducts.value[0].key
   }
 }
 
@@ -196,6 +233,12 @@ const fetchCodes = async () => {
   const result = await apiCall(`/admin/redeem-codes?${params.toString()}`, { method: 'GET' })
   codes.value = result.codes || []
   stats.value = result.stats || []
+  selectedCodes.value = []
+}
+
+const selectProductFilter = async (productKey) => {
+  filterProductKey.value = productKey
+  await fetchCodes()
 }
 
 const importCodes = async () => {
@@ -219,6 +262,54 @@ const importCodes = async () => {
   } finally {
     isImporting.value = false
   }
+}
+
+const isCodeSelectable = (row) => row.status === 'available'
+
+const handleSelectionChange = (selection) => {
+  selectedCodes.value = selection
+}
+
+const deleteCodes = async (ids = [], title = '删除兑换码') => {
+  if (!ids.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除 ${ids.length} 个未使用兑换码？已分配兑换码不会被删除。`,
+      title,
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  isDeleting.value = true
+  try {
+    const result = ids.length === 1
+      ? await apiCall(`/admin/redeem-codes/${ids[0]}`, { method: 'DELETE' })
+      : await apiCall('/admin/redeem-codes/batch-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids })
+      })
+    ElMessage.success(`已删除 ${result.deleted || 0} 个兑换码`)
+    await fetchCodes()
+  } catch (error) {
+    ElMessage.error(error.message || '删除兑换码失败')
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+const deleteSingleCode = async (row) => {
+  if (row.status !== 'available') return
+  await deleteCodes([row.id], '删除兑换码')
+}
+
+const batchDeleteSelectedCodes = async () => {
+  await deleteCodes(selectedAvailableIds.value, '批量删除兑换码')
 }
 
 onMounted(async () => {
@@ -308,6 +399,10 @@ onMounted(async () => {
   width: 12rem;
 }
 
+.redeem-filters .el-button {
+  flex: 0 0 auto;
+}
+
 .redeem-stats-strip {
   display: flex;
   flex: 0 0 auto;
@@ -319,10 +414,21 @@ onMounted(async () => {
 
 .redeem-stat-item {
   flex: 0 0 10rem;
+  cursor: pointer;
   padding: 0.7rem 0.8rem;
   border: 1px solid #e5e7eb;
   border-radius: 0.45rem;
   background: #f8fafc;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.redeem-stat-item.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px #2563eb;
 }
 
 .redeem-stat-item strong {

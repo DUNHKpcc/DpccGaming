@@ -253,6 +253,84 @@ test('api username update is constrained to one pending username submission', as
   assert.match(calls[0][0], /fulfillment_status = 'username_required'/);
 });
 
+test('deletes one available redeem code by id', async () => {
+  const pool = {};
+  const calls = {
+    ids: null
+  };
+
+  stubRepository({
+    ensurePaymentTables: async () => {},
+    deleteAvailableRedeemCodes: async (executor, ids) => {
+      calls.ids = ids;
+      return [{ affectedRows: 1 }];
+    }
+  });
+
+  const result = await paymentService.deleteRedeemCode({ id: 7 }, pool);
+
+  assert.deepEqual(calls.ids, [7]);
+  assert.deepEqual(result, {
+    requested: 1,
+    deleted: 1,
+    skipped: 0
+  });
+});
+
+test('single redeem code delete rejects assigned or missing codes', async () => {
+  const pool = {};
+
+  stubRepository({
+    ensurePaymentTables: async () => {},
+    deleteAvailableRedeemCodes: async () => [{ affectedRows: 0 }]
+  });
+
+  await assert.rejects(
+    paymentService.deleteRedeemCode({ id: 8 }, pool),
+    /不存在或已分配/
+  );
+});
+
+test('batch redeem code delete reports skipped assigned codes', async () => {
+  const pool = {};
+  const calls = {
+    ids: null
+  };
+
+  stubRepository({
+    ensurePaymentTables: async () => {},
+    deleteAvailableRedeemCodes: async (executor, ids) => {
+      calls.ids = ids;
+      return [{ affectedRows: 2 }];
+    }
+  });
+
+  const result = await paymentService.deleteRedeemCodes({ ids: [11, '12', 13] }, pool);
+
+  assert.deepEqual(calls.ids, [11, 12, 13]);
+  assert.deepEqual(result, {
+    requested: 3,
+    deleted: 2,
+    skipped: 1
+  });
+});
+
+test('redeem code deletion is constrained to available codes', async () => {
+  const calls = [];
+  const executor = {
+    execute: async (sql, params) => {
+      calls.push([sql, params]);
+      return [{ affectedRows: 2 }];
+    }
+  };
+
+  await repository.deleteAvailableRedeemCodes(executor, [1, 2]);
+
+  assert.match(calls[0][0], /DELETE FROM redeem_codes/);
+  assert.match(calls[0][0], /status = 'available'/);
+  assert.deepEqual(calls[0][1], [1, 2]);
+});
+
 test('closed orders are not acknowledged as already paid when pending update fails', async () => {
   const connection = createConnection();
 

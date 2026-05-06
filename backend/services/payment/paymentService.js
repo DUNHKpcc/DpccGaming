@@ -125,6 +125,13 @@ const normalizeRedeemCodes = (codes = []) => {
     .filter(Boolean))];
 };
 
+const normalizeRedeemCodeIds = (ids = []) => {
+  const source = Array.isArray(ids) ? ids : [ids];
+  return [...new Set(source
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0))];
+};
+
 const assignPaymentFulfillment = async (connection, order = {}, productType = 'subscription', assignedAt = new Date()) => {
   const skuId = productType === 'recharge' ? order.plan_id : order.plan_id;
   const assignedCode = await repository.assignRedeemCodeToOrder(connection, {
@@ -291,6 +298,35 @@ const listRedeemCodes = async (filters = {}) => {
       count: Number(row.count || 0)
     }))
   };
+};
+
+const deleteRedeemCodes = async ({ ids } = {}, pool = getPool()) => {
+  const normalizedIds = normalizeRedeemCodeIds(ids);
+  if (normalizedIds.length === 0) {
+    const error = new Error('请选择要删除的兑换码');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await repository.ensurePaymentTables(pool);
+  const [result] = await repository.deleteAvailableRedeemCodes(pool, normalizedIds);
+  const deleted = Number(result?.affectedRows || 0);
+
+  return {
+    requested: normalizedIds.length,
+    deleted,
+    skipped: normalizedIds.length - deleted
+  };
+};
+
+const deleteRedeemCode = async ({ id } = {}, pool = getPool()) => {
+  const result = await deleteRedeemCodes({ ids: [id] }, pool);
+  if (result.deleted !== 1) {
+    const error = new Error('兑换码不存在或已分配，不能删除');
+    error.statusCode = 400;
+    throw error;
+  }
+  return result;
 };
 
 const getPaymentOrderResult = async ({ userId, orderNo } = {}) => {
@@ -566,6 +602,8 @@ module.exports = {
   getRedeemCodeCatalog,
   importRedeemCodes,
   listRedeemCodes,
+  deleteRedeemCode,
+  deleteRedeemCodes,
   getPaymentOrderResult,
   submitPaymentOrderApiUsername,
   createAlipayOrder,

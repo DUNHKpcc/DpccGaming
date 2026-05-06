@@ -20,5 +20,7 @@ router.delete('/users/:userId/delete', authenticateToken, checkAdminPermission, 
 router.get('/redeem-codes/catalog', authenticateToken, checkAdminPermission, adminRedeemCodeController.getRedeemCodeCatalog);
 router.get('/redeem-codes', authenticateToken, checkAdminPermission, adminRedeemCodeController.listRedeemCodes);
 router.post('/redeem-codes/import', authenticateToken, checkAdminPermission, adminRedeemCodeController.importRedeemCodes);
+router.post('/redeem-codes/batch-delete', authenticateToken, checkAdminPermission, adminRedeemCodeController.batchDeleteRedeemCodes);
+router.delete('/redeem-codes/:id', authenticateToken, checkAdminPermission, adminRedeemCodeController.deleteRedeemCode);
 
 module.exports = router;

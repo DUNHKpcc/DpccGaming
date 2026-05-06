@@ -350,6 +350,18 @@ const getRedeemCodeStats = async (executor) => {
   return rows;
 };
 
+const deleteAvailableRedeemCodes = async (executor, ids = []) => {
+  if (!ids.length) return [{ affectedRows: 0 }];
+  const placeholders = ids.map(() => '?').join(', ');
+  return executor.execute(
+    `
+      DELETE FROM redeem_codes
+      WHERE id IN (${placeholders}) AND status = 'available'
+    `,
+    ids
+  );
+};
+
 module.exports = {
   ensurePaymentTables,
   createPaymentOrder,
@@ -366,5 +378,6 @@ module.exports = {
   updatePaymentOrderApiUsername,
   createRedeemCode,
   listRedeemCodes,
-  getRedeemCodeStats
+  getRedeemCodeStats,
+  deleteAvailableRedeemCodes
 };

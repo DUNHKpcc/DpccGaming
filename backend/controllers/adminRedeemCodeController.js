@@ -38,8 +38,40 @@ const importRedeemCodes = async (req, res) => {
   }
 };
 
+const deleteRedeemCode = async (req, res) => {
+  try {
+    const result = await paymentService.deleteRedeemCode({
+      id: req.params.id
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('删除兑换码失败:', error);
+    res.status(error.statusCode || 500).json({
+      message: error.message || '删除兑换码失败'
+    });
+  }
+};
+
+const batchDeleteRedeemCodes = async (req, res) => {
+  try {
+    const result = await paymentService.deleteRedeemCodes({
+      ids: req.body?.ids
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('批量删除兑换码失败:', error);
+    res.status(error.statusCode || 500).json({
+      message: error.message || '批量删除兑换码失败'
+    });
+  }
+};
+
 module.exports = {
   getRedeemCodeCatalog,
   listRedeemCodes,
-  importRedeemCodes
+  importRedeemCodes,
+  deleteRedeemCode,
+  batchDeleteRedeemCodes
 };
