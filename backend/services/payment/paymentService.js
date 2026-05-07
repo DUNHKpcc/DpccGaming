@@ -5,6 +5,7 @@ const {
   getPaymentPlan,
   getPaymentDuration,
   getRechargePackage,
+  getRechargeBonusPackage,
   calculateOrderAmount,
   listPaymentPlans,
   listPaymentDurations,
@@ -14,6 +15,10 @@ const {
   buildAlipayPagePayForm,
   verifyAlipayNotifyParams
 } = require('./alipay');
+const {
+  encryptRedeemCode,
+  decryptRedeemCode
+} = require('./redeemCodeCrypto');
 
 const PAYMENT_ORDER_LOCK_MINUTES = 5;
 const PAYMENT_SUPPORT_WECHAT = '15160701051';
@@ -102,14 +107,22 @@ const getRedeemCodeCatalog = () => ({
       productType: 'recharge',
       skuId: pack.id,
       label: pack.name
-    }))
+    })),
+    {
+      productType: 'recharge',
+      skuId: getRechargeBonusPackage().id,
+      label: getRechargeBonusPackage().name
+    }
   ]
 });
 
 const normalizeRedeemProduct = (productType = '', skuId = '') => {
   const normalizedProductType = productType === 'recharge' ? 'recharge' : '';
   const normalizedSkuId = String(skuId || '').trim();
-  const product = normalizedProductType === 'recharge' ? getRechargePackage(normalizedSkuId) : null;
+  const bonusPackage = getRechargeBonusPackage();
+  const product = normalizedProductType === 'recharge'
+    ? getRechargePackage(normalizedSkuId) || (normalizedSkuId === bonusPackage.id ? bonusPackage : null)
+    : null;
   if (!product) {
     const error = new Error('兑换码档位无效');
     error.statusCode = 400;
@@ -141,30 +154,80 @@ const maskRedeemCode = (code = '') => {
   return `${normalized.slice(0, 4)}****${normalized.slice(-4)}`;
 };
 
+const buildRedeemCodes = (order = {}, options = {}) => {
+  const formatCode = options.masked ? maskRedeemCode : (code) => code;
+  return [
+    { label: '原有额度', code: order.redeem_code },
+    { label: '赠送 $30', code: order.bonus_redeem_code }
+  ]
+    .filter((item) => item.code)
+    .map((item) => ({
+      ...item,
+      code: formatCode(item.code)
+    }));
+};
+
+const getRedeemCodeRowsById = async (executor, orders = []) => {
+  const ids = normalizeRedeemCodeIds(orders.flatMap((order) => [
+    order.redeem_code_id,
+    order.bonus_redeem_code_id
+  ]));
+  if (!ids.length) return new Map();
+  const rows = await repository.getRedeemCodesByIds(executor, ids);
+  return new Map(rows.map((row) => [Number(row.id), row]));
+};
+
+const buildOrderRedeemCodes = (order = {}, rowsById = new Map(), options = {}) => {
+  const hasAssignedIds = Boolean(order.redeem_code_id || order.bonus_redeem_code_id);
+  if (!hasAssignedIds) return buildRedeemCodes(order, options);
+
+  const redeemCodeRow = rowsById.get(Number(order.redeem_code_id));
+  const bonusRedeemCodeRow = rowsById.get(Number(order.bonus_redeem_code_id));
+  const assignedCodes = buildRedeemCodes({
+    redeem_code: redeemCodeRow ? decryptRedeemCode(redeemCodeRow) : '',
+    bonus_redeem_code: bonusRedeemCodeRow ? decryptRedeemCode(bonusRedeemCodeRow) : ''
+  }, options);
+  return assignedCodes.length > 0 ? assignedCodes : buildRedeemCodes(order, options);
+};
+
 const assignPaymentFulfillment = async (connection, order = {}, productType = 'subscription', assignedAt = new Date()) => {
   const skuId = productType === 'recharge' ? order.plan_id : order.plan_id;
-  const assignedCode = await repository.assignRedeemCodeToOrder(connection, {
+  const assignedAtText = toMysqlDateTime(assignedAt);
+  const assignCode = (targetSkuId) => repository.assignRedeemCodeToOrder(connection, {
     productType,
-    skuId,
+    skuId: targetSkuId,
     orderNo: order.order_no,
     userId: order.user_id,
-    assignedAt: toMysqlDateTime(assignedAt)
+    assignedAt: assignedAtText
   });
-  const redeemCode = assignedCode?.code || null;
-  const fulfillmentStatus = redeemCode ? 'code_assigned' : 'manual_required';
+  const assignedCode = await assignCode(skuId);
+  const assignedBonusCode = assignedCode ? await assignCode(getRechargeBonusPackage().id) : null;
+  const redeemCode = assignedCode ? decryptRedeemCode(assignedCode) : null;
+  const bonusRedeemCode = assignedBonusCode ? decryptRedeemCode(assignedBonusCode) : null;
+  const fulfillmentStatus = redeemCode && bonusRedeemCode ? 'code_assigned' : 'manual_required';
 
   await repository.updatePaymentOrderFulfillment(connection, {
     orderNo: order.order_no,
     fulfillmentStatus,
-    redeemCode,
+    redeemCodeId: assignedCode?.id || null,
+    bonusRedeemCodeId: assignedBonusCode?.id || null,
+    redeemCode: null,
+    bonusRedeemCode: null,
     redeemUrl: PAYMENT_REDEEM_URL,
     supportWechat: PAYMENT_SUPPORT_WECHAT,
     supportNote: PAYMENT_SUPPORT_NOTE
   });
 
+  const redeemCodes = buildRedeemCodes({
+    redeem_code: redeemCode,
+    bonus_redeem_code: bonusRedeemCode
+  });
+
   return {
     fulfillmentStatus,
     redeemCode,
+    bonusRedeemCode,
+    redeemCodes,
     redeemUrl: PAYMENT_REDEEM_URL,
     supportWechat: PAYMENT_SUPPORT_WECHAT,
     supportNote: PAYMENT_SUPPORT_NOTE
@@ -246,7 +309,7 @@ const createAlipayOrder = async ({ userId, productType = 'subscription', planId,
   };
 };
 
-const importRedeemCodes = async ({ productType, skuId, codes } = {}) => {
+const importRedeemCodes = async ({ productType, skuId, codes } = {}, pool = getPool()) => {
   const normalizedProduct = normalizeRedeemProduct(productType, skuId);
   const normalizedCodes = normalizeRedeemCodes(codes);
   if (normalizedCodes.length === 0) {
@@ -255,14 +318,21 @@ const importRedeemCodes = async ({ productType, skuId, codes } = {}) => {
     throw error;
   }
 
-  const pool = getPool();
   await repository.ensurePaymentTables(pool);
   let inserted = 0;
   for (const code of normalizedCodes) {
+    const legacyCode = await repository.getRedeemCodeByPlainCode(pool, code);
+    if (legacyCode) continue;
+
+    const encryptedCode = encryptRedeemCode(code);
     const [result] = await repository.createRedeemCode(pool, {
       productType: normalizedProduct.productType,
       skuId: normalizedProduct.skuId,
-      code
+      code: encryptedCode.codeStorageValue,
+      codeCiphertext: encryptedCode.codeCiphertext,
+      codeIv: encryptedCode.codeIv,
+      codeAuthTag: encryptedCode.codeAuthTag,
+      codeLookupHash: encryptedCode.codeLookupHash
     });
     inserted += Number(result?.affectedRows || 0);
   }
@@ -292,7 +362,7 @@ const listRedeemCodes = async (filters = {}, pool = getPool()) => {
       id: row.id,
       productType: row.product_type,
       skuId: row.sku_id,
-      maskedCode: maskRedeemCode(row.code),
+      maskedCode: maskRedeemCode(decryptRedeemCode(row)),
       status: row.status,
       assignedOrderNo: row.assigned_order_no || '',
       assignedUserId: row.assigned_user_id || null,
@@ -329,7 +399,7 @@ const getRedeemCodeSecret = async ({ id } = {}, pool = getPool()) => {
     productType: row.product_type,
     skuId: row.sku_id,
     status: row.status,
-    code: row.code
+    code: decryptRedeemCode(row)
   };
 };
 
@@ -362,7 +432,7 @@ const deleteRedeemCode = async ({ id } = {}, pool = getPool()) => {
   return result;
 };
 
-const getPaymentOrderResult = async ({ userId, orderNo } = {}) => {
+const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool()) => {
   const normalizedOrderNo = String(orderNo || '').trim();
   if (!normalizedOrderNo) {
     const error = new Error('订单号不能为空');
@@ -370,7 +440,6 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}) => {
     throw error;
   }
 
-  const pool = getPool();
   await repository.ensurePaymentTables(pool);
   const order = await repository.getPaymentOrderForUser(pool, {
     orderNo: normalizedOrderNo,
@@ -386,6 +455,9 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}) => {
   const product = productType === 'recharge'
     ? getRechargePackage(order.plan_id)
     : getPaymentPlan(order.plan_id);
+  const redeemCodes = order.status === 'paid' && productType === 'recharge'
+    ? buildOrderRedeemCodes(order, await getRedeemCodeRowsById(pool, [order]))
+    : [];
 
   return {
     orderNo: order.order_no,
@@ -397,7 +469,9 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}) => {
     status: order.status,
     fulfillmentStatus: order.fulfillment_status || 'pending',
     apiUsername: order.api_username || '',
-    redeemCode: order.status === 'paid' && productType === 'recharge' ? (order.redeem_code || '') : '',
+    redeemCode: redeemCodes[0]?.code || '',
+    bonusRedeemCode: redeemCodes[1]?.code || '',
+    redeemCodes,
     redeemUrl: order.redeem_url || PAYMENT_REDEEM_URL,
     supportWechat: order.support_wechat || PAYMENT_SUPPORT_WECHAT,
     supportNote: order.support_note || PAYMENT_SUPPORT_NOTE,
@@ -418,8 +492,9 @@ const resolvePaymentProductName = (order = {}) => {
   };
 };
 
-const mapAdminPaymentOrder = (order = {}) => {
+const mapAdminPaymentOrder = (order = {}, rowsById = new Map()) => {
   const product = resolvePaymentProductName(order);
+  const maskedRedeemCodes = buildOrderRedeemCodes(order, rowsById, { masked: true });
   return {
     orderNo: order.order_no,
     userId: order.user_id,
@@ -437,7 +512,9 @@ const mapAdminPaymentOrder = (order = {}) => {
     status: order.status,
     fulfillmentStatus: order.fulfillment_status || 'pending',
     apiUsername: order.api_username || '',
-    maskedRedeemCode: order.redeem_code ? maskRedeemCode(order.redeem_code) : '',
+    maskedRedeemCode: maskedRedeemCodes[0]?.code || '',
+    maskedBonusRedeemCode: maskedRedeemCodes[1]?.code || '',
+    maskedRedeemCodes,
     alipayTradeNo: order.alipay_trade_no || '',
     paidAt: order.paid_at || null,
     expiresAt: order.expires_at || null,
@@ -452,9 +529,10 @@ const listAdminPaymentOrders = async (filters = {}, pool = getPool()) => {
     orderNo: String(filters.orderNo || '').trim(),
     status: ['pending', 'paid', 'closed'].includes(filters.status) ? filters.status : ''
   });
+  const rowsById = await getRedeemCodeRowsById(pool, rows);
 
   return {
-    orders: rows.map(mapAdminPaymentOrder)
+    orders: rows.map((row) => mapAdminPaymentOrder(row, rowsById))
   };
 };
 
@@ -474,7 +552,8 @@ const getAdminPaymentOrderDetail = async ({ orderNo } = {}, pool = getPool()) =>
     throw error;
   }
 
-  return mapAdminPaymentOrder(order);
+  const rowsById = await getRedeemCodeRowsById(pool, [order]);
+  return mapAdminPaymentOrder(order, rowsById);
 };
 
 const deleteAdminPaymentOrder = async ({ orderNo } = {}, pool = getPool()) => {

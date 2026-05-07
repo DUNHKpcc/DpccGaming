@@ -28,16 +28,28 @@ const PAYMENT_DURATIONS = Object.freeze([
   { id: '12m', label: '12个月', months: 12 }
 ]);
 
+const RECHARGE_BONUS_USD = 30;
+const RECHARGE_BONUS_PACKAGE = Object.freeze({
+  id: 'usd-30-bonus',
+  name: '$30 赠送额度包',
+  quotaUsd: '30.00',
+  subject: 'DPCC API $30 Bonus Credit Pack'
+});
+
+const applyRechargeBonus = (pack) => ({
+  ...pack,
+  originalQuotaUsd: pack.quotaUsd,
+  bonusQuotaUsd: RECHARGE_BONUS_PACKAGE.quotaUsd,
+  quotaUsd: (Number(pack.quotaUsd) + RECHARGE_BONUS_USD).toFixed(2)
+});
+
 const RECHARGE_PACKAGES = Object.freeze([
-  { id: 'usd-6', name: '$6 额度包', quotaUsd: '6.00', price: '10.00', subject: 'DPCC API $6 Credit Pack' },
-  { id: 'usd-33', name: '$33 额度包', quotaUsd: '33.00', price: '50.00', subject: 'DPCC API $33 Credit Pack' },
-  { id: 'usd-45', name: '$45 额度包', quotaUsd: '45.00', price: '80.00', subject: 'DPCC API $45 Credit Pack' },
-  { id: 'usd-100', name: '$100 额度包', quotaUsd: '100.00', price: '150.00', subject: 'DPCC API $100 Credit Pack' },
-  { id: 'usd-180', name: '$180 额度包', quotaUsd: '180.00', price: '200.00', subject: 'DPCC API $180 Credit Pack' },
-  { id: 'usd-230', name: '$230 额度包', quotaUsd: '230.00', price: '300.00', subject: 'DPCC API $230 Credit Pack' },
-  { id: 'usd-350', name: '$350 额度包', quotaUsd: '350.00', price: '400.00', subject: 'DPCC API $350 Credit Pack' },
-  { id: 'usd-450', name: '$450 额度包', quotaUsd: '450.00', price: '500.00', subject: 'DPCC API $450 Credit Pack' }
-]);
+  { id: 'usd-25', name: '$25 额度包', quotaUsd: '25.00', price: '19.90', subject: 'DPCC API $25 Credit Pack' },
+  { id: 'usd-200', name: '$200 额度包', quotaUsd: '200.00', price: '149.90', subject: 'DPCC API $200 Credit Pack' },
+  { id: 'usd-500', name: '$500 额度包', quotaUsd: '500.00', price: '299.90', subject: 'DPCC API $500 Credit Pack' },
+  { id: 'usd-1000', name: '$1000 额度包', quotaUsd: '1000.00', price: '499.90', subject: 'DPCC API $1000 Credit Pack' },
+  { id: 'usd-2000', name: '$2000 额度包', quotaUsd: '2000.00', price: '899.90', subject: 'DPCC API $2000 Credit Pack' }
+].map(applyRechargeBonus));
 
 const toCents = (amount) => Math.round(Number(amount) * 100);
 
@@ -66,10 +78,13 @@ const listPaymentDurations = () => PAYMENT_DURATIONS.map((duration) => ({ ...dur
 
 const listRechargePackages = () => RECHARGE_PACKAGES.map((pack) => ({ ...pack }));
 
+const getRechargeBonusPackage = () => ({ ...RECHARGE_BONUS_PACKAGE });
+
 module.exports = {
   getPaymentPlan,
   getPaymentDuration,
   getRechargePackage,
+  getRechargeBonusPackage,
   calculateOrderAmount,
   listPaymentPlans,
   listPaymentDurations,

@@ -30,6 +30,10 @@ const jwtSecret = getEnv(
   'JWT_SECRET',
   isProduction ? '' : `dev-${crypto.randomBytes(32).toString('hex')}`
 );
+const redeemCodeEncryptionKey = getEnv(
+  'REDEEM_CODE_ENCRYPTION_KEY',
+  isProduction ? '' : 'dev-redeem-code-encryption-key-change-me'
+);
 const jwtExpiresIn = getEnv('JWT_EXPIRES_IN', '30d');
 const jwtCookieName = getEnv('JWT_COOKIE_NAME', 'dpcc_auth_token');
 const parsedJwtCookieDays = Number(process.env.JWT_COOKIE_DAYS || 30);
@@ -75,6 +79,7 @@ if (isProduction) {
   const missing = [];
   if (!dbPassword) missing.push('DB_PASSWORD');
   if (!jwtSecret) missing.push('JWT_SECRET');
+  if (!redeemCodeEncryptionKey) missing.push('REDEEM_CODE_ENCRYPTION_KEY');
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables in production: ${missing.join(', ')}`);
   }
@@ -88,6 +93,9 @@ if (!isProduction) {
     console.warn('[config] JWT_SECRET 未设置，已使用随机开发密钥（重启后会变化）。');
   } else if (jwtSecret.length < 32) {
     console.warn('[config] JWT_SECRET 长度小于 32，建议提高复杂度。');
+  }
+  if (!process.env.REDEEM_CODE_ENCRYPTION_KEY) {
+    console.warn('[config] REDEEM_CODE_ENCRYPTION_KEY 未设置，已使用开发密钥。');
   }
 }
 
@@ -112,6 +120,10 @@ const config = {
     expiresIn: jwtExpiresIn,
     cookieName: jwtCookieName,
     cookieDays: jwtCookieDays
+  },
+
+  redeemCode: {
+    encryptionKey: redeemCodeEncryptionKey
   },
 
   wechat: {

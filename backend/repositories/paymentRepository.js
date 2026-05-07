@@ -21,10 +21,21 @@ const ensurePaymentTables = async (pool) => {
           alipay_trade_no VARCHAR(96) DEFAULT NULL,
           paid_at DATETIME DEFAULT NULL,
           expires_at DATETIME DEFAULT NULL,
+          fulfillment_status VARCHAR(24) NOT NULL DEFAULT 'pending',
+          redeem_code_id INT DEFAULT NULL,
+          bonus_redeem_code_id INT DEFAULT NULL,
+          redeem_code VARCHAR(128) DEFAULT NULL,
+          bonus_redeem_code VARCHAR(128) DEFAULT NULL,
+          redeem_url VARCHAR(255) DEFAULT NULL,
+          support_wechat VARCHAR(32) DEFAULT NULL,
+          support_note VARCHAR(255) DEFAULT NULL,
+          api_username VARCHAR(96) DEFAULT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX idx_payment_orders_user_id (user_id),
           INDEX idx_payment_orders_status (status),
+          INDEX idx_payment_orders_redeem_code_id (redeem_code_id),
+          INDEX idx_payment_orders_bonus_redeem_code_id (bonus_redeem_code_id),
           CONSTRAINT fk_payment_orders_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
       `),
@@ -59,12 +70,17 @@ const ensurePaymentTables = async (pool) => {
           product_type VARCHAR(24) NOT NULL,
           sku_id VARCHAR(32) NOT NULL,
           code VARCHAR(128) NOT NULL UNIQUE,
+          code_ciphertext TEXT,
+          code_iv VARCHAR(32) DEFAULT NULL,
+          code_auth_tag VARCHAR(32) DEFAULT NULL,
+          code_lookup_hash VARCHAR(64) DEFAULT NULL,
           status ENUM('available', 'assigned') NOT NULL DEFAULT 'available',
           assigned_order_no VARCHAR(64) DEFAULT NULL,
           assigned_user_id INT DEFAULT NULL,
           assigned_at DATETIME DEFAULT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_redeem_codes_lookup_hash (code_lookup_hash),
           INDEX idx_redeem_codes_sku_status (product_type, sku_id, status),
           INDEX idx_redeem_codes_order_no (assigned_order_no)
         )
@@ -91,7 +107,22 @@ const ensurePaymentTables = async (pool) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
           throw error;
         });
+      await pool.execute('ALTER TABLE payment_orders ADD COLUMN redeem_code_id INT DEFAULT NULL AFTER fulfillment_status')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders ADD COLUMN bonus_redeem_code_id INT DEFAULT NULL AFTER redeem_code_id')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
       await pool.execute('ALTER TABLE payment_orders ADD COLUMN redeem_code VARCHAR(128) DEFAULT NULL AFTER fulfillment_status')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders ADD COLUMN bonus_redeem_code VARCHAR(128) DEFAULT NULL AFTER redeem_code')
         .catch((error) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
           throw error;
@@ -114,6 +145,41 @@ const ensurePaymentTables = async (pool) => {
       await pool.execute('ALTER TABLE payment_orders ADD COLUMN api_username VARCHAR(96) DEFAULT NULL AFTER support_note')
         .catch((error) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders ADD INDEX idx_payment_orders_redeem_code_id (redeem_code_id)')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_KEYNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders ADD INDEX idx_payment_orders_bonus_redeem_code_id (bonus_redeem_code_id)')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_KEYNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE redeem_codes ADD COLUMN code_ciphertext TEXT AFTER code')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE redeem_codes ADD COLUMN code_iv VARCHAR(32) DEFAULT NULL AFTER code_ciphertext')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE redeem_codes ADD COLUMN code_auth_tag VARCHAR(32) DEFAULT NULL AFTER code_iv')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE redeem_codes ADD COLUMN code_lookup_hash VARCHAR(64) DEFAULT NULL AFTER code_auth_tag')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE redeem_codes ADD UNIQUE INDEX uq_redeem_codes_lookup_hash (code_lookup_hash)')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_KEYNAME') return null;
           throw error;
         });
     })().catch((error) => {
@@ -317,7 +383,10 @@ const updatePaymentOrderFulfillment = async (executor, payload = {}) => executor
   `
     UPDATE payment_orders
     SET fulfillment_status = ?,
+        redeem_code_id = ?,
+        bonus_redeem_code_id = ?,
         redeem_code = ?,
+        bonus_redeem_code = ?,
         redeem_url = ?,
         support_wechat = ?,
         support_note = ?
@@ -325,7 +394,10 @@ const updatePaymentOrderFulfillment = async (executor, payload = {}) => executor
   `,
   [
     payload.fulfillmentStatus,
+    payload.redeemCodeId || null,
+    payload.bonusRedeemCodeId || null,
     payload.redeemCode || null,
+    payload.bonusRedeemCode || null,
     payload.redeemUrl,
     payload.supportWechat,
     payload.supportNote,
@@ -352,10 +424,18 @@ const updatePaymentOrderApiUsername = async (executor, payload = {}) => executor
 const createRedeemCode = async (executor, payload = {}) => executor.execute(
   `
     INSERT IGNORE INTO redeem_codes
-      (product_type, sku_id, code, status)
-    VALUES (?, ?, ?, 'available')
+      (product_type, sku_id, code, code_ciphertext, code_iv, code_auth_tag, code_lookup_hash, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'available')
   `,
-  [payload.productType, payload.skuId, payload.code]
+  [
+    payload.productType,
+    payload.skuId,
+    payload.code,
+    payload.codeCiphertext || null,
+    payload.codeIv || null,
+    payload.codeAuthTag || null,
+    payload.codeLookupHash || null
+  ]
 );
 
 const listRedeemCodes = async (executor, filters = {}) => {
@@ -406,6 +486,31 @@ const getRedeemCodeById = async (executor, id) => {
   return rows[0] || null;
 };
 
+const getRedeemCodeByPlainCode = async (executor, code = '') => {
+  const [rows] = await executor.execute(
+    'SELECT id FROM redeem_codes WHERE code = ? LIMIT 1',
+    [code]
+  );
+  return rows[0] || null;
+};
+
+const getRedeemCodesByIds = async (executor, ids = []) => {
+  const normalizedIds = [...new Set(ids
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0))];
+  if (!normalizedIds.length) return [];
+  const placeholders = normalizedIds.map(() => '?').join(', ');
+  const [rows] = await executor.execute(
+    `
+      SELECT *
+      FROM redeem_codes
+      WHERE id IN (${placeholders})
+    `,
+    normalizedIds
+  );
+  return rows;
+};
+
 const deleteAvailableRedeemCodes = async (executor, ids = []) => {
   if (!ids.length) return [{ affectedRows: 0 }];
   const placeholders = ids.map(() => '?').join(', ');
@@ -439,5 +544,7 @@ module.exports = {
   listRedeemCodes,
   getRedeemCodeStats,
   getRedeemCodeById,
+  getRedeemCodeByPlainCode,
+  getRedeemCodesByIds,
   deleteAvailableRedeemCodes
 };
