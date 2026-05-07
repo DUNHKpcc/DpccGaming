@@ -84,8 +84,12 @@
                 @click="selectRechargePackage(pack.id)"
               >
                 <span class="plan-name">{{ pack.name }}</span>
+                <span v-if="pack.hasRechargeBonus" class="recharge-bonus-badge">{{ pack.bonusText }}</span>
                 <strong>{{ pack.priceText }}</strong>
-                <span class="daily-quota">{{ pack.quotaText }}</span>
+                <span class="daily-quota recharge-quota">
+                  <span v-if="pack.hasRechargeBonus" class="quota-original">{{ pack.originalQuotaText }}</span>
+                  <span class="quota-upgraded">{{ pack.quotaText }}</span>
+                </span>
                 <span class="plan-divider"></span>
                 <span class="plan-feature">✅到账余额 · ⚡调用扣费</span>
                 <span class="plan-feature">🔒服务端锁定金额和额度</span>
@@ -152,7 +156,12 @@
               </div>
               <div v-else>
                 <dt>到账</dt>
-                <dd>{{ selectedRechargePackage.quotaText }}</dd>
+                <dd>
+                  <span class="recharge-quota order-recharge-quota">
+                    <span v-if="selectedRechargePackage.hasRechargeBonus" class="quota-original">{{ selectedRechargePackage.originalQuotaText }}</span>
+                    <span class="quota-upgraded">{{ selectedRechargePackage.quotaText }}</span>
+                  </span>
+                </dd>
               </div>
               <div>
                 <dt>订单</dt>
@@ -207,6 +216,7 @@ const planPresentation = {
 const formatMoney = (amount) => `¥${Number(amount || 0).toFixed(2)}`
 const formatQuota = (quota) => `每日 $${Number(quota || 0).toFixed(0)} 免费额度`
 const formatRechargeQuota = (quota) => `到账 $${Number(quota || 0).toFixed(0)} 普通额度`
+const formatRechargeBonus = (quota, originalQuota) => `多送 $${Math.max(0, Number(quota || 0) - Number(originalQuota || 0)).toFixed(0)}`
 
 const productMode = ref('subscription')
 const plans = ref([])
@@ -219,11 +229,11 @@ const countdownNow = ref(Date.now())
 let countdownTimerId = null
 const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度' }
 const emptyDuration = { label: '加载中', months: 1 }
-const emptyRechargePackage = { name: '加载中', price: 0, quotaText: '正在加载额度' }
+const emptyRechargePackage = { name: '加载中', price: 0, quotaText: '正在加载额度', hasRechargeBonus: false }
 
 const selectedPlanId = ref('gold')
 const selectedDurationId = ref('1m')
-const selectedRechargePackageId = ref('usd-6')
+const selectedRechargePackageId = ref('usd-25')
 
 const selectProductMode = (mode) => {
   productMode.value = mode
@@ -339,11 +349,18 @@ const loadPaymentCatalog = async () => {
       features: planPresentation[plan.id]?.features || []
     }))
     durations.value = catalog.durations || []
-    rechargePackages.value = (catalog.rechargePackages || []).map((pack) => ({
-      ...pack,
-      priceText: formatMoney(pack.price),
-      quotaText: formatRechargeQuota(pack.quotaUsd)
-    }))
+    rechargePackages.value = (catalog.rechargePackages || []).map((pack) => {
+      const originalQuotaUsd = pack.originalQuotaUsd
+      const hasRechargeBonus = Number(originalQuotaUsd || 0) > 0 && Number(originalQuotaUsd) < Number(pack.quotaUsd || 0)
+      return {
+        ...pack,
+        priceText: formatMoney(pack.price),
+        quotaText: formatRechargeQuota(pack.quotaUsd),
+        hasRechargeBonus,
+        originalQuotaText: hasRechargeBonus ? formatRechargeQuota(originalQuotaUsd) : '',
+        bonusText: hasRechargeBonus ? formatRechargeBonus(pack.quotaUsd, originalQuotaUsd) : ''
+      }
+    })
   } catch (error) {
     paymentError.value = error.message || '支付款项加载失败'
   }
@@ -714,6 +731,11 @@ onBeforeUnmount(stopCountdown)
   color: var(--text-primary);
 }
 
+.plan-card.selected .recharge-bonus-badge {
+  border-color: var(--bg-primary);
+  color: var(--bg-primary);
+}
+
 .recommend-badge {
   position: absolute;
   top: 1.5rem;
@@ -746,6 +768,44 @@ onBeforeUnmount(stopCountdown)
   font-weight: 900;
 }
 
+.recharge-bonus-badge {
+  margin-top: 0.65rem;
+  border: 1px solid var(--border-secondary);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.recharge-quota {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.28rem;
+  line-height: 1.25;
+}
+
+.quota-original {
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-decoration: line-through;
+  text-decoration-color: #f5b301;
+  text-decoration-thickness: 2px;
+  text-decoration-skip-ink: none;
+}
+
+.quota-upgraded {
+  color: inherit;
+  font-weight: 900;
+}
+
+.order-recharge-quota {
+  margin-top: 0;
+}
+
 .plan-divider {
   width: 100%;
   height: 1px;
@@ -763,7 +823,8 @@ onBeforeUnmount(stopCountdown)
 .payment-config {
   gap: 1rem;
   flex: 0 0 auto;
-  margin-bottom: 0.85rem;
+  margin-top: auto;
+  margin-bottom: 0;
 }
 
 .config-panel,
@@ -940,6 +1001,7 @@ onBeforeUnmount(stopCountdown)
 }
 
 .pay-button {
+  margin-top: auto;
   min-height: 3.35rem;
   border: 0;
   border-radius: 0.5rem;
@@ -1004,6 +1066,9 @@ onBeforeUnmount(stopCountdown)
   .plan-grid,
   .payment-config {
     gap: 0.75rem;
+  }
+
+  .plan-grid {
     margin-bottom: 0.7rem;
   }
 

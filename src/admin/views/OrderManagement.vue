@@ -126,6 +126,10 @@
           <dt>兑换码</dt>
           <dd>{{ selectedOrder.maskedRedeemCode }}</dd>
         </div>
+        <div v-if="selectedOrder.maskedBonusRedeemCode">
+          <dt>赠送码</dt>
+          <dd>{{ selectedOrder.maskedBonusRedeemCode }}</dd>
+        </div>
         <div v-if="selectedOrder.alipayTradeNo">
           <dt>支付宝交易号</dt>
           <dd>{{ selectedOrder.alipayTradeNo }}</dd>

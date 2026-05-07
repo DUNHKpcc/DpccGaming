@@ -78,10 +78,17 @@
 
           <template v-else>
             <h2>兑换码</h2>
-            <div v-if="canRedeem" class="redeem-code-row">
-              <code>{{ orderResult.redeemCode }}</code>
-              <button type="button" @click="copyRedeemCode">复制</button>
-            </div>
+            <template v-if="canRedeem">
+              <div
+                v-for="item in redeemCodes"
+                :key="item.label"
+                class="redeem-code-row"
+              >
+                <span class="redeem-code-label">{{ item.label }}</span>
+                <code>{{ item.code }}</code>
+                <button type="button" @click="copyRedeemCode(item.code)">复制</button>
+              </div>
+            </template>
             <p v-else class="muted-copy">{{ redeemPlaceholderText }}</p>
 
             <a
@@ -130,7 +137,16 @@ const isPaid = computed(() => orderResult.value.status === 'paid')
 const isSubscriptionOrder = computed(() => orderResult.value.productType === 'subscription')
 const isSubscriptionPaid = computed(() => isPaid.value && isSubscriptionOrder.value)
 const needsApiUsername = computed(() => isSubscriptionPaid.value && !orderResult.value.apiUsername)
-const canRedeem = computed(() => isPaid.value && orderResult.value.productType === 'recharge' && Boolean(orderResult.value.redeemCode))
+const redeemCodes = computed(() => {
+  if (Array.isArray(orderResult.value.redeemCodes) && orderResult.value.redeemCodes.length) {
+    return orderResult.value.redeemCodes.filter((item) => item?.code)
+  }
+  return orderResult.value.redeemCode
+    ? [{ label: '原有额度', code: orderResult.value.redeemCode }]
+    : []
+})
+const canRedeem = computed(() => isPaid.value && orderResult.value.productType === 'recharge' && redeemCodes.value.length > 0)
+const hasAllRedeemCodes = computed(() => canRedeem.value && orderResult.value.fulfillmentStatus === 'code_assigned')
 const isManualRequired = computed(() => isPaid.value && orderResult.value.productType === 'recharge' && orderResult.value.fulfillmentStatus === 'manual_required')
 const isExpiredPending = computed(() => {
   if (orderResult.value.status !== 'pending' || !orderResult.value.expiresAt) return false
@@ -152,15 +168,15 @@ const supportCopy = computed(() => (
 const titleText = computed(() => {
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '支付成功，等待处理'
   if (needsApiUsername.value) return '支付成功，填写用户名'
-  if (canRedeem.value) return '支付成功'
   if (isManualRequired.value) return '支付成功，等待发码'
+  if (hasAllRedeemCodes.value) return '支付成功'
   if (isExpiredPending.value) return '支付未完成'
   return '检查支付结果'
 })
 
 const statusTone = computed(() => {
   if (isSubscriptionPaid.value) return 'success'
-  if (canRedeem.value) return 'success'
+  if (hasAllRedeemCodes.value) return 'success'
   if (isManualRequired.value) return 'warning'
   if (isExpiredPending.value) return 'warning'
   if (errorMessage.value) return 'error'
@@ -170,8 +186,8 @@ const statusTone = computed(() => {
 const statusIcon = computed(() => {
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return 'fa-solid fa-clock'
   if (needsApiUsername.value) return 'fa-solid fa-user'
-  if (canRedeem.value) return 'fa-solid fa-check'
   if (isManualRequired.value) return 'fa-solid fa-headset'
+  if (hasAllRedeemCodes.value) return 'fa-solid fa-check'
   if (isExpiredPending.value) return 'fa-solid fa-clock-rotate-left'
   if (errorMessage.value) return 'fa-solid fa-triangle-exclamation'
   return 'fa-solid fa-spinner'
@@ -180,8 +196,8 @@ const statusIcon = computed(() => {
 const statusHeading = computed(() => {
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '用户名已提交，请等待 5 分钟'
   if (needsApiUsername.value) return '已确认支付，请填写 DPCC-API 用户名'
-  if (canRedeem.value) return '已确认支付并发放兑换码'
   if (isManualRequired.value) return '已确认支付，库存待人工处理'
+  if (hasAllRedeemCodes.value) return '已确认支付并发放兑换码'
   if (isExpiredPending.value) return '订单未完成支付'
   if (errorMessage.value) return '暂时无法确认'
   return '正在等待支付宝确认'
@@ -190,8 +206,10 @@ const statusHeading = computed(() => {
 const statusDescription = computed(() => {
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '我们会按你提交的平台用户名处理月卡订阅。'
   if (needsApiUsername.value) return '月卡订阅不提供兑换码，请提交你在另一个平台的用户名。'
-  if (canRedeem.value) return '复制兑换码后前往外部兑换网站完成充值。'
-  if (isManualRequired.value) return '请添加售后微信，我们会根据订单号补发兑换码。'
+  if (hasAllRedeemCodes.value) return '复制原有额度和赠送额度两个兑换码后前往外部兑换网站完成充值。'
+  if (isManualRequired.value) return canRedeem.value
+    ? '已发放当前可用兑换码，缺失部分请添加售后微信补发。'
+    : '请添加售后微信，我们会根据订单号补发兑换码。'
   if (isExpiredPending.value) return '这笔订单没有收到支付成功通知，请返回支付页重新下单。'
   if (errorMessage.value) return '请稍后重试，或添加微信联系售后。'
   return '支付宝异步通知可能延迟几秒，本页会自动刷新。'
@@ -306,7 +324,7 @@ const copyText = async (text) => {
   await navigator.clipboard?.writeText(text)
 }
 
-const copyRedeemCode = () => copyText(orderResult.value.redeemCode)
+const copyRedeemCode = (code) => copyText(code)
 const copySupportWechat = () => copyText(supportWechat.value)
 
 onMounted(() => {
@@ -520,6 +538,14 @@ onBeforeUnmount(stopPolling)
   align-items: center;
   gap: 0.75rem;
   margin: 1rem 0;
+}
+
+.redeem-code-label {
+  width: 5rem;
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  font-size: 0.82rem;
+  font-weight: 900;
 }
 
 .api-username-form {
