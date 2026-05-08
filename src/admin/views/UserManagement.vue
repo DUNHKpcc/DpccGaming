@@ -11,9 +11,19 @@
     </template>
 
     <el-card class="admin-panel-card" shadow="never">
+      <div class="admin-filter-bar">
+        <el-input
+          v-model="searchQuery"
+          class="admin-search-input"
+          clearable
+          placeholder="搜索用户名或用户ID"
+        />
+      </div>
+
       <el-table
-        v-if="users.length"
-        :data="users"
+        v-if="filteredUsers.length"
+        :data="pagedUsers"
+        class="admin-user-table"
         height="100%"
         row-key="id"
       >
@@ -27,7 +37,8 @@
                 <strong class="admin-username-row">
                   <span>{{ row.username }}</span>
                 </strong>
-                <small>{{ row.email || '未设置邮箱' }}</small>
+                <small class="admin-user-id-row">ID: {{ row.id }}</small>
+                <small class="admin-user-email-row">{{ row.email || '未设置邮箱' }}</small>
               </div>
             </div>
           </template>
@@ -86,21 +97,64 @@
         </el-table-column>
       </el-table>
 
-      <el-empty v-else description="暂无用户数据">
+      <el-empty v-else :description="emptyDescription">
         <el-button type="primary" @click="refreshUsers">刷新列表</el-button>
       </el-empty>
+
+      <div v-if="totalPages > 1" class="admin-pagination">
+        <el-pagination
+          v-model:current-page="currentPage"
+          background
+          layout="prev, pager, next"
+          :page-size="pageSize"
+          :total="totalUsers"
+        />
+      </div>
     </el-card>
   </AdminLayout>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { useNotificationStore } from '../../stores/notification'
 
 const notificationStore = useNotificationStore()
 const users = ref([])
+const searchQuery = ref('')
+const currentPage = ref(1)
+const pageSize = 10
+
+const filteredUsers = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase()
+  if (!keyword) return users.value
+
+  return users.value.filter((user) => (
+    String(user.id || '').includes(keyword)
+    || String(user.username || '').toLowerCase().includes(keyword)
+  ))
+})
+
+const pagedUsers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredUsers.value.slice(start, start + pageSize)
+})
+
+const totalUsers = computed(() => filteredUsers.value.length)
+const totalPages = computed(() => Math.ceil(totalUsers.value / pageSize))
+const emptyDescription = computed(() => (users.value.length ? '暂无匹配用户' : '暂无用户数据'))
+
+watch(searchQuery, () => {
+  currentPage.value = 1
+})
+
+watch(totalPages, (pages) => {
+  const lastPage = Math.max(pages, 1)
+  if (currentPage.value > lastPage) {
+    currentPage.value = lastPage
+  }
+})
 
 const roleOptions = [
   { value: 'user', label: '普通用户' },
@@ -125,6 +179,7 @@ const fetchUsers = async () => {
     if (response.ok) {
       const data = await response.json()
       users.value = data.users || []
+      currentPage.value = 1
     } else {
       const error = await response.json()
       notificationStore.error('获取失败', error.error || '获取用户列表失败')
@@ -348,8 +403,28 @@ onMounted(() => {
 }
 
 .admin-panel-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
   padding: 0;
+}
+
+.admin-user-table {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.admin-filter-bar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.admin-search-input {
+  max-width: 22rem;
 }
 
 .admin-user-cell,
@@ -378,5 +453,20 @@ onMounted(() => {
 
 .el-button i {
   margin-right: 0.35rem;
+}
+
+.admin-pagination {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid #eef2f7;
+}
+
+@media (max-width: 720px) {
+  .admin-search-input {
+    width: 100%;
+    max-width: none;
+  }
 }
 </style>

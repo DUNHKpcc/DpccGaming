@@ -101,7 +101,7 @@
 
         <div class="redeem-table-shell">
           <el-table
-            :data="codes"
+            :data="pagedCodes"
             height="100%"
             row-key="id"
             empty-text="暂无兑换码"
@@ -168,13 +168,23 @@
             </el-table-column>
           </el-table>
         </div>
+
+        <div v-if="totalPages > 1" class="redeem-pagination">
+          <el-pagination
+            v-model:current-page="currentPage"
+            background
+            layout="prev, pager, next"
+            :page-size="pageSize"
+            :total="codeTotal"
+          />
+        </div>
       </el-card>
     </div>
   </AdminLayout>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
@@ -193,6 +203,8 @@ const isDeleting = ref(false)
 const selectedCodes = ref([])
 const revealedCodes = ref({})
 const secretLoadingId = ref(null)
+const currentPage = ref(1)
+const pageSize = 10
 
 const splitProductKey = (key = '') => {
   const [productType = '', skuId = ''] = String(key || '').split(':')
@@ -213,6 +225,25 @@ const activeProductLabel = computed(() => (
 const selectedAvailableIds = computed(() => selectedCodes.value
   .filter((item) => item.status === 'available')
   .map((item) => item.id))
+
+const pagedCodes = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return codes.value.slice(start, start + pageSize)
+})
+
+const codeTotal = computed(() => codes.value.length)
+const totalPages = computed(() => Math.ceil(codeTotal.value / pageSize))
+
+watch(totalPages, (pages) => {
+  const lastPage = Math.max(pages, 1)
+  if (currentPage.value > lastPage) {
+    currentPage.value = lastPage
+  }
+})
+
+watch(currentPage, () => {
+  selectedCodes.value = []
+})
 
 const visibleStats = computed(() => {
   const groups = new Map()
@@ -265,6 +296,7 @@ const fetchCodes = async () => {
   const result = await apiCall(`/admin/redeem-codes?${params.toString()}`, { method: 'GET' })
   codes.value = result.codes || []
   stats.value = result.stats || []
+  currentPage.value = 1
   selectedCodes.value = []
   revealedCodes.value = {}
 }
@@ -514,6 +546,14 @@ onMounted(async () => {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+
+.redeem-pagination {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid #eef2f7;
 }
 
 .redeem-code-text {

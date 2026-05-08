@@ -132,6 +132,13 @@ watch([searchQuery, selectedCategory], () => {
   currentPage.value = 1
 })
 
+watch(totalPages, (pages) => {
+  const lastPage = Math.max(pages, 1)
+  if (currentPage.value > lastPage) {
+    currentPage.value = lastPage
+  }
+})
+
 const fetchGames = async () => {
   try {
     const token = localStorage.getItem('token')
