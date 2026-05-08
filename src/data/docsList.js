@@ -5,6 +5,24 @@ const docsPublisher = {
 
 export const docsList = [
   {
+    id: 'gpt55-prompting-guide',
+    title: '不是模型降智，变笨了，而是懒得美化你的垃圾提示词',
+    tag: 'SKILL',
+    summary: '别再用你的垃圾Prompting了',
+    publisher: docsPublisher,
+    cover: '/doc-covers/prompting.webp',
+    file: '/doc-files/gpt55-prompting-guide.md'
+  },
+  {
+    id: 'agent-md',
+    title: '一个 AGENT 文档让你的 Codex 和 Claude Code 想清楚再做事',
+    tag: 'SKILL',
+    summary: 'Claude内部大佬的经验',
+    publisher: docsPublisher,
+    cover: '/doc-covers/claude.webp',
+    file: '/doc-files/agent-md.md'
+  },
+  {
     id: 'ppt-master',
     title: '如何生成高质量PPT',
     tag: 'SKILL',
