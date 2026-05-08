@@ -5,11 +5,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "vite",
-    "dev:test": "vite --config test/vite.react.config.js",
     "build": "vite build",
-    "build:test": "vite build --config test/vite.react.config.js",
     "preview": "vite preview",
-    "preview:test": "vite preview --config test/vite.react.config.js",
     "start": "node server.js",
     "server": "node server.js",
     "blog:optimize": "python3 py_script/blog-image-optimizer.py"

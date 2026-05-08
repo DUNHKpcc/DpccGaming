@@ -67,3 +67,9 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria allow independent execution. Weak criteria like "make it work" require clarification.
 
+## Temporary Test Policy
+
+- Do not add permanent test files to this repository unless the user explicitly asks for committed tests.
+- When a task needs temporary tests, create them only under the repository root `temp-test/` directory.
+- Run the temporary tests needed for the task, then delete those test files before finishing.
+- Do not use `test/`, `tests/`, `backend/tests/`, or scattered `*.test.*` files elsewhere in the project.
