@@ -1,3 +1,29 @@
+const PAYMENT_DURATIONS = Object.freeze([
+  { id: '1m', label: '1个月', months: 1 },
+  { id: '3m', label: '3个月', months: 3 },
+  { id: '12m', label: '12个月', months: 12 }
+]);
+
+const RECHARGE_BONUS_USD = 30;
+const RECHARGE_BONUS_PACKAGE = Object.freeze({
+  id: 'usd-30-bonus',
+  name: '$30 赠送额度包',
+  quotaUsd: '30.00',
+  subject: 'DPCC API $30 Bonus Credit Pack'
+});
+
+const applyPlanBonus = (plan) => ({
+  ...plan,
+  bonusQuotaUsd: RECHARGE_BONUS_PACKAGE.quotaUsd
+});
+
+const applyRechargeBonus = (pack) => ({
+  ...pack,
+  originalQuotaUsd: pack.quotaUsd,
+  bonusQuotaUsd: RECHARGE_BONUS_PACKAGE.quotaUsd,
+  quotaUsd: (Number(pack.quotaUsd) + RECHARGE_BONUS_USD).toFixed(2)
+});
+
 const PAYMENT_PLANS = Object.freeze([
   {
     id: 'bronze',
@@ -20,35 +46,14 @@ const PAYMENT_PLANS = Object.freeze([
     dailyQuotaUsd: '50.00',
     subject: 'DPCC API Platinum Monthly Card'
   }
-]);
-
-const PAYMENT_DURATIONS = Object.freeze([
-  { id: '1m', label: '1个月', months: 1 },
-  { id: '3m', label: '3个月', months: 3 },
-  { id: '12m', label: '12个月', months: 12 }
-]);
-
-const RECHARGE_BONUS_USD = 30;
-const RECHARGE_BONUS_PACKAGE = Object.freeze({
-  id: 'usd-30-bonus',
-  name: '$30 赠送额度包',
-  quotaUsd: '30.00',
-  subject: 'DPCC API $30 Bonus Credit Pack'
-});
-
-const applyRechargeBonus = (pack) => ({
-  ...pack,
-  originalQuotaUsd: pack.quotaUsd,
-  bonusQuotaUsd: RECHARGE_BONUS_PACKAGE.quotaUsd,
-  quotaUsd: (Number(pack.quotaUsd) + RECHARGE_BONUS_USD).toFixed(2)
-});
+].map(applyPlanBonus));
 
 const RECHARGE_PACKAGES = Object.freeze([
-  { id: 'usd-25', name: '$25 额度包', quotaUsd: '25.00', price: '19.90', subject: 'DPCC API $25 Credit Pack' },
-  { id: 'usd-200', name: '$200 额度包', quotaUsd: '200.00', price: '149.90', subject: 'DPCC API $200 Credit Pack' },
-  { id: 'usd-500', name: '$500 额度包', quotaUsd: '500.00', price: '299.90', subject: 'DPCC API $500 Credit Pack' },
-  { id: 'usd-1000', name: '$1000 额度包', quotaUsd: '1000.00', price: '499.90', subject: 'DPCC API $1000 Credit Pack' },
-  { id: 'usd-2000', name: '$2000 额度包', quotaUsd: '2000.00', price: '899.90', subject: 'DPCC API $2000 Credit Pack' }
+  { id: 'usd-25', name: '$25 额度', quotaUsd: '25.00', price: '19.90', subject: 'DPCC API $25 Credit Pack' },
+  { id: 'usd-200', name: '$200 额度', quotaUsd: '200.00', price: '149.90', subject: 'DPCC API $200 Credit Pack' },
+  { id: 'usd-500', name: '$500 额度', quotaUsd: '500.00', price: '299.90', subject: 'DPCC API $500 Credit Pack' },
+  { id: 'usd-1000', name: '$1000 额度', quotaUsd: '1000.00', price: '499.90', subject: 'DPCC API $1000 Credit Pack' },
+  { id: 'usd-2000', name: '$2000 额度', quotaUsd: '2000.00', price: '899.90', subject: 'DPCC API $2000 Credit Pack' }
 ].map(applyRechargeBonus));
 
 const toCents = (amount) => Math.round(Number(amount) * 100);

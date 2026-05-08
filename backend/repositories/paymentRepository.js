@@ -409,10 +409,13 @@ const updatePaymentOrderApiUsername = async (executor, payload = {}) => executor
   `
     UPDATE payment_orders
     SET api_username = ?,
-        fulfillment_status = 'username_submitted'
+        fulfillment_status = CASE
+          WHEN fulfillment_status = 'manual_required' THEN 'manual_required'
+          ELSE 'username_submitted'
+        END
     WHERE order_no = ? AND user_id = ? AND status = 'paid'
       AND api_username IS NULL
-      AND fulfillment_status = 'username_required'
+      AND fulfillment_status IN ('username_required', 'manual_required')
   `,
   [
     payload.apiUsername,

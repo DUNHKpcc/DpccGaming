@@ -14,7 +14,7 @@
           <i :class="statusIcon" aria-hidden="true"></i>
         </div>
         <div>
-          <strong>{{ statusHeading }}</strong>
+          <strong :class="{ 'needs-username-heading': needsApiUsername }">{{ statusHeading }}</strong>
           <span>{{ statusDescription }}</span>
         </div>
       </section>
@@ -25,7 +25,10 @@
           <dl>
             <div>
               <dt>订单号</dt>
-              <dd>{{ orderNo || '等待支付宝回传订单号' }}</dd>
+              <dd class="order-number-value">
+                <span>{{ orderNo || '等待支付宝回传订单号' }}</span>
+                <button v-if="orderNo" type="button" @click="copyOrderNo">复制</button>
+              </dd>
             </div>
             <div>
               <dt>支付状态</dt>
@@ -74,6 +77,31 @@
             </form>
             <p v-else class="muted-copy">已提交 {{ orderResult.apiUsername }}，请等待 5 分钟。</p>
             <p v-if="apiUsernameMessage" class="success-message">{{ apiUsernameMessage }}</p>
+
+            <div v-if="subscriptionBonusRedeemCodes.length" class="subscription-bonus-codes">
+              <h3>赠送金兑换码</h3>
+              <div
+                v-for="item in subscriptionBonusRedeemCodes"
+                :key="item.label"
+                class="redeem-code-row"
+              >
+                <span class="redeem-code-label">{{ item.label }}</span>
+                <code>{{ item.code }}</code>
+                <button type="button" @click="copyRedeemCode(item.code)">复制</button>
+              </div>
+              <a
+                class="redeem-link"
+                :href="redeemUrl"
+                target="_blank"
+                rel="noopener"
+              >
+                前往兑换网站
+                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+              </a>
+            </div>
+            <p v-else-if="isSubscriptionManualRequired" class="muted-copy manual-copy">
+              赠送码当前库存不足，订单已转入人工补发。请先提交 DPCC-API 用户名，并通过售后微信提供订单号。
+            </p>
           </template>
 
           <template v-else>
@@ -101,12 +129,13 @@
               <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
             </a>
           </template>
-        </div>
 
-        <div class="support-panel">
-          <h2>售后和技术支持</h2>
-          <p>{{ supportCopy }}</p>
-          <button type="button" @click="copySupportWechat">复制微信号</button>
+          <div class="support-block">
+            <div>
+              <h2>售后和技术支持</h2>
+              <p>{{ supportCopy }}</p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -136,6 +165,7 @@ const redeemUrl = computed(() => orderResult.value.redeemUrl || 'https://api.dpc
 const isPaid = computed(() => orderResult.value.status === 'paid')
 const isSubscriptionOrder = computed(() => orderResult.value.productType === 'subscription')
 const isSubscriptionPaid = computed(() => isPaid.value && isSubscriptionOrder.value)
+const isSubscriptionManualRequired = computed(() => isSubscriptionPaid.value && orderResult.value.fulfillmentStatus === 'manual_required')
 const needsApiUsername = computed(() => isSubscriptionPaid.value && !orderResult.value.apiUsername)
 const redeemCodes = computed(() => {
   if (Array.isArray(orderResult.value.redeemCodes) && orderResult.value.redeemCodes.length) {
@@ -145,6 +175,11 @@ const redeemCodes = computed(() => {
     ? [{ label: '原有额度', code: orderResult.value.redeemCode }]
     : []
 })
+const subscriptionBonusRedeemCodes = computed(() => (
+  isSubscriptionPaid.value
+    ? redeemCodes.value.filter((item) => String(item.label || '').includes('赠送'))
+    : []
+))
 const canRedeem = computed(() => isPaid.value && orderResult.value.productType === 'recharge' && redeemCodes.value.length > 0)
 const hasAllRedeemCodes = computed(() => canRedeem.value && orderResult.value.fulfillmentStatus === 'code_assigned')
 const isManualRequired = computed(() => isPaid.value && orderResult.value.productType === 'recharge' && orderResult.value.fulfillmentStatus === 'manual_required')
@@ -160,12 +195,15 @@ const apiUsernameText = computed(() => {
   return '-'
 })
 const supportCopy = computed(() => (
-  isSubscriptionPaid.value
-    ? `添加微信 ${supportWechat.value}，请同时提供订单号和 DPCC-API 用户名。`
+  isSubscriptionManualRequired.value
+    ? `添加微信 ${supportWechat.value}，请同时提供订单号和 DPCC-API 用户名，售后会补发赠送码。`
+    : isSubscriptionPaid.value
+    ? `添加微信 ${supportWechat.value}，请同时提供订单号、DPCC-API 用户名和赠送金兑换码。`
     : `添加微信 ${supportWechat.value}，请同时提供订单号和兑换码。`
 ))
 
 const titleText = computed(() => {
+  if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '支付成功，等待补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '支付成功，等待处理'
   if (needsApiUsername.value) return '支付成功，填写用户名'
   if (isManualRequired.value) return '支付成功，等待发码'
@@ -175,6 +213,7 @@ const titleText = computed(() => {
 })
 
 const statusTone = computed(() => {
+  if (isSubscriptionManualRequired.value) return 'warning'
   if (isSubscriptionPaid.value) return 'success'
   if (hasAllRedeemCodes.value) return 'success'
   if (isManualRequired.value) return 'warning'
@@ -184,6 +223,7 @@ const statusTone = computed(() => {
 })
 
 const statusIcon = computed(() => {
+  if (isSubscriptionManualRequired.value) return 'fa-solid fa-headset'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return 'fa-solid fa-clock'
   if (needsApiUsername.value) return 'fa-solid fa-user'
   if (isManualRequired.value) return 'fa-solid fa-headset'
@@ -194,6 +234,8 @@ const statusIcon = computed(() => {
 })
 
 const statusHeading = computed(() => {
+  if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '用户名已提交，赠送码待补发'
+  if (isSubscriptionManualRequired.value) return '已确认支付，赠送码待人工补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '用户名已提交，请等待 5 分钟'
   if (needsApiUsername.value) return '已确认支付，请填写 DPCC-API 用户名'
   if (isManualRequired.value) return '已确认支付，库存待人工处理'
@@ -204,8 +246,10 @@ const statusHeading = computed(() => {
 })
 
 const statusDescription = computed(() => {
+  if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '我们会处理月卡订阅，并通过售后补发赠送码。'
+  if (isSubscriptionManualRequired.value) return '请提交你在另一个平台的用户名，赠送码库存不足的部分会由人工补发。'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '我们会按你提交的平台用户名处理月卡订阅。'
-  if (needsApiUsername.value) return '月卡订阅不提供兑换码，请提交你在另一个平台的用户名。'
+  if (needsApiUsername.value) return '请提交你在另一个平台的用户名，赠送金兑换码可在本页领取。'
   if (hasAllRedeemCodes.value) return '复制原有额度和赠送额度两个兑换码后前往外部兑换网站完成充值。'
   if (isManualRequired.value) return canRedeem.value
     ? '已发放当前可用兑换码，缺失部分请添加售后微信补发。'
@@ -324,8 +368,8 @@ const copyText = async (text) => {
   await navigator.clipboard?.writeText(text)
 }
 
+const copyOrderNo = () => copyText(orderNo.value)
 const copyRedeemCode = (code) => copyText(code)
-const copySupportWechat = () => copyText(supportWechat.value)
 
 onMounted(() => {
   loadOrderResult()
@@ -351,7 +395,7 @@ onBeforeUnmount(stopPolling)
 .status-band,
 .result-grid,
 .redeem-code-row,
-.support-panel {
+.support-block {
   display: flex;
 }
 
@@ -365,8 +409,7 @@ onBeforeUnmount(stopPolling)
 .result-header p,
 .result-header h1,
 .result-panel h2,
-.support-panel h2,
-.support-panel p,
+.result-panel h3,
 .api-username-form label,
 .success-message {
   margin: 0;
@@ -388,7 +431,7 @@ onBeforeUnmount(stopPolling)
 .secondary-action,
 .redeem-code-row button,
 .api-username-form button,
-.support-panel button,
+.order-number-value button,
 .redeem-link {
   border-radius: 0.5rem;
   font-weight: 900;
@@ -442,6 +485,10 @@ onBeforeUnmount(stopPolling)
   font-size: 1.25rem;
 }
 
+.status-band strong.needs-username-heading {
+  color: #ef4444;
+}
+
 .status-band span {
   margin-top: 0.25rem;
   color: var(--text-tertiary);
@@ -454,28 +501,41 @@ onBeforeUnmount(stopPolling)
   flex-wrap: wrap;
 }
 
-.result-panel,
-.support-panel {
+.result-panel {
   border: 1px solid var(--border-primary);
   background: var(--bg-secondary);
   border-radius: 0.75rem;
   padding: 1.25rem;
 }
 
+.support-block {
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--border-primary);
+}
+
 .result-panel {
   flex: 1 1 20rem;
 }
 
-.support-panel {
-  flex: 1 1 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+.result-panel h2,
+.support-block h2 {
+  font-size: 1rem;
 }
 
-.result-panel h2,
-.support-panel h2 {
-  font-size: 1rem;
+.subscription-bonus-codes {
+  margin-top: 1.25rem;
+}
+
+.subscription-bonus-codes h3 {
+  font-size: 0.92rem;
+}
+
+.manual-copy {
+  margin-top: 1rem;
 }
 
 .result-panel dl {
@@ -492,7 +552,7 @@ onBeforeUnmount(stopPolling)
 
 .result-panel dt,
 .muted-copy,
-.support-panel p {
+.support-block p {
   color: var(--text-tertiary);
   font-weight: 700;
 }
@@ -508,13 +568,29 @@ onBeforeUnmount(stopPolling)
 .secondary-action,
 .redeem-code-row button,
 .api-username-form button,
-.support-panel button,
 .redeem-link {
   min-height: 2.75rem;
   border: 0;
   background: var(--text-primary);
   color: var(--bg-primary);
   padding: 0 1rem;
+  cursor: pointer;
+}
+
+.order-number-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.order-number-value button {
+  min-height: 2.1rem;
+  border: 0;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0 0.7rem;
   cursor: pointer;
 }
 
@@ -607,7 +683,7 @@ onBeforeUnmount(stopPolling)
 
 @media (max-width: 720px) {
   .result-header,
-  .support-panel {
+  .support-block {
     align-items: flex-start;
     flex-direction: column;
   }

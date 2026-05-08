@@ -1,7 +1,14 @@
 const paymentService = require('../services/payment/paymentService');
 
-const getPaymentCatalog = (req, res) => {
-  res.json(paymentService.getCatalog());
+const getPaymentCatalog = async (req, res) => {
+  try {
+    res.json(await paymentService.getCatalog());
+  } catch (error) {
+    console.error('获取支付目录失败:', error);
+    res.status(error.statusCode || 500).json({
+      message: error.message || '获取支付目录失败'
+    });
+  }
 };
 
 const createAlipayOrder = async (req, res) => {

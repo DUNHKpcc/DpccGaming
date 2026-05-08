@@ -56,14 +56,22 @@
               :key="plan.id"
               type="button"
               class="plan-card"
-              :class="{ selected: plan.id === selectedPlanId }"
+              :class="{ selected: plan.id === selectedPlanId, 'has-plan-bonus': plan.hasPlanBonus }"
               :aria-pressed="plan.id === selectedPlanId"
               @click="selectPlan(plan.id)"
             >
               <span v-if="plan.recommended" class="recommend-badge">推荐款项</span>
+              <span v-if="plan.hasPlanBonus" class="recharge-bonus-badge">{{ plan.bonusText }}</span>
               <span class="plan-name">{{ plan.name }}</span>
               <strong>{{ plan.priceText }}</strong>
               <span class="daily-quota">{{ plan.dailyQuota }}</span>
+              <span
+                v-if="plan.hasPlanBonus"
+                class="stock-line"
+                :class="{ empty: !plan.hasBonusStock }"
+              >
+                {{ plan.bonusStockText }}
+              </span>
               <span class="plan-divider"></span>
               <span class="plan-feature" v-for="feature in plan.features" :key="feature">
                 {{ feature }}
@@ -89,6 +97,14 @@
                 <span class="daily-quota recharge-quota">
                   <span v-if="pack.hasRechargeBonus" class="quota-original">{{ pack.originalQuotaText }}</span>
                   <span class="quota-upgraded">{{ pack.quotaText }}</span>
+                </span>
+                <span class="stock-line" :class="{ empty: !pack.hasMainStock }">{{ pack.stockText }}</span>
+                <span
+                  v-if="pack.hasRechargeBonus"
+                  class="stock-line"
+                  :class="{ empty: !pack.hasBonusStock }"
+                >
+                  {{ pack.bonusStockText }}
                 </span>
                 <span class="plan-divider"></span>
                 <span class="plan-feature">✅到账余额 · ⚡调用扣费</span>
@@ -154,7 +170,15 @@
                 <dt>周期</dt>
                 <dd>{{ selectedDuration.label }}</dd>
               </div>
-              <div v-else>
+              <div v-if="isSubscriptionMode && selectedPlan.hasPlanBonus">
+                <dt>赠送余额</dt>
+                <dd>{{ selectedPlan.bonusQuotaText }}</dd>
+              </div>
+              <div v-if="isSubscriptionMode && selectedPlan.hasPlanBonus">
+                <dt>赠送码库存</dt>
+                <dd :class="{ 'stock-warning': !selectedPlan.hasBonusStock }">{{ selectedPlan.bonusStockText }}</dd>
+              </div>
+              <div v-if="!isSubscriptionMode">
                 <dt>到账</dt>
                 <dd>
                   <span class="recharge-quota order-recharge-quota">
@@ -162,6 +186,14 @@
                     <span class="quota-upgraded">{{ selectedRechargePackage.quotaText }}</span>
                   </span>
                 </dd>
+              </div>
+              <div v-if="!isSubscriptionMode">
+                <dt>兑换码库存</dt>
+                <dd :class="{ 'stock-warning': !selectedRechargePackage.hasMainStock }">{{ selectedRechargePackage.stockText }}</dd>
+              </div>
+              <div v-if="!isSubscriptionMode && selectedRechargePackage.hasRechargeBonus">
+                <dt>赠送码库存</dt>
+                <dd :class="{ 'stock-warning': !selectedRechargePackage.hasBonusStock }">{{ selectedRechargePackage.bonusStockText }}</dd>
               </div>
               <div>
                 <dt>订单</dt>
@@ -216,7 +248,16 @@ const planPresentation = {
 const formatMoney = (amount) => `¥${Number(amount || 0).toFixed(2)}`
 const formatQuota = (quota) => `每日 $${Number(quota || 0).toFixed(0)} 免费额度`
 const formatRechargeQuota = (quota) => `到账 $${Number(quota || 0).toFixed(0)} 普通额度`
-const formatRechargeBonus = (quota, originalQuota) => `多送 $${Math.max(0, Number(quota || 0) - Number(originalQuota || 0)).toFixed(0)}`
+const formatBonusQuota = (quota) => `赠送 $${Number(quota || 0).toFixed(0)} 普通余额`
+const formatRechargeBonus = (quota, originalQuota) => `多赠送 $${Math.max(0, Number(quota || 0) - Number(originalQuota || 0)).toFixed(0)}`
+const normalizeStock = (value) => {
+  const count = Number(value || 0)
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
+}
+const formatRedeemStock = (count, label = '兑换码') => {
+  const normalized = normalizeStock(count)
+  return normalized > 0 ? `${label}剩余 ${normalized} 个` : `${label}暂无库存，支付后人工处理`
+}
 
 const productMode = ref('subscription')
 const plans = ref([])
@@ -227,9 +268,18 @@ const isCreatingOrder = ref(false)
 const orderExpiresAt = ref('')
 const countdownNow = ref(Date.now())
 let countdownTimerId = null
-const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度' }
+const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度', hasBonusStock: false, bonusStockText: '赠送码库存同步中' }
 const emptyDuration = { label: '加载中', months: 1 }
-const emptyRechargePackage = { name: '加载中', price: 0, quotaText: '正在加载额度', hasRechargeBonus: false }
+const emptyRechargePackage = {
+  name: '加载中',
+  price: 0,
+  quotaText: '正在加载额度',
+  hasRechargeBonus: false,
+  hasMainStock: false,
+  hasBonusStock: false,
+  stockText: '兑换码库存同步中',
+  bonusStockText: '赠送码库存同步中'
+}
 
 const selectedPlanId = ref('gold')
 const selectedDurationId = ref('1m')
@@ -283,8 +333,12 @@ const orderSummaryText = computed(() => (
 ))
 const orderFooterText = computed(() => (
   isSubscriptionMode.value
-    ? '支付完成后请在结果页提交 DPCC-API 用户名，人工确认后为你开通月卡。'
-    : '支付完成后结果页会展示兑换码；库存不足时请凭订单号联系售后处理。'
+    ? (selectedPlan.value.hasBonusStock
+        ? '支付完成后请在结果页提交 DPCC-API 用户名，赠送码可在结果页领取。'
+        : '当前赠送码暂无库存，支付后请提交用户名，赠送码会转入人工补发。')
+    : (selectedRechargePackage.value.hasMainStock && selectedRechargePackage.value.hasBonusStock
+        ? '支付完成后结果页会展示兑换码；复制后前往兑换网站完成充值。'
+        : '当前有兑换码库存不足，支付后会转入人工发码，请凭订单号联系售后处理。')
 ))
 const orderId = computed(() => `服务端创建后锁定`)
 const isPayDisabled = computed(() => (
@@ -346,6 +400,11 @@ const loadPaymentCatalog = async () => {
       ...planPresentation[plan.id],
       priceText: formatMoney(plan.price),
       dailyQuota: formatQuota(plan.dailyQuotaUsd),
+      hasPlanBonus: Number(plan.bonusQuotaUsd || 0) > 0,
+      bonusText: Number(plan.bonusQuotaUsd || 0) > 0 ? formatRechargeBonus(plan.bonusQuotaUsd, 0) : '',
+      bonusQuotaText: Number(plan.bonusQuotaUsd || 0) > 0 ? formatBonusQuota(plan.bonusQuotaUsd) : '',
+      hasBonusStock: normalizeStock(plan.bonusRedeemCodesAvailable) > 0,
+      bonusStockText: formatRedeemStock(plan.bonusRedeemCodesAvailable, '赠送码'),
       features: planPresentation[plan.id]?.features || []
     }))
     durations.value = catalog.durations || []
@@ -358,7 +417,11 @@ const loadPaymentCatalog = async () => {
         quotaText: formatRechargeQuota(pack.quotaUsd),
         hasRechargeBonus,
         originalQuotaText: hasRechargeBonus ? formatRechargeQuota(originalQuotaUsd) : '',
-        bonusText: hasRechargeBonus ? formatRechargeBonus(pack.quotaUsd, originalQuotaUsd) : ''
+        bonusText: hasRechargeBonus ? formatRechargeBonus(pack.quotaUsd, originalQuotaUsd) : '',
+        hasMainStock: normalizeStock(pack.availableRedeemCodes) > 0,
+        hasBonusStock: normalizeStock(pack.bonusRedeemCodesAvailable) > 0,
+        stockText: formatRedeemStock(pack.availableRedeemCodes, '兑换码'),
+        bonusStockText: formatRedeemStock(pack.bonusRedeemCodesAvailable, '赠送码')
       }
     })
   } catch (error) {
@@ -417,6 +480,7 @@ onBeforeUnmount(stopCountdown)
 
 <style scoped>
 .payment-page {
+  --payment-plan-card-height: clamp(18.5rem, 38vh, 21rem);
   width: 100%;
   max-width: 100%;
   min-height: calc(100vh - 4rem);
@@ -692,10 +756,12 @@ onBeforeUnmount(stopCountdown)
 
 .plan-card {
   position: relative;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-height: clamp(15.75rem, 34vh, 19rem);
+  min-height: var(--payment-plan-card-height);
+  height: var(--payment-plan-card-height);
   padding: clamp(1.25rem, 2.5vh, 1.875rem) clamp(1rem, 2vw, 1.5rem) clamp(1rem, 2vh, 1.5rem);
   border: 1px solid var(--border-primary);
   border-radius: 0.5rem;
@@ -703,6 +769,10 @@ onBeforeUnmount(stopCountdown)
   color: var(--text-primary);
   text-align: left;
   transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.plan-card.has-plan-bonus {
+  padding-top: clamp(3.25rem, 5vh, 4rem);
 }
 
 .recharge-grid .plan-card {
@@ -718,7 +788,8 @@ onBeforeUnmount(stopCountdown)
 }
 
 .plan-card.selected .daily-quota,
-.plan-card.selected .plan-feature {
+.plan-card.selected .plan-feature,
+.plan-card.selected .stock-line {
   color: var(--bg-primary);
 }
 
@@ -729,11 +800,6 @@ onBeforeUnmount(stopCountdown)
 .plan-card.selected .recommend-badge {
   background: var(--bg-primary);
   color: var(--text-primary);
-}
-
-.plan-card.selected .recharge-bonus-badge {
-  border-color: var(--bg-primary);
-  color: var(--bg-primary);
 }
 
 .recommend-badge {
@@ -748,6 +814,12 @@ onBeforeUnmount(stopCountdown)
   font-size: 0.72rem;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.plan-card.has-plan-bonus .recommend-badge {
+  top: 1rem;
+  right: auto;
+  left: 1rem;
 }
 
 .plan-name {
@@ -768,15 +840,48 @@ onBeforeUnmount(stopCountdown)
   font-weight: 900;
 }
 
+.stock-line {
+  margin-top: 0.45rem;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.stock-line.empty,
+.stock-warning {
+  color: #f59e0b;
+}
+
 .recharge-bonus-badge {
-  margin-top: 0.65rem;
-  border: 1px solid var(--border-secondary);
-  border-radius: 999px;
-  padding: 0.25rem 0.55rem;
-  color: var(--text-primary);
-  font-size: 0.76rem;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1;
+  border-radius: 0.2rem 0.2rem 0.2rem 0;
+  padding: 0.38rem 0.68rem;
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  color: #ffffff;
+  box-shadow: 0 0.45rem 1rem rgba(239, 68, 68, 0.26);
+  font-size: 0.74rem;
   font-weight: 900;
   line-height: 1;
+  white-space: nowrap;
+  transform: rotate(2deg);
+}
+
+.recharge-bonus-badge::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -0.35rem;
+  border-top: 0.35rem solid #b91c1c;
+  border-left: 0.35rem solid transparent;
+}
+
+.recharge-grid .plan-name {
+  display: block;
+  max-width: calc(100% - 7.25rem);
 }
 
 .recharge-quota {
@@ -823,7 +928,7 @@ onBeforeUnmount(stopCountdown)
 .payment-config {
   gap: 1rem;
   flex: 0 0 auto;
-  margin-top: auto;
+  margin-top: 0;
   margin-bottom: 0;
 }
 
@@ -917,19 +1022,20 @@ onBeforeUnmount(stopCountdown)
 
 .order-panel {
   flex: 0 0 clamp(20.5rem, 31vw, 24.5rem);
+  align-self: flex-start;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.6rem;
   min-height: 0;
   overflow: visible;
-  padding: clamp(1rem, 2vw, 1.25rem);
+  padding: 1rem;
 }
 
 .amount-box,
 .order-footer-note {
   background: var(--bg-tertiary);
   border-radius: 0.5rem;
-  padding: 1rem;
+  padding: 0.85rem 0.9rem;
 }
 
 .amount-box {
@@ -955,7 +1061,7 @@ onBeforeUnmount(stopCountdown)
 
 .amount-box p,
 .order-footer-note p {
-  margin: 0.45rem 0 0;
+  margin: 0.42rem 0 0;
   color: var(--text-secondary);
   font-weight: 700;
   line-height: 1.5;
@@ -964,12 +1070,12 @@ onBeforeUnmount(stopCountdown)
 .order-details {
   border: 1px solid var(--border-primary);
   border-radius: 0.5rem;
-  padding: 0.95rem 1rem;
+  padding: 0.85rem 0.9rem;
 }
 
 .order-details dl {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.46rem;
   margin: 0.65rem 0 0;
 }
 
@@ -1001,8 +1107,8 @@ onBeforeUnmount(stopCountdown)
 }
 
 .pay-button {
-  margin-top: auto;
-  min-height: 3.35rem;
+  margin-top: 0;
+  min-height: 3.1rem;
   border: 0;
   border-radius: 0.5rem;
   background: var(--text-primary);
@@ -1073,7 +1179,8 @@ onBeforeUnmount(stopCountdown)
   }
 
   .plan-card {
-    min-height: 13.25rem;
+    min-height: 17rem;
+    height: 17rem;
   }
 
   .plan-divider {
@@ -1131,6 +1238,7 @@ onBeforeUnmount(stopCountdown)
 
   .plan-card {
     min-height: 0;
+    height: auto;
   }
 
   .recharge-grid .plan-card {

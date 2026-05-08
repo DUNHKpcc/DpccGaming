@@ -95,11 +95,45 @@ const ensureAlipayCreateConfig = () => {
   }
 };
 
-const getCatalog = () => ({
-  plans: listPaymentPlans(),
-  durations: listPaymentDurations(),
-  rechargePackages: listRechargePackages()
-});
+const buildRedeemCodeInventory = (stats = []) => {
+  const availableBySku = new Map();
+  stats.forEach((row = {}) => {
+    if (row.status !== 'available') return;
+    const key = `${row.product_type}:${row.sku_id}`;
+    availableBySku.set(key, Number(row.count || 0));
+  });
+  const availableFor = (productType, skuId) => availableBySku.get(`${productType}:${skuId}`) || 0;
+  const bonusPackage = getRechargeBonusPackage();
+  const bonusAvailable = availableFor('recharge', bonusPackage.id);
+
+  return {
+    availableFor,
+    bonusPackage,
+    bonusAvailable
+  };
+};
+
+const getCatalog = async (pool = getPool()) => {
+  await repository.ensurePaymentTables(pool);
+  const inventory = buildRedeemCodeInventory(await repository.getRedeemCodeStats(pool));
+
+  return {
+    plans: listPaymentPlans().map((plan) => ({
+      ...plan,
+      bonusRedeemCodesAvailable: inventory.bonusAvailable
+    })),
+    durations: listPaymentDurations(),
+    rechargePackages: listRechargePackages().map((pack) => ({
+      ...pack,
+      availableRedeemCodes: inventory.availableFor('recharge', pack.id),
+      bonusRedeemCodesAvailable: inventory.bonusAvailable
+    })),
+    bonusRedeemCodeStock: {
+      skuId: inventory.bonusPackage.id,
+      available: inventory.bonusAvailable
+    }
+  };
+};
 
 const getRedeemCodeCatalog = () => ({
   products: [
@@ -190,6 +224,25 @@ const buildOrderRedeemCodes = (order = {}, rowsById = new Map(), options = {}) =
   return assignedCodes.length > 0 ? assignedCodes : buildRedeemCodes(order, options);
 };
 
+const getRedeemCodeByLabel = (redeemCodes = [], labelMatcher) => (
+  redeemCodes.find((item) => labelMatcher(String(item.label || '')))?.code || ''
+);
+
+const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Date()) => {
+  const assignedCode = await repository.assignRedeemCodeToOrder(connection, {
+    productType: 'recharge',
+    skuId: getRechargeBonusPackage().id,
+    orderNo: order.order_no,
+    userId: order.user_id,
+    assignedAt: toMysqlDateTime(assignedAt)
+  });
+
+  return {
+    assignedCode,
+    redeemCode: assignedCode ? decryptRedeemCode(assignedCode) : null
+  };
+};
+
 const assignPaymentFulfillment = async (connection, order = {}, productType = 'subscription', assignedAt = new Date()) => {
   const skuId = productType === 'recharge' ? order.plan_id : order.plan_id;
   const assignedAtText = toMysqlDateTime(assignedAt);
@@ -201,16 +254,16 @@ const assignPaymentFulfillment = async (connection, order = {}, productType = 's
     assignedAt: assignedAtText
   });
   const assignedCode = await assignCode(skuId);
-  const assignedBonusCode = assignedCode ? await assignCode(getRechargeBonusPackage().id) : null;
+  const bonusAssignment = assignedCode ? await assignBonusRedeemCode(connection, order, assignedAt) : {};
   const redeemCode = assignedCode ? decryptRedeemCode(assignedCode) : null;
-  const bonusRedeemCode = assignedBonusCode ? decryptRedeemCode(assignedBonusCode) : null;
+  const bonusRedeemCode = bonusAssignment.redeemCode || null;
   const fulfillmentStatus = redeemCode && bonusRedeemCode ? 'code_assigned' : 'manual_required';
 
   await repository.updatePaymentOrderFulfillment(connection, {
     orderNo: order.order_no,
     fulfillmentStatus,
     redeemCodeId: assignedCode?.id || null,
-    bonusRedeemCodeId: assignedBonusCode?.id || null,
+    bonusRedeemCodeId: bonusAssignment.assignedCode?.id || null,
     redeemCode: null,
     bonusRedeemCode: null,
     redeemUrl: PAYMENT_REDEEM_URL,
@@ -234,22 +287,35 @@ const assignPaymentFulfillment = async (connection, order = {}, productType = 's
   };
 };
 
-const setSubscriptionUsernameRequired = async (connection, order = {}) => {
+const setSubscriptionUsernameRequired = async (connection, order = {}, bonusAssignment = {}) => {
+  const redeemCodes = buildRedeemCodes({
+    bonus_redeem_code: bonusAssignment.redeemCode
+  });
+  const hasBonusCode = Boolean(bonusAssignment.redeemCode);
+  const fulfillmentStatus = hasBonusCode ? 'username_required' : 'manual_required';
+  const supportNote = hasBonusCode
+    ? PAYMENT_API_USERNAME_WAIT_NOTE
+    : '赠送兑换码库存不足，请提交 DPCC-API 平台用户名，并添加售后微信补发赠送码。';
+
   await repository.updatePaymentOrderFulfillment(connection, {
     orderNo: order.order_no,
-    fulfillmentStatus: 'username_required',
+    fulfillmentStatus,
+    bonusRedeemCodeId: bonusAssignment.assignedCode?.id || null,
     redeemCode: null,
-    redeemUrl: null,
+    bonusRedeemCode: null,
+    redeemUrl: bonusAssignment.redeemCode ? PAYMENT_REDEEM_URL : null,
     supportWechat: PAYMENT_SUPPORT_WECHAT,
-    supportNote: PAYMENT_API_USERNAME_WAIT_NOTE
+    supportNote
   });
 
   return {
-    fulfillmentStatus: 'username_required',
+    fulfillmentStatus,
     redeemCode: null,
-    redeemUrl: '',
+    bonusRedeemCode: bonusAssignment.redeemCode || '',
+    redeemCodes,
+    redeemUrl: bonusAssignment.redeemCode ? PAYMENT_REDEEM_URL : '',
     supportWechat: PAYMENT_SUPPORT_WECHAT,
-    supportNote: PAYMENT_API_USERNAME_WAIT_NOTE
+    supportNote
   };
 };
 
@@ -284,10 +350,10 @@ const createAlipayOrder = async ({ userId, productType = 'subscription', planId,
     productType: normalizedProductType,
     planId: normalizedProductType === 'recharge' ? rechargePackage.id : plan.id,
     durationId: normalizedProductType === 'recharge' ? 'one_time' : duration.id,
-    quotaUsd: normalizedProductType === 'recharge' ? rechargePackage.quotaUsd : null,
+    quotaUsd: normalizedProductType === 'recharge' ? rechargePackage.quotaUsd : plan.bonusQuotaUsd,
     amount,
     subject: normalizedProductType === 'recharge' ? rechargePackage.subject : plan.subject,
-    body: normalizedProductType === 'recharge' ? `一次性充值 ${rechargePackage.quotaUsd} 美元额度` : duration.label,
+    body: normalizedProductType === 'recharge' ? `一次性充值 ${rechargePackage.quotaUsd} 美元额度` : `${duration.label}，赠送 ${plan.bonusQuotaUsd} 美元普通余额`,
     expiresAt: toMysqlDateTime(expiresAt),
     expiresInMinutes: PAYMENT_ORDER_LOCK_MINUTES
   };
@@ -455,7 +521,7 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
   const product = productType === 'recharge'
     ? getRechargePackage(order.plan_id)
     : getPaymentPlan(order.plan_id);
-  const redeemCodes = order.status === 'paid' && productType === 'recharge'
+  const redeemCodes = order.status === 'paid' && (productType === 'recharge' || productType === 'subscription')
     ? buildOrderRedeemCodes(order, await getRedeemCodeRowsById(pool, [order]))
     : [];
 
@@ -469,8 +535,8 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
     status: order.status,
     fulfillmentStatus: order.fulfillment_status || 'pending',
     apiUsername: order.api_username || '',
-    redeemCode: redeemCodes[0]?.code || '',
-    bonusRedeemCode: redeemCodes[1]?.code || '',
+    redeemCode: getRedeemCodeByLabel(redeemCodes, (label) => label === '原有额度'),
+    bonusRedeemCode: getRedeemCodeByLabel(redeemCodes, (label) => label.includes('赠送')),
     redeemCodes,
     redeemUrl: order.redeem_url || PAYMENT_REDEEM_URL,
     supportWechat: order.support_wechat || PAYMENT_SUPPORT_WECHAT,
@@ -512,8 +578,8 @@ const mapAdminPaymentOrder = (order = {}, rowsById = new Map()) => {
     status: order.status,
     fulfillmentStatus: order.fulfillment_status || 'pending',
     apiUsername: order.api_username || '',
-    maskedRedeemCode: maskedRedeemCodes[0]?.code || '',
-    maskedBonusRedeemCode: maskedRedeemCodes[1]?.code || '',
+    maskedRedeemCode: getRedeemCodeByLabel(maskedRedeemCodes, (label) => label === '原有额度'),
+    maskedBonusRedeemCode: getRedeemCodeByLabel(maskedRedeemCodes, (label) => label.includes('赠送')),
     maskedRedeemCodes,
     alipayTradeNo: order.alipay_trade_no || '',
     paidAt: order.paid_at || null,
@@ -665,7 +731,7 @@ const submitPaymentOrderApiUsername = async ({ userId, orderNo, apiUsername } = 
   return {
     orderNo: normalizedOrderNo,
     apiUsername: normalizedApiUsername,
-    fulfillmentStatus: 'username_submitted',
+    fulfillmentStatus: order.fulfillment_status === 'manual_required' ? 'manual_required' : 'username_submitted',
     message: '已提交，请等待 5 分钟'
   };
 };
@@ -770,7 +836,17 @@ const handlePaidOrder = async (pool, payload = {}) => {
       await repository.insertMembership(connection, membership);
     }
 
-    const fulfillment = await setSubscriptionUsernameRequired(connection, order);
+    const bonusQuotaUsd = Number(order.quota_usd || plan.bonusQuotaUsd || 0);
+    if (bonusQuotaUsd > 0) {
+      await repository.addUserBalance(connection, {
+        userId: order.user_id,
+        quotaUsd: bonusQuotaUsd.toFixed(2),
+        orderNo: payload.orderNo
+      });
+    }
+
+    const bonusAssignment = await assignBonusRedeemCode(connection, order, paidAt);
+    const fulfillment = await setSubscriptionUsernameRequired(connection, order, bonusAssignment);
 
     await connection.commit();
     return { status: 'paid', orderNo: order.order_no, alreadyPaid: false, ...fulfillment };
