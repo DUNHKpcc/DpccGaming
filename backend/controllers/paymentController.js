@@ -2,7 +2,9 @@ const paymentService = require('../services/payment/paymentService');
 
 const getPaymentCatalog = async (req, res) => {
   try {
-    res.json(await paymentService.getCatalog());
+    res.json(await paymentService.getCatalog({
+      userId: req.user?.userId
+    }));
   } catch (error) {
     console.error('获取支付目录失败:', error);
     res.status(error.statusCode || 500).json({

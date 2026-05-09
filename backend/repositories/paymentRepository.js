@@ -19,6 +19,7 @@ const ensurePaymentTables = async (pool) => {
           subject VARCHAR(128) NOT NULL,
           status ENUM('pending', 'paid', 'closed') NOT NULL DEFAULT 'pending',
           alipay_trade_no VARCHAR(96) DEFAULT NULL,
+          alipay_buyer_id VARCHAR(96) DEFAULT NULL,
           paid_at DATETIME DEFAULT NULL,
           expires_at DATETIME DEFAULT NULL,
           fulfillment_status VARCHAR(24) NOT NULL DEFAULT 'pending',
@@ -34,6 +35,7 @@ const ensurePaymentTables = async (pool) => {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX idx_payment_orders_user_id (user_id),
           INDEX idx_payment_orders_status (status),
+          INDEX idx_payment_orders_alipay_buyer_id (alipay_buyer_id),
           INDEX idx_payment_orders_redeem_code_id (redeem_code_id),
           INDEX idx_payment_orders_bonus_redeem_code_id (bonus_redeem_code_id),
           CONSTRAINT fk_payment_orders_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -62,6 +64,19 @@ const ensurePaymentTables = async (pool) => {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           CONSTRAINT fk_user_api_balances_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      `),
+        pool.execute(`
+        CREATE TABLE IF NOT EXISTS payment_bonus_claims (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          claim_type VARCHAR(24) NOT NULL,
+          claim_key VARCHAR(128) NOT NULL,
+          order_no VARCHAR(64) NOT NULL,
+          user_id INT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_payment_bonus_claims_type_key (claim_type, claim_key),
+          INDEX idx_payment_bonus_claims_order_no (order_no),
+          INDEX idx_payment_bonus_claims_user_id (user_id)
         )
       `),
         pool.execute(`
@@ -147,6 +162,16 @@ const ensurePaymentTables = async (pool) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
           throw error;
         });
+      await pool.execute('ALTER TABLE payment_orders ADD COLUMN alipay_buyer_id VARCHAR(96) DEFAULT NULL AFTER alipay_trade_no')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders ADD INDEX idx_payment_orders_alipay_buyer_id (alipay_buyer_id)')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_KEYNAME') return null;
+          throw error;
+        });
       await pool.execute('ALTER TABLE payment_orders ADD INDEX idx_payment_orders_redeem_code_id (redeem_code_id)')
         .catch((error) => {
           if (error?.code === 'ER_DUP_KEYNAME') return null;
@@ -178,6 +203,11 @@ const ensurePaymentTables = async (pool) => {
           throw error;
         });
       await pool.execute('ALTER TABLE redeem_codes ADD UNIQUE INDEX uq_redeem_codes_lookup_hash (code_lookup_hash)')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_KEYNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE redeem_codes ADD INDEX idx_redeem_codes_assigned_user_sku (assigned_user_id, product_type, sku_id, status)')
         .catch((error) => {
           if (error?.code === 'ER_DUP_KEYNAME') return null;
           throw error;
@@ -269,6 +299,29 @@ const deleteUnpaidPaymentOrder = async (executor, orderNo = '') => executor.exec
   [orderNo]
 );
 
+const closeExpiredPaymentOrders = async (executor, now = '') => executor.execute(
+  `
+    UPDATE payment_orders
+    SET status = 'closed'
+    WHERE status = 'pending'
+      AND expires_at IS NOT NULL
+      AND expires_at <= ?
+  `,
+  [now]
+);
+
+const closeExpiredPaymentOrder = async (executor, payload = {}) => executor.execute(
+  `
+    UPDATE payment_orders
+    SET status = 'closed'
+    WHERE order_no = ?
+      AND status = 'pending'
+      AND expires_at IS NOT NULL
+      AND expires_at <= ?
+  `,
+  [payload.orderNo, payload.now]
+);
+
 const getPaymentOrderByNoForUpdate = async (executor, orderNo = '') => {
   const [rows] = await executor.execute(
     'SELECT * FROM payment_orders WHERE order_no = ? LIMIT 1 FOR UPDATE',
@@ -285,6 +338,80 @@ const getPaymentOrderForUser = async (executor, payload = {}) => {
   return rows[0] || null;
 };
 
+const listAssignedRedeemCodeSkusForUser = async (executor, userId) => {
+  const [rows] = await executor.execute(
+    `
+      SELECT DISTINCT product_type, sku_id
+      FROM redeem_codes
+      WHERE assigned_user_id = ?
+        AND status = 'assigned'
+    `,
+    [userId]
+  );
+  return rows;
+};
+
+const getAssignedRedeemCodeForUserSku = async (executor, payload = {}) => {
+  const [rows] = await executor.execute(
+    `
+      SELECT id
+      FROM redeem_codes
+      WHERE assigned_user_id = ?
+        AND product_type = ?
+        AND sku_id = ?
+        AND status = 'assigned'
+      LIMIT 1
+    `,
+    [payload.userId, payload.productType, payload.skuId]
+  );
+  return rows[0] || null;
+};
+
+const getBonusRedeemCodeClaimByPayer = async (executor, payload = {}) => {
+  const [rows] = await executor.execute(
+    `
+      SELECT order_no
+      FROM payment_orders
+      WHERE provider = 'alipay'
+        AND status = 'paid'
+        AND alipay_buyer_id = ?
+        AND bonus_redeem_code_id IS NOT NULL
+        AND order_no <> ?
+      LIMIT 1
+    `,
+    [payload.alipayBuyerId, payload.currentOrderNo]
+  );
+  return rows[0] || null;
+};
+
+const createPaymentBonusClaim = async (executor, payload = {}) => executor.execute(
+  `
+    INSERT IGNORE INTO payment_bonus_claims
+      (claim_type, claim_key, order_no, user_id)
+    VALUES (?, ?, ?, ?)
+  `,
+  [
+    payload.claimType,
+    payload.claimKey,
+    payload.orderNo,
+    payload.userId
+  ]
+);
+
+const deletePaymentBonusClaim = async (executor, payload = {}) => executor.execute(
+  `
+    DELETE FROM payment_bonus_claims
+    WHERE claim_type = ?
+      AND claim_key = ?
+      AND order_no = ?
+  `,
+  [
+    payload.claimType,
+    payload.claimKey,
+    payload.orderNo
+  ]
+);
+
 const getMembershipByUserId = async (executor, userId) => {
   const [rows] = await executor.execute(
     'SELECT * FROM user_api_memberships WHERE user_id = ? LIMIT 1',
@@ -296,10 +423,15 @@ const getMembershipByUserId = async (executor, userId) => {
 const markOrderPaid = async (executor, order = {}) => executor.execute(
   `
     UPDATE payment_orders
-    SET status = 'paid', alipay_trade_no = ?, paid_at = ?
-    WHERE order_no = ? AND status = 'pending'
+    SET status = 'paid',
+        alipay_trade_no = ?,
+        alipay_buyer_id = ?,
+        paid_at = ?
+    WHERE order_no = ?
+      AND status IN ('pending', 'closed')
+      AND (expires_at IS NULL OR expires_at >= ?)
   `,
-  [order.alipayTradeNo, order.paidAt, order.orderNo]
+  [order.alipayTradeNo, order.alipayBuyerId || null, order.paidAt, order.orderNo, order.paidAt]
 );
 
 const insertMembership = async (executor, membership = {}) => executor.execute(
@@ -401,6 +533,18 @@ const updatePaymentOrderFulfillment = async (executor, payload = {}) => executor
     payload.redeemUrl,
     payload.supportWechat,
     payload.supportNote,
+    payload.orderNo
+  ]
+);
+
+const updatePaymentOrderQuota = async (executor, payload = {}) => executor.execute(
+  `
+    UPDATE payment_orders
+    SET quota_usd = ?
+    WHERE order_no = ?
+  `,
+  [
+    payload.quotaUsd,
     payload.orderNo
   ]
 );
@@ -533,8 +677,15 @@ module.exports = {
   getPaymentOrderDetailByNo,
   listPaymentOrders,
   deleteUnpaidPaymentOrder,
+  closeExpiredPaymentOrders,
+  closeExpiredPaymentOrder,
   getPaymentOrderByNoForUpdate,
   getPaymentOrderForUser,
+  listAssignedRedeemCodeSkusForUser,
+  getAssignedRedeemCodeForUserSku,
+  getBonusRedeemCodeClaimByPayer,
+  createPaymentBonusClaim,
+  deletePaymentBonusClaim,
   getMembershipByUserId,
   markOrderPaid,
   insertMembership,
@@ -542,6 +693,7 @@ module.exports = {
   addUserBalance,
   assignRedeemCodeToOrder,
   updatePaymentOrderFulfillment,
+  updatePaymentOrderQuota,
   updatePaymentOrderApiUsername,
   createRedeemCode,
   listRedeemCodes,
