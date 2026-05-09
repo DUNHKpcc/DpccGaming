@@ -72,6 +72,7 @@
               >
                 {{ plan.bonusStockText }}
               </span>
+              <span v-if="plan.bonusRedeemCodeUsed" class="stock-line used">已领取过赠送码，本次不重复赠送</span>
               <span class="plan-divider"></span>
               <span class="plan-feature" v-for="feature in plan.features" :key="feature">
                 {{ feature }}
@@ -106,6 +107,7 @@
                 >
                   {{ pack.bonusStockText }}
                 </span>
+                <span v-if="pack.bonusRedeemCodeUsed" class="stock-line used">已领取过赠送码，本次不重复赠送</span>
                 <span class="plan-divider"></span>
                 <span class="plan-feature">✅到账余额 · ⚡调用扣费</span>
                 <span class="plan-feature">🔒服务端锁定金额和额度</span>
@@ -178,6 +180,10 @@
                 <dt>赠送码库存</dt>
                 <dd :class="{ 'stock-warning': !selectedPlan.hasBonusStock }">{{ selectedPlan.bonusStockText }}</dd>
               </div>
+              <div v-if="isSubscriptionMode && selectedPlan.bonusRedeemCodeUsed">
+                <dt>赠送限制</dt>
+                <dd class="stock-warning">你已领取过赠送兑换码，本次不重复赠送</dd>
+              </div>
               <div v-if="!isSubscriptionMode">
                 <dt>到账</dt>
                 <dd>
@@ -194,6 +200,10 @@
               <div v-if="!isSubscriptionMode && selectedRechargePackage.hasRechargeBonus">
                 <dt>赠送码库存</dt>
                 <dd :class="{ 'stock-warning': !selectedRechargePackage.hasBonusStock }">{{ selectedRechargePackage.bonusStockText }}</dd>
+              </div>
+              <div v-if="!isSubscriptionMode && selectedRechargePackage.bonusRedeemCodeUsed">
+                <dt>赠送限制</dt>
+                <dd class="stock-warning">你已领取过赠送兑换码，本次不重复赠送</dd>
               </div>
               <div>
                 <dt>订单</dt>
@@ -217,7 +227,7 @@
             :disabled="isPayDisabled"
             @click="redirectToAlipay"
           >
-            {{ isCreatingOrder ? '正在创建订单...' : `跳转支付宝支付 ${orderAmountText}` }}
+            {{ payButtonText }}
           </button>
           <p v-if="paymentError" class="payment-error">{{ paymentError }}</p>
         </aside>
@@ -268,13 +278,14 @@ const isCreatingOrder = ref(false)
 const orderExpiresAt = ref('')
 const countdownNow = ref(Date.now())
 let countdownTimerId = null
-const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度', hasBonusStock: false, bonusStockText: '赠送码库存同步中' }
+const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度', hasBonusStock: false, bonusRedeemCodeUsed: false, bonusStockText: '赠送码库存同步中' }
 const emptyDuration = { label: '加载中', months: 1 }
 const emptyRechargePackage = {
   name: '加载中',
   price: 0,
   quotaText: '正在加载额度',
   hasRechargeBonus: false,
+  bonusRedeemCodeUsed: false,
   hasMainStock: false,
   hasBonusStock: false,
   stockText: '兑换码库存同步中',
@@ -331,13 +342,20 @@ const orderSummaryText = computed(() => (
     ? `${selectedPlan.value.name} · ${selectedDuration.value.label} · ${selectedPlan.value.dailyQuota}`
     : `${selectedRechargePackage.value.name} · ${selectedRechargePackage.value.quotaText}`
 ))
-const orderFooterText = computed(() => (
+const selectedBonusRedeemCodeUsed = computed(() => (
   isSubscriptionMode.value
+    ? selectedPlan.value.bonusRedeemCodeUsed
+    : selectedRechargePackage.value.bonusRedeemCodeUsed
+))
+const orderFooterText = computed(() => (
+  selectedBonusRedeemCodeUsed.value
+    ? '赠送兑换码按站内账号和支付宝付款账号各限领取一次，本次只处理所选款项，不再重复赠送。'
+    : isSubscriptionMode.value
     ? (selectedPlan.value.hasBonusStock
-        ? '支付完成后请在结果页提交 DPCC-API 用户名，赠送码可在结果页领取。'
+        ? '支付完成后请在结果页提交 DPCC-API 用户名，赠送码按站内账号和支付宝付款账号各限领取一次。'
         : '当前赠送码暂无库存，支付后请提交用户名，赠送码会转入人工补发。')
     : (selectedRechargePackage.value.hasMainStock && selectedRechargePackage.value.hasBonusStock
-        ? '支付完成后结果页会展示兑换码；复制后前往兑换网站完成充值。'
+        ? '支付完成后结果页会展示兑换码；赠送码按站内账号和支付宝付款账号各限领取一次。'
         : '当前有兑换码库存不足，支付后会转入人工发码，请凭订单号联系售后处理。')
 ))
 const orderId = computed(() => `服务端创建后锁定`)
@@ -346,6 +364,10 @@ const isPayDisabled = computed(() => (
   || (isSubscriptionMode.value && (!selectedPlan.value.id || !selectedDuration.value.id))
   || (!isSubscriptionMode.value && !selectedRechargePackage.value.id)
 ))
+const payButtonText = computed(() => {
+  if (isCreatingOrder.value) return '正在创建订单...'
+  return `跳转支付宝支付 ${orderAmountText.value}`
+})
 const orderLockRemainingMs = computed(() => {
   if (!orderExpiresAt.value) return ORDER_LOCK_SECONDS * 1000
   const expiresAt = new Date(orderExpiresAt.value).getTime()
@@ -395,27 +417,35 @@ const loadPaymentCatalog = async () => {
       method: 'GET',
       suppressErrorLogging: true
     })
-    plans.value = (catalog.plans || []).map((plan) => ({
-      ...plan,
-      ...planPresentation[plan.id],
-      priceText: formatMoney(plan.price),
-      dailyQuota: formatQuota(plan.dailyQuotaUsd),
-      hasPlanBonus: Number(plan.bonusQuotaUsd || 0) > 0,
-      bonusText: Number(plan.bonusQuotaUsd || 0) > 0 ? formatRechargeBonus(plan.bonusQuotaUsd, 0) : '',
-      bonusQuotaText: Number(plan.bonusQuotaUsd || 0) > 0 ? formatBonusQuota(plan.bonusQuotaUsd) : '',
-      hasBonusStock: normalizeStock(plan.bonusRedeemCodesAvailable) > 0,
-      bonusStockText: formatRedeemStock(plan.bonusRedeemCodesAvailable, '赠送码'),
-      features: planPresentation[plan.id]?.features || []
-    }))
+    plans.value = (catalog.plans || []).map((plan) => {
+      const bonusRedeemCodeUsed = Boolean(plan.bonusRedeemCodeUsed)
+      const hasPlanBonus = Number(plan.bonusQuotaUsd || 0) > 0 && !bonusRedeemCodeUsed
+      return {
+        ...plan,
+        ...planPresentation[plan.id],
+        priceText: formatMoney(plan.price),
+        dailyQuota: formatQuota(plan.dailyQuotaUsd),
+        hasPlanBonus,
+        bonusText: hasPlanBonus ? formatRechargeBonus(plan.bonusQuotaUsd, 0) : '',
+        bonusQuotaText: hasPlanBonus ? formatBonusQuota(plan.bonusQuotaUsd) : '',
+        bonusRedeemCodeUsed,
+        hasBonusStock: normalizeStock(plan.bonusRedeemCodesAvailable) > 0,
+        bonusStockText: formatRedeemStock(plan.bonusRedeemCodesAvailable, '赠送码'),
+        features: planPresentation[plan.id]?.features || []
+      }
+    })
     durations.value = catalog.durations || []
     rechargePackages.value = (catalog.rechargePackages || []).map((pack) => {
       const originalQuotaUsd = pack.originalQuotaUsd
-      const hasRechargeBonus = Number(originalQuotaUsd || 0) > 0 && Number(originalQuotaUsd) < Number(pack.quotaUsd || 0)
+      const bonusRedeemCodeUsed = Boolean(pack.bonusRedeemCodeUsed)
+      const hasRechargeBonus = !bonusRedeemCodeUsed && Number(originalQuotaUsd || 0) > 0 && Number(originalQuotaUsd) < Number(pack.quotaUsd || 0)
+      const quotaUsd = bonusRedeemCodeUsed && originalQuotaUsd ? originalQuotaUsd : pack.quotaUsd
       return {
         ...pack,
         priceText: formatMoney(pack.price),
-        quotaText: formatRechargeQuota(pack.quotaUsd),
+        quotaText: formatRechargeQuota(quotaUsd),
         hasRechargeBonus,
+        bonusRedeemCodeUsed,
         originalQuotaText: hasRechargeBonus ? formatRechargeQuota(originalQuotaUsd) : '',
         bonusText: hasRechargeBonus ? formatRechargeBonus(pack.quotaUsd, originalQuotaUsd) : '',
         hasMainStock: normalizeStock(pack.availableRedeemCodes) > 0,
@@ -849,6 +879,7 @@ onBeforeUnmount(stopCountdown)
 }
 
 .stock-line.empty,
+.stock-line.used,
 .stock-warning {
   color: #f59e0b;
 }

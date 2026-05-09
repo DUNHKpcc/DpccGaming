@@ -250,6 +250,7 @@ const statusText = (value) => {
 
 const fulfillmentText = (value) => {
   if (value === 'code_assigned') return '已发码'
+  if (value === 'bonus_skipped') return '赠送已跳过'
   if (value === 'manual_required') return '人工处理'
   if (value === 'username_required') return '待填用户名'
   if (value === 'username_submitted') return '用户名已提交'

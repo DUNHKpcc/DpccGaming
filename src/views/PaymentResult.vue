@@ -54,7 +54,7 @@
           <button type="button" class="primary-action" :disabled="isLoading || !orderNo" @click="loadOrderResult">
             {{ isLoading ? '正在检查...' : '重新检查支付结果' }}
           </button>
-          <RouterLink v-if="isExpiredPending" to="/payment" class="secondary-action">重新发起支付</RouterLink>
+          <RouterLink v-if="isPaymentFinalIncomplete" to="/payment" class="secondary-action">重新发起支付</RouterLink>
         </div>
 
         <div class="result-panel redeem-panel">
@@ -157,6 +157,7 @@ const apiUsernameInput = ref('')
 const apiUsernameMessage = ref('')
 const isSubmittingApiUsername = ref(false)
 let pollTimerId = null
+const PAYMENT_NOTIFY_GRACE_MS = 2 * 60 * 1000
 
 const queryOrderNo = computed(() => String(route.query.out_trade_no || route.query.orderNo || '').trim())
 const orderNo = computed(() => queryOrderNo.value || sessionStorage.getItem('lastPaymentOrderNo') || '')
@@ -166,6 +167,11 @@ const isPaid = computed(() => orderResult.value.status === 'paid')
 const isSubscriptionOrder = computed(() => orderResult.value.productType === 'subscription')
 const isSubscriptionPaid = computed(() => isPaid.value && isSubscriptionOrder.value)
 const isSubscriptionManualRequired = computed(() => isSubscriptionPaid.value && orderResult.value.fulfillmentStatus === 'manual_required')
+const isBonusSkipped = computed(() => isPaid.value && orderResult.value.fulfillmentStatus === 'bonus_skipped')
+const bonusNoticeText = computed(() => {
+  const note = String(orderResult.value.supportNote || '').trim()
+  return note.includes('赠送兑换码') || note.includes('付款账号') ? note : ''
+})
 const needsApiUsername = computed(() => isSubscriptionPaid.value && !orderResult.value.apiUsername)
 const redeemCodes = computed(() => {
   if (Array.isArray(orderResult.value.redeemCodes) && orderResult.value.redeemCodes.length) {
@@ -188,6 +194,13 @@ const isExpiredPending = computed(() => {
   const expiresAt = new Date(orderResult.value.expiresAt).getTime()
   return Number.isFinite(expiresAt) && expiresAt <= Date.now()
 })
+const isPaymentIncomplete = computed(() => orderResult.value.status === 'closed' || isExpiredPending.value)
+const isPaymentInNotifyGrace = computed(() => {
+  if (!isPaymentIncomplete.value || !orderResult.value.expiresAt) return false
+  const expiresAt = new Date(orderResult.value.expiresAt).getTime()
+  return Number.isFinite(expiresAt) && Date.now() <= expiresAt + PAYMENT_NOTIFY_GRACE_MS
+})
+const isPaymentFinalIncomplete = computed(() => isPaymentIncomplete.value && !isPaymentInNotifyGrace.value)
 const formattedCreatedAt = computed(() => formatDateTime(orderResult.value.createdAt))
 const apiUsernameText = computed(() => {
   if (orderResult.value.apiUsername) return orderResult.value.apiUsername
@@ -195,7 +208,9 @@ const apiUsernameText = computed(() => {
   return '-'
 })
 const supportCopy = computed(() => (
-  isSubscriptionManualRequired.value
+  bonusNoticeText.value
+    ? bonusNoticeText.value
+    : isSubscriptionManualRequired.value
     ? `添加微信 ${supportWechat.value}，请同时提供订单号和 DPCC-API 用户名，售后会补发赠送码。`
     : isSubscriptionPaid.value
     ? `添加微信 ${supportWechat.value}，请同时提供订单号、DPCC-API 用户名和赠送金兑换码。`
@@ -206,18 +221,20 @@ const titleText = computed(() => {
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '支付成功，等待补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '支付成功，等待处理'
   if (needsApiUsername.value) return '支付成功，填写用户名'
+  if (isBonusSkipped.value) return '支付成功'
   if (isManualRequired.value) return '支付成功，等待发码'
   if (hasAllRedeemCodes.value) return '支付成功'
-  if (isExpiredPending.value) return '支付未完成'
+  if (isPaymentFinalIncomplete.value) return '支付未完成'
   return '检查支付结果'
 })
 
 const statusTone = computed(() => {
   if (isSubscriptionManualRequired.value) return 'warning'
   if (isSubscriptionPaid.value) return 'success'
+  if (isBonusSkipped.value) return 'success'
   if (hasAllRedeemCodes.value) return 'success'
   if (isManualRequired.value) return 'warning'
-  if (isExpiredPending.value) return 'warning'
+  if (isPaymentFinalIncomplete.value) return 'warning'
   if (errorMessage.value) return 'error'
   return 'pending'
 })
@@ -226,9 +243,10 @@ const statusIcon = computed(() => {
   if (isSubscriptionManualRequired.value) return 'fa-solid fa-headset'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return 'fa-solid fa-clock'
   if (needsApiUsername.value) return 'fa-solid fa-user'
+  if (isBonusSkipped.value) return 'fa-solid fa-check'
   if (isManualRequired.value) return 'fa-solid fa-headset'
   if (hasAllRedeemCodes.value) return 'fa-solid fa-check'
-  if (isExpiredPending.value) return 'fa-solid fa-clock-rotate-left'
+  if (isPaymentFinalIncomplete.value) return 'fa-solid fa-clock-rotate-left'
   if (errorMessage.value) return 'fa-solid fa-triangle-exclamation'
   return 'fa-solid fa-spinner'
 })
@@ -238,9 +256,10 @@ const statusHeading = computed(() => {
   if (isSubscriptionManualRequired.value) return '已确认支付，赠送码待人工补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '用户名已提交，请等待 5 分钟'
   if (needsApiUsername.value) return '已确认支付，请填写 DPCC-API 用户名'
+  if (isBonusSkipped.value) return '已发放本次兑换码'
   if (isManualRequired.value) return '已确认支付，库存待人工处理'
   if (hasAllRedeemCodes.value) return '已确认支付并发放兑换码'
-  if (isExpiredPending.value) return '订单未完成支付'
+  if (isPaymentFinalIncomplete.value) return '订单未完成支付'
   if (errorMessage.value) return '暂时无法确认'
   return '正在等待支付宝确认'
 })
@@ -249,12 +268,13 @@ const statusDescription = computed(() => {
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '我们会处理月卡订阅，并通过售后补发赠送码。'
   if (isSubscriptionManualRequired.value) return '请提交你在另一个平台的用户名，赠送码库存不足的部分会由人工补发。'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '我们会按你提交的平台用户名处理月卡订阅。'
-  if (needsApiUsername.value) return '请提交你在另一个平台的用户名，赠送金兑换码可在本页领取。'
+  if (needsApiUsername.value) return bonusNoticeText.value || '请提交你在另一个平台的用户名，赠送金兑换码可在本页领取。'
+  if (isBonusSkipped.value) return bonusNoticeText.value || '主兑换码已发放，赠送兑换码本次不再重复发放。'
   if (hasAllRedeemCodes.value) return '复制原有额度和赠送额度两个兑换码后前往外部兑换网站完成充值。'
   if (isManualRequired.value) return canRedeem.value
     ? '已发放当前可用兑换码，缺失部分请添加售后微信补发。'
     : '请添加售后微信，我们会根据订单号补发兑换码。'
-  if (isExpiredPending.value) return '这笔订单没有收到支付成功通知，请返回支付页重新下单。'
+  if (isPaymentFinalIncomplete.value) return '这笔订单没有收到支付成功通知，请返回支付页重新下单。'
   if (errorMessage.value) return '请稍后重试，或添加微信联系售后。'
   return '支付宝异步通知可能延迟几秒，本页会自动刷新。'
 })
@@ -262,15 +282,14 @@ const statusDescription = computed(() => {
 const paymentStatusText = computed(() => {
   if (!orderResult.value.status) return '待检查'
   if (orderResult.value.status === 'paid') return '已支付'
-  if (orderResult.value.status === 'closed') return '已关闭'
-  if (isExpiredPending.value) return '未完成'
+  if (isPaymentFinalIncomplete.value) return '未完成'
   return '待确认'
 })
 
 const redeemPlaceholderText = computed(() => (
   isManualRequired.value
     ? '当前档位兑换码库存不足，已转入人工发码。'
-    : isExpiredPending.value
+    : isPaymentFinalIncomplete.value
       ? '订单未完成支付，不会发放兑换码。'
     : '支付确认后这里会显示兑换码。'
 ))
@@ -325,7 +344,7 @@ const loadOrderResult = async (options = {}) => {
     if (orderResult.value.status === 'paid') {
       stopPolling()
     }
-    if (isExpiredPending.value) {
+    if (isPaymentFinalIncomplete.value) {
       stopPolling()
     }
   } catch (error) {
