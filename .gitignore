@@ -1,4 +1,5 @@
 node_modules/
+.DS_Store
 svg_background/codingPanel.html
 public/BGV.mp4
 public/favicon.png
