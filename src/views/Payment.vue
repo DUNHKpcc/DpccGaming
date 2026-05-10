@@ -207,6 +207,10 @@
                 <dt>赠送限制</dt>
                 <dd class="stock-warning">你已领取过赠送兑换码，本次不重复赠送</dd>
               </div>
+              <div v-if="selectedPromotionLimitNotice">
+                <dt>限购说明</dt>
+                <dd class="stock-warning">{{ selectedPromotionLimitNotice }}</dd>
+              </div>
               <div>
                 <dt>订单</dt>
                 <dd>{{ orderId }}</dd>
@@ -336,8 +340,20 @@ const selectedBonusRedeemCodeUsed = computed(() => (
     ? selectedPlan.value.bonusRedeemCodeUsed
     : selectedRechargePackage.value.bonusRedeemCodeUsed
 ))
+const selectedActivePromotion = computed(() => (
+  isSubscriptionMode.value
+    ? selectedPlan.value.activePromotion
+    : selectedRechargePackage.value.activePromotion
+))
+const selectedPromotionLimitNotice = computed(() => (
+  selectedActivePromotion.value?.limitOnce
+    ? '本促销同一站内账号和同一支付宝支付ID限购一次；重复支付不会自动发放权益，请联系售后补差价或退款。'
+    : ''
+))
 const orderFooterText = computed(() => (
-  selectedBonusRedeemCodeUsed.value
+  selectedPromotionLimitNotice.value
+    ? selectedPromotionLimitNotice.value
+    : selectedBonusRedeemCodeUsed.value
     ? '赠送兑换码按站内账号和支付宝付款账号各限领取一次，本次只处理所选款项，不再重复赠送。'
     : isSubscriptionMode.value
     ? (selectedPlan.value.hasBonusStock

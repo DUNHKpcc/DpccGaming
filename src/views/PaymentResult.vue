@@ -280,7 +280,7 @@ const statusHeading = computed(() => {
 })
 
 const statusDescription = computed(() => {
-  if (isPromotionPayerBlocked.value) return bonusNoticeText.value || '该支付ID已参与过本次限购促销，请联系售后处理。'
+  if (isPromotionPayerBlocked.value) return bonusNoticeText.value || '你的支付ID已购买过本次限购促销，当前订单已支付但未自动发放，请联系售后补差价或退款。'
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '我们会处理月卡订阅，并通过售后补发赠送码。'
   if (isSubscriptionManualRequired.value) return '请提交你在另一个平台的用户名，赠送码库存不足的部分会由人工补发。'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '我们会按你提交的平台用户名处理月卡订阅。'
@@ -304,7 +304,7 @@ const paymentStatusText = computed(() => {
 
 const redeemPlaceholderText = computed(() => (
   isPromotionPayerBlocked.value
-    ? '你的支付ID已购买过本次限购促销，请联系售后处理。'
+    ? '你的支付ID已购买过本次限购促销，当前订单已支付但未自动发放，请联系售后补差价或退款。'
     : isManualRequired.value
     ? '当前档位兑换码库存不足，已转入人工发码。'
     : isPaymentFinalIncomplete.value
