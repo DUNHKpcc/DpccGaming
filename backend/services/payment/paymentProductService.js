@@ -356,7 +356,7 @@ const normalizePromotionPayload = (payload = {}) => ({
   promotionBonusQuotaUsd: normalizeQuota(payload.promotionBonusQuotaUsd ?? payload.promotion_bonus_quota_usd),
   limitOnce: Boolean(payload.limitOnce ?? payload.limit_once),
   limitScope: 'user',
-  claimScopeKey: String(payload.claimScopeKey || payload.claim_scope_key || '').trim(),
+  claimScopeKey: '',
   status: payload.status === 'inactive' ? 'inactive' : 'active'
 });
 
@@ -406,9 +406,11 @@ const createAdminPaymentPromotion = async (payload = {}, pool = getPool()) => {
   await seedDefaultPaymentProducts(pool);
   const promotion = normalizePromotionPayload(payload);
   await validatePromotionInput(pool, promotion);
-  const [result] = await repository.createPaymentPromotion(pool, {
+  const [result] = await repository.createPaymentPromotion(pool, promotion);
+  await repository.updatePaymentPromotion(pool, {
     ...promotion,
-    claimScopeKey: promotion.claimScopeKey || `promotion_${Date.now().toString(36)}`
+    id: result.insertId,
+    claimScopeKey: `promotion_${result.insertId}`
   });
   const row = await repository.getPaymentPromotionById(pool, result.insertId);
   return { promotion: mapPromotion(row) };
@@ -425,9 +427,9 @@ const updateAdminPaymentPromotion = async (payload = {}, pool = getPool()) => {
 
   const promotion = normalizePromotionPayload({
     ...payload,
-    productId: current.product_id,
-    claimScopeKey: current.claim_scope_key
+    productId: current.product_id
   });
+  promotion.claimScopeKey = current.claim_scope_key || `promotion_${current.id}`;
   await validatePromotionInput(pool, promotion);
   await repository.updatePaymentPromotion(pool, promotion);
   const row = await repository.getPaymentPromotionById(pool, promotion.id);

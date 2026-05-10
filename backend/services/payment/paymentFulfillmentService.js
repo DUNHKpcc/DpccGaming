@@ -14,12 +14,15 @@ const {
   PAYMENT_API_USERNAME_WAIT_NOTE,
   BONUS_REDEEM_CODE_ALREADY_USED_NOTE,
   BONUS_REDEEM_CODE_PAYER_MISSING_NOTE,
+  PROMOTION_PAYER_ALREADY_USED_NOTE,
+  PROMOTION_PAYER_MISSING_NOTE,
   toMysqlDateTime,
   addMonths,
   isPaymentAfterOrderExpiry,
   buildRedeemCodes
 } = require('./paymentUtils');
 const {
+  acquirePayerClaim,
   acquireUserAndPayerClaims,
   releaseClaims
 } = require('./paymentClaimService');
@@ -36,6 +39,8 @@ const closeExpiredPaymentOrder = async (executor, orderNo = '', now = new Date()
 };
 
 const getOrderProductSnapshot = (order = {}) => parseSnapshotJson(order.product_snapshot_json) || {};
+
+const getOrderPromotionSnapshot = (order = {}) => parseSnapshotJson(order.promotion_snapshot_json) || {};
 
 const hasUserRedeemedSku = async (executor, payload = {}) => {
   const normalizedUserId = Number(payload.userId || 0);
@@ -214,6 +219,55 @@ const setSubscriptionUsernameRequired = async (connection, order = {}, bonusAssi
   };
 };
 
+const acquirePromotionPayerClaim = async (connection, order = {}, payload = {}) => {
+  const promotionSnapshot = getOrderPromotionSnapshot(order);
+  if (!promotionSnapshot.limitOnce) {
+    return { claimed: true, claims: [], promotionSnapshot: null };
+  }
+
+  const claimResult = await acquirePayerClaim(connection, {
+    purpose: promotionSnapshot.claimScopeKey || `promotion_${promotionSnapshot.id}`,
+    alipayBuyerId: payload.alipayBuyerId,
+    orderNo: order.order_no,
+    userId: order.user_id
+  });
+
+  return {
+    ...claimResult,
+    promotionSnapshot
+  };
+};
+
+const setPromotionManualReview = async (connection, order = {}, payerClaim = {}) => {
+  const supportNote = payerClaim.reason === 'payer_missing'
+    ? PROMOTION_PAYER_MISSING_NOTE
+    : PROMOTION_PAYER_ALREADY_USED_NOTE;
+
+  await repository.updatePaymentOrderFulfillment(connection, {
+    orderNo: order.order_no,
+    fulfillmentStatus: 'manual_required',
+    redeemCodeId: null,
+    bonusRedeemCodeId: null,
+    redeemCode: null,
+    bonusRedeemCode: null,
+    redeemUrl: null,
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote
+  });
+
+  return {
+    fulfillmentStatus: 'manual_required',
+    redeemCode: null,
+    bonusRedeemCode: null,
+    redeemCodes: [],
+    promotionPayerRejected: true,
+    promotionPayerRejectReason: payerClaim.reason || 'already_used',
+    redeemUrl: '',
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote
+  };
+};
+
 const handlePaidOrder = async (pool, payload = {}) => {
   await repository.ensurePaymentTables(pool);
   const connection = await pool.getConnection();
@@ -259,6 +313,9 @@ const handlePaidOrder = async (pool, payload = {}) => {
 
     const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
     const productSnapshot = getOrderProductSnapshot(order);
+    const promotionPayerClaim = await acquirePromotionPayerClaim(connection, order, {
+      alipayBuyerId: payload.alipayBuyerId
+    });
     const plan = getPaymentPlan(order.plan_id);
     const duration = getPaymentDuration(productSnapshot.durationId || order.duration_id) || {
       id: productSnapshot.durationId || order.duration_id,
@@ -282,6 +339,18 @@ const handlePaidOrder = async (pool, payload = {}) => {
       const error = new Error('支付订单不是待支付状态');
       error.statusCode = 400;
       throw error;
+    }
+    if (!promotionPayerClaim.claimed) {
+      const fulfillment = await setPromotionManualReview(connection, order, promotionPayerClaim);
+      await connection.commit();
+      transactionClosed = true;
+      return {
+        status: 'paid',
+        orderNo: order.order_no,
+        productType,
+        alreadyPaid: false,
+        ...fulfillment
+      };
     }
 
     if (productType === 'recharge') {

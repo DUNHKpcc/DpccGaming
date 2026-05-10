@@ -38,10 +38,13 @@ const buildScopedClaim = (purpose = '', scope = '', key = '') => {
   const normalizedScope = String(scope || '').trim();
   const claimType = normalizedPurpose === 'bonus'
     ? (normalizedScope === 'alipay_buyer' ? BONUS_CLAIM_TYPE_ALIPAY_BUYER : BONUS_CLAIM_TYPE_USER)
-    : `${normalizedPurpose}_${normalizedScope}`.slice(0, 24);
+    : `scoped_${normalizedScope || 'user'}`;
+  const claimKey = normalizedPurpose === 'bonus'
+    ? String(key || '').trim()
+    : `${normalizedPurpose}:${String(key || '').trim()}`;
   return {
     claimType,
-    claimKey: String(key || '').trim()
+    claimKey
   };
 };
 
@@ -63,6 +66,24 @@ const acquireUserClaim = async (executor, payload = {}) => {
   }
 
   const claim = buildScopedClaim(payload.purpose || 'bonus', 'user', userClaimKey);
+  const claimed = await createClaim(executor, {
+    ...claim,
+    orderNo: payload.orderNo,
+    userId: payload.userId
+  });
+
+  return claimed
+    ? { claimed: true, claims: [claim] }
+    : { claimed: false, reason: 'already_used' };
+};
+
+const acquirePayerClaim = async (executor, payload = {}) => {
+  const normalizedBuyerId = String(payload.alipayBuyerId || '').trim();
+  if (!normalizedBuyerId) {
+    return { claimed: false, reason: 'payer_missing' };
+  }
+
+  const claim = buildScopedClaim(payload.purpose || 'bonus', 'alipay_buyer', normalizedBuyerId);
   const claimed = await createClaim(executor, {
     ...claim,
     orderNo: payload.orderNo,
@@ -98,23 +119,21 @@ const acquireUserAndPayerClaims = async (executor, payload = {}) => {
     return { claimed: false, reason: 'already_used' };
   }
 
-  const payerClaim = buildScopedClaim(payload.purpose || 'bonus', 'alipay_buyer', normalizedBuyerId);
-  const payerClaimed = await createClaim(executor, {
-    ...payerClaim,
-    orderNo: payload.orderNo,
-    userId: payload.userId
+  const payerResult = await acquirePayerClaim(executor, {
+    ...payload,
+    alipayBuyerId: normalizedBuyerId
   });
-  if (!payerClaimed) {
+  if (!payerResult.claimed) {
     await releaseClaims(executor, {
       orderNo: payload.orderNo,
       claims: userResult.claims
     });
-    return { claimed: false, reason: 'already_used' };
+    return payerResult;
   }
 
   return {
     claimed: true,
-    claims: [...userResult.claims, payerClaim]
+    claims: [...userResult.claims, ...payerResult.claims]
   };
 };
 
@@ -124,5 +143,6 @@ module.exports = {
   releaseClaims,
   buildScopedClaim,
   acquireUserClaim,
+  acquirePayerClaim,
   acquireUserAndPayerClaims
 };
