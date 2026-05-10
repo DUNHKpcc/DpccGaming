@@ -61,7 +61,8 @@
               @click="selectPlan(plan.id)"
             >
               <span v-if="plan.badgeText" class="recommend-badge">{{ plan.badgeText }}</span>
-              <span v-if="plan.hasPlanBonus" class="recharge-bonus-badge">{{ plan.bonusText }}</span>
+              <span v-if="plan.promotionBadgeText" class="recharge-bonus-badge">{{ plan.promotionBadgeText }}</span>
+              <span v-else-if="plan.hasPlanBonus" class="recharge-bonus-badge">{{ plan.bonusText }}</span>
               <span class="plan-name">{{ plan.name }}</span>
               <strong>{{ plan.priceText }}</strong>
               <span class="daily-quota">{{ plan.dailyQuota }}</span>
@@ -94,7 +95,8 @@
               >
                 <span v-if="pack.badgeText" class="recommend-badge">{{ pack.badgeText }}</span>
                 <span class="plan-name">{{ pack.name }}</span>
-                <span v-if="pack.hasRechargeBonus" class="recharge-bonus-badge">{{ pack.bonusText }}</span>
+                <span v-if="pack.promotionBadgeText" class="recharge-bonus-badge">{{ pack.promotionBadgeText }}</span>
+                <span v-else-if="pack.hasRechargeBonus" class="recharge-bonus-badge">{{ pack.bonusText }}</span>
                 <strong>{{ pack.priceText }}</strong>
                 <span class="daily-quota recharge-quota">
                   <span v-if="pack.hasRechargeBonus" class="quota-original">{{ pack.originalQuotaText }}</span>
@@ -260,6 +262,21 @@ const normalizeStock = (value) => {
 const formatRedeemStock = (count, label = '兑换码') => {
   const normalized = normalizeStock(count)
   return normalized > 0 ? `${label}剩余 ${normalized} 个` : `${label}暂无库存，支付后人工处理`
+}
+const buildPromotionBadgeText = (product = {}) => {
+  const promotion = product.activePromotion
+  if (!promotion) return ''
+
+  const promotionPrice = Number(promotion.promotionPrice ?? product.price)
+  const originalPrice = Number(product.originalPrice ?? product.basePrice ?? product.price)
+  const promotionBonusQuota = Number(promotion.promotionBonusQuotaUsd || 0)
+  if (promotionBonusQuota > 0) {
+    return `促销赠送 $${promotionBonusQuota.toFixed(0)}`
+  }
+  if (Number.isFinite(promotionPrice) && Number.isFinite(originalPrice) && promotionPrice < originalPrice) {
+    return '限时优惠'
+  }
+  return promotion.badgeText || promotion.title || '限时促销'
 }
 
 const productMode = ref('subscription')
@@ -437,7 +454,8 @@ const loadPaymentCatalog = async () => {
         bonusRedeemCodeUsed,
         hasBonusStock: normalizeStock(plan.bonusRedeemCodesAvailable) > 0,
         bonusStockText: formatRedeemStock(plan.bonusRedeemCodesAvailable, '赠送码'),
-        badgeText: plan.activePromotion?.badgeText || plan.activePromotion?.title || plan.cardBadge || (plan.recommended ? '推荐款项' : ''),
+        promotionBadgeText: buildPromotionBadgeText(plan),
+        badgeText: plan.cardBadge || (plan.recommended ? '推荐款项' : ''),
         features
       }
     })
@@ -460,7 +478,8 @@ const loadPaymentCatalog = async () => {
         hasBonusStock: normalizeStock(pack.bonusRedeemCodesAvailable) > 0,
         stockText: formatRedeemStock(pack.availableRedeemCodes, '兑换码'),
         bonusStockText: formatRedeemStock(pack.bonusRedeemCodesAvailable, '赠送码'),
-        badgeText: pack.activePromotion?.badgeText || pack.activePromotion?.title || pack.cardBadge || '',
+        promotionBadgeText: buildPromotionBadgeText(pack),
+        badgeText: pack.cardBadge || '',
         features: Array.isArray(pack.features) && pack.features.length
           ? pack.features
           : ['✅到账余额 · ⚡调用扣费', '🔒服务端锁定金额和额度']
