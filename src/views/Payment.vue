@@ -60,7 +60,7 @@
               :aria-pressed="plan.id === selectedPlanId"
               @click="selectPlan(plan.id)"
             >
-              <span v-if="plan.recommended" class="recommend-badge">推荐款项</span>
+              <span v-if="plan.badgeText" class="recommend-badge">{{ plan.badgeText }}</span>
               <span v-if="plan.hasPlanBonus" class="recharge-bonus-badge">{{ plan.bonusText }}</span>
               <span class="plan-name">{{ plan.name }}</span>
               <strong>{{ plan.priceText }}</strong>
@@ -92,6 +92,7 @@
                 :aria-pressed="pack.id === selectedRechargePackageId"
                 @click="selectRechargePackage(pack.id)"
               >
+                <span v-if="pack.badgeText" class="recommend-badge">{{ pack.badgeText }}</span>
                 <span class="plan-name">{{ pack.name }}</span>
                 <span v-if="pack.hasRechargeBonus" class="recharge-bonus-badge">{{ pack.bonusText }}</span>
                 <strong>{{ pack.priceText }}</strong>
@@ -109,8 +110,9 @@
                 </span>
                 <span v-if="pack.bonusRedeemCodeUsed" class="stock-line used">已领取过赠送码，本次不重复赠送</span>
                 <span class="plan-divider"></span>
-                <span class="plan-feature">✅到账余额 · ⚡调用扣费</span>
-                <span class="plan-feature">🔒服务端锁定金额和额度</span>
+                <span class="plan-feature" v-for="feature in pack.features" :key="feature">
+                  {{ feature }}
+                </span>
               </button>
             </div>
           </div>
@@ -242,19 +244,6 @@ import { apiCall } from '../utils/api'
 
 const ORDER_LOCK_SECONDS = 5 * 60
 
-const planPresentation = {
-  bronze: {
-    features: ['✅适合轻量试用', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费','💰月等值150$']
-  },
-  gold: {
-    recommended: true,
-    features: ['✅适合日常编码', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费','💰月等值450$']
-  },
-  platinum: {
-    features: ['✅适合高频调用', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费','💰月等值1500$']
-  }
-}
-
 const formatMoney = (amount) => `¥${Number(amount || 0).toFixed(2)}`
 const formatQuota = (quota) => `每日 $${Number(quota || 0).toFixed(0)} 免费额度`
 const formatRechargeQuota = (quota) => `到账 $${Number(quota || 0).toFixed(0)} 普通额度`
@@ -292,9 +281,9 @@ const emptyRechargePackage = {
   bonusStockText: '赠送码库存同步中'
 }
 
-const selectedPlanId = ref('gold')
+const selectedPlanId = ref('')
 const selectedDurationId = ref('1m')
-const selectedRechargePackageId = ref('usd-25')
+const selectedRechargePackageId = ref('')
 
 const selectProductMode = (mode) => {
   productMode.value = mode
@@ -417,12 +406,13 @@ const loadPaymentCatalog = async () => {
       method: 'GET',
       suppressErrorLogging: true
     })
-    plans.value = (catalog.plans || []).map((plan) => {
+    const subscriptionProducts = catalog.subscriptionProducts || catalog.plans || []
+    plans.value = subscriptionProducts.map((plan) => {
       const bonusRedeemCodeUsed = Boolean(plan.bonusRedeemCodeUsed)
       const hasPlanBonus = Number(plan.bonusQuotaUsd || 0) > 0 && !bonusRedeemCodeUsed
+      const features = Array.isArray(plan.features) ? plan.features : []
       return {
         ...plan,
-        ...planPresentation[plan.id],
         priceText: formatMoney(plan.price),
         dailyQuota: formatQuota(plan.dailyQuotaUsd),
         hasPlanBonus,
@@ -431,14 +421,16 @@ const loadPaymentCatalog = async () => {
         bonusRedeemCodeUsed,
         hasBonusStock: normalizeStock(plan.bonusRedeemCodesAvailable) > 0,
         bonusStockText: formatRedeemStock(plan.bonusRedeemCodesAvailable, '赠送码'),
-        features: planPresentation[plan.id]?.features || []
+        badgeText: plan.activePromotion?.badgeText || plan.activePromotion?.title || plan.cardBadge || (plan.recommended ? '推荐款项' : ''),
+        features
       }
     })
     durations.value = catalog.durations || []
-    rechargePackages.value = (catalog.rechargePackages || []).map((pack) => {
-      const originalQuotaUsd = pack.originalQuotaUsd
+    const rechargeProducts = catalog.rechargeProducts || catalog.rechargePackages || []
+    rechargePackages.value = rechargeProducts.map((pack) => {
+      const originalQuotaUsd = pack.originalQuotaUsd || pack.baseQuotaUsd
       const bonusRedeemCodeUsed = Boolean(pack.bonusRedeemCodeUsed)
-      const hasRechargeBonus = !bonusRedeemCodeUsed && Number(originalQuotaUsd || 0) > 0 && Number(originalQuotaUsd) < Number(pack.quotaUsd || 0)
+      const hasRechargeBonus = !bonusRedeemCodeUsed && Number(pack.bonusQuotaUsd || 0) > 0
       const quotaUsd = bonusRedeemCodeUsed && originalQuotaUsd ? originalQuotaUsd : pack.quotaUsd
       return {
         ...pack,
@@ -451,9 +443,22 @@ const loadPaymentCatalog = async () => {
         hasMainStock: normalizeStock(pack.availableRedeemCodes) > 0,
         hasBonusStock: normalizeStock(pack.bonusRedeemCodesAvailable) > 0,
         stockText: formatRedeemStock(pack.availableRedeemCodes, '兑换码'),
-        bonusStockText: formatRedeemStock(pack.bonusRedeemCodesAvailable, '赠送码')
+        bonusStockText: formatRedeemStock(pack.bonusRedeemCodesAvailable, '赠送码'),
+        badgeText: pack.activePromotion?.badgeText || pack.activePromotion?.title || pack.cardBadge || '',
+        features: Array.isArray(pack.features) && pack.features.length
+          ? pack.features
+          : ['✅到账余额 · ⚡调用扣费', '🔒服务端锁定金额和额度']
       }
     })
+    if (!plans.value.some((plan) => plan.id === selectedPlanId.value)) {
+      selectedPlanId.value = (plans.value.find((plan) => plan.recommended) || plans.value[0])?.id || ''
+    }
+    if (!durations.value.some((duration) => duration.id === selectedDurationId.value)) {
+      selectedDurationId.value = durations.value[0]?.id || ''
+    }
+    if (!rechargePackages.value.some((pack) => pack.id === selectedRechargePackageId.value)) {
+      selectedRechargePackageId.value = rechargePackages.value[0]?.id || ''
+    }
   } catch (error) {
     paymentError.value = error.message || '支付款项加载失败'
   }
@@ -482,12 +487,14 @@ const redirectToAlipay = async () => {
       body: JSON.stringify(isSubscriptionMode.value
         ? {
             productType: 'subscription',
-            planId: selectedPlanId.value,
+            productId: selectedPlan.value.id,
+            planId: selectedPlan.value.skuId || selectedPlan.value.id,
             durationId: selectedDurationId.value
           }
         : {
             productType: 'recharge',
-            rechargePackageId: selectedRechargePackageId.value
+            productId: selectedRechargePackage.value.id,
+            rechargePackageId: selectedRechargePackage.value.skuId || selectedRechargePackage.value.id
           })
     })
     if (result.expiresAt) {

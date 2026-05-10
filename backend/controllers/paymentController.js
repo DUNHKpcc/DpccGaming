@@ -18,6 +18,7 @@ const createAlipayOrder = async (req, res) => {
     const result = await paymentService.createAlipayOrder({
       userId: req.user.userId,
       productType: req.body?.productType,
+      productId: req.body?.productId,
       planId: req.body?.planId,
       durationId: req.body?.durationId,
       rechargePackageId: req.body?.rechargePackageId
