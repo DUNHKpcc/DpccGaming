@@ -31,6 +31,8 @@ const ensurePaymentTables = async (pool) => {
           support_wechat VARCHAR(32) DEFAULT NULL,
           support_note VARCHAR(255) DEFAULT NULL,
           api_username VARCHAR(96) DEFAULT NULL,
+          product_snapshot_json TEXT,
+          promotion_snapshot_json TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX idx_payment_orders_user_id (user_id),
@@ -100,6 +102,52 @@ const ensurePaymentTables = async (pool) => {
           INDEX idx_redeem_codes_order_no (assigned_order_no)
         )
       `),
+        pool.execute(`
+        CREATE TABLE IF NOT EXISTS payment_products (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_type VARCHAR(24) NOT NULL,
+          sku_id VARCHAR(64) NOT NULL UNIQUE,
+          name VARCHAR(96) NOT NULL,
+          subject VARCHAR(128) NOT NULL,
+          description VARCHAR(255) DEFAULT NULL,
+          base_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+          currency VARCHAR(8) NOT NULL DEFAULT 'CNY',
+          base_quota_usd DECIMAL(10,2) DEFAULT NULL,
+          daily_quota_usd DECIMAL(10,2) DEFAULT NULL,
+          main_redeem_sku_id VARCHAR(64) DEFAULT NULL,
+          bonus_redeem_sku_id VARCHAR(64) DEFAULT NULL,
+          bonus_quota_usd DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+          recommended TINYINT(1) NOT NULL DEFAULT 0,
+          card_badge VARCHAR(64) DEFAULT NULL,
+          card_features_json TEXT,
+          order_note VARCHAR(255) DEFAULT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_payment_products_type_status_sort (product_type, status, sort_order)
+        )
+      `),
+        pool.execute(`
+        CREATE TABLE IF NOT EXISTS payment_promotions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          title VARCHAR(96) NOT NULL,
+          badge_text VARCHAR(64) DEFAULT NULL,
+          starts_at DATETIME DEFAULT NULL,
+          ends_at DATETIME DEFAULT NULL,
+          promotion_price DECIMAL(10,2) DEFAULT NULL,
+          promotion_bonus_quota_usd DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+          limit_once TINYINT(1) NOT NULL DEFAULT 0,
+          limit_scope VARCHAR(24) NOT NULL DEFAULT 'user',
+          claim_scope_key VARCHAR(128) DEFAULT NULL,
+          status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_payment_promotions_product_status_time (product_id, status, starts_at, ends_at),
+          CONSTRAINT fk_payment_promotions_product_id FOREIGN KEY (product_id) REFERENCES payment_products(id) ON DELETE CASCADE
+        )
+      `),
       ]);
 
       await pool.execute('ALTER TABLE payment_orders ADD COLUMN expires_at DATETIME DEFAULT NULL')
@@ -110,6 +158,11 @@ const ensurePaymentTables = async (pool) => {
       await pool.execute("ALTER TABLE payment_orders ADD COLUMN product_type VARCHAR(24) NOT NULL DEFAULT 'subscription' AFTER provider")
         .catch((error) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders MODIFY COLUMN plan_id VARCHAR(64) NOT NULL')
+        .catch((error) => {
+          if (error?.code === 'ER_BAD_FIELD_ERROR') return null;
           throw error;
         });
       await pool.execute('ALTER TABLE payment_orders ADD COLUMN quota_usd DECIMAL(10,2) DEFAULT NULL AFTER duration_id')
@@ -162,6 +215,16 @@ const ensurePaymentTables = async (pool) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
           throw error;
         });
+      await pool.execute('ALTER TABLE payment_orders ADD COLUMN product_snapshot_json TEXT AFTER api_username')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders ADD COLUMN promotion_snapshot_json TEXT AFTER product_snapshot_json')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
       await pool.execute('ALTER TABLE payment_orders ADD COLUMN alipay_buyer_id VARCHAR(96) DEFAULT NULL AFTER alipay_trade_no')
         .catch((error) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
@@ -185,6 +248,11 @@ const ensurePaymentTables = async (pool) => {
       await pool.execute('ALTER TABLE redeem_codes ADD COLUMN code_ciphertext TEXT AFTER code')
         .catch((error) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE redeem_codes MODIFY COLUMN sku_id VARCHAR(64) NOT NULL')
+        .catch((error) => {
+          if (error?.code === 'ER_BAD_FIELD_ERROR') return null;
           throw error;
         });
       await pool.execute('ALTER TABLE redeem_codes ADD COLUMN code_iv VARCHAR(32) DEFAULT NULL AFTER code_ciphertext')
@@ -221,13 +289,240 @@ const ensurePaymentTables = async (pool) => {
   await paymentTablesInitPromise;
 };
 
+const listPaymentProducts = async (executor, filters = {}) => {
+  const where = [];
+  const params = [];
+  if (filters.productType) {
+    where.push('product_type = ?');
+    params.push(filters.productType);
+  }
+  if (filters.status) {
+    where.push('status = ?');
+    params.push(filters.status);
+  }
+  if (filters.keyword) {
+    where.push('(name LIKE ? OR sku_id LIKE ?)');
+    params.push(`%${filters.keyword}%`, `%${filters.keyword}%`);
+  }
+
+  const [rows] = await executor.execute(
+    `
+      SELECT *
+      FROM payment_products
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY sort_order ASC, id ASC
+    `,
+    params
+  );
+  return rows;
+};
+
+const getPaymentProductById = async (executor, id) => {
+  const [rows] = await executor.execute(
+    'SELECT * FROM payment_products WHERE id = ? LIMIT 1',
+    [id]
+  );
+  return rows[0] || null;
+};
+
+const getPaymentProductBySkuId = async (executor, skuId = '') => {
+  const [rows] = await executor.execute(
+    'SELECT * FROM payment_products WHERE sku_id = ? LIMIT 1',
+    [skuId]
+  );
+  return rows[0] || null;
+};
+
+const createPaymentProduct = async (executor, product = {}) => executor.execute(
+  `
+    INSERT INTO payment_products
+      (
+        product_type, sku_id, name, subject, description, base_price,
+        currency, base_quota_usd, daily_quota_usd, main_redeem_sku_id,
+        bonus_redeem_sku_id, bonus_quota_usd, recommended, card_badge,
+        card_features_json, order_note, sort_order, status
+      )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+  [
+    product.productType,
+    product.skuId,
+    product.name,
+    product.subject,
+    product.description || null,
+    product.basePrice,
+    product.currency || 'CNY',
+    product.baseQuotaUsd || null,
+    product.dailyQuotaUsd || null,
+    product.mainRedeemSkuId || null,
+    product.bonusRedeemSkuId || null,
+    product.bonusQuotaUsd || '0.00',
+    product.recommended ? 1 : 0,
+    product.cardBadge || null,
+    product.cardFeaturesJson || null,
+    product.orderNote || null,
+    product.sortOrder || 0,
+    product.status === 'inactive' ? 'inactive' : 'active'
+  ]
+);
+
+const updatePaymentProduct = async (executor, product = {}) => executor.execute(
+  `
+    UPDATE payment_products
+    SET product_type = ?,
+        name = ?,
+        subject = ?,
+        description = ?,
+        base_price = ?,
+        currency = ?,
+        base_quota_usd = ?,
+        daily_quota_usd = ?,
+        main_redeem_sku_id = ?,
+        bonus_redeem_sku_id = ?,
+        bonus_quota_usd = ?,
+        recommended = ?,
+        card_badge = ?,
+        card_features_json = ?,
+        order_note = ?,
+        sort_order = ?,
+        status = ?
+    WHERE id = ?
+  `,
+  [
+    product.productType,
+    product.name,
+    product.subject,
+    product.description || null,
+    product.basePrice,
+    product.currency || 'CNY',
+    product.baseQuotaUsd || null,
+    product.dailyQuotaUsd || null,
+    product.mainRedeemSkuId || null,
+    product.bonusRedeemSkuId || null,
+    product.bonusQuotaUsd || '0.00',
+    product.recommended ? 1 : 0,
+    product.cardBadge || null,
+    product.cardFeaturesJson || null,
+    product.orderNote || null,
+    product.sortOrder || 0,
+    product.status === 'inactive' ? 'inactive' : 'active',
+    product.id
+  ]
+);
+
+const listPaymentPromotions = async (executor, filters = {}) => {
+  const where = [];
+  const params = [];
+  if (filters.productId) {
+    where.push('product_id = ?');
+    params.push(filters.productId);
+  }
+  if (filters.status) {
+    where.push('status = ?');
+    params.push(filters.status);
+  }
+
+  const [rows] = await executor.execute(
+    `
+      SELECT *
+      FROM payment_promotions
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY id DESC
+    `,
+    params
+  );
+  return rows;
+};
+
+const getPaymentPromotionById = async (executor, id) => {
+  const [rows] = await executor.execute(
+    'SELECT * FROM payment_promotions WHERE id = ? LIMIT 1',
+    [id]
+  );
+  return rows[0] || null;
+};
+
+const getActivePaymentPromotionsForProduct = async (executor, payload = {}) => {
+  const [rows] = await executor.execute(
+    `
+      SELECT *
+      FROM payment_promotions
+      WHERE product_id = ?
+        AND status = 'active'
+        AND (starts_at IS NULL OR starts_at <= ?)
+        AND (ends_at IS NULL OR ends_at >= ?)
+      ORDER BY id DESC
+    `,
+    [payload.productId, payload.now, payload.now]
+  );
+  return rows;
+};
+
+const createPaymentPromotion = async (executor, promotion = {}) => executor.execute(
+  `
+    INSERT INTO payment_promotions
+      (
+        product_id, title, badge_text, starts_at, ends_at, promotion_price,
+        promotion_bonus_quota_usd, limit_once, limit_scope, claim_scope_key, status
+      )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+  [
+    promotion.productId,
+    promotion.title,
+    promotion.badgeText || null,
+    promotion.startsAt || null,
+    promotion.endsAt || null,
+    promotion.promotionPrice || null,
+    promotion.promotionBonusQuotaUsd || '0.00',
+    promotion.limitOnce ? 1 : 0,
+    promotion.limitScope || 'user',
+    promotion.claimScopeKey || null,
+    promotion.status === 'inactive' ? 'inactive' : 'active'
+  ]
+);
+
+const updatePaymentPromotion = async (executor, promotion = {}) => executor.execute(
+  `
+    UPDATE payment_promotions
+    SET title = ?,
+        badge_text = ?,
+        starts_at = ?,
+        ends_at = ?,
+        promotion_price = ?,
+        promotion_bonus_quota_usd = ?,
+        limit_once = ?,
+        limit_scope = ?,
+        claim_scope_key = ?,
+        status = ?
+    WHERE id = ?
+  `,
+  [
+    promotion.title,
+    promotion.badgeText || null,
+    promotion.startsAt || null,
+    promotion.endsAt || null,
+    promotion.promotionPrice || null,
+    promotion.promotionBonusQuotaUsd || '0.00',
+    promotion.limitOnce ? 1 : 0,
+    promotion.limitScope || 'user',
+    promotion.claimScopeKey || null,
+    promotion.status === 'inactive' ? 'inactive' : 'active',
+    promotion.id
+  ]
+);
+
 const createPaymentOrder = async (pool, order = {}) => {
   await ensurePaymentTables(pool);
   await pool.execute(
     `
       INSERT INTO payment_orders
-        (order_no, user_id, provider, product_type, plan_id, duration_id, quota_usd, amount, currency, subject, status, expires_at)
-      VALUES (?, ?, 'alipay', ?, ?, ?, ?, ?, 'CNY', ?, 'pending', ?)
+        (
+          order_no, user_id, provider, product_type, plan_id, duration_id,
+          quota_usd, amount, currency, subject, status, expires_at,
+          product_snapshot_json, promotion_snapshot_json
+        )
+      VALUES (?, ?, 'alipay', ?, ?, ?, ?, ?, 'CNY', ?, 'pending', ?, ?, ?)
     `,
     [
       order.orderNo,
@@ -238,7 +533,9 @@ const createPaymentOrder = async (pool, order = {}) => {
       order.quotaUsd || null,
       order.amount,
       order.subject,
-      order.expiresAt
+      order.expiresAt,
+      order.productSnapshotJson || null,
+      order.promotionSnapshotJson || null
     ]
   );
 };
@@ -672,6 +969,16 @@ const deleteAvailableRedeemCodes = async (executor, ids = []) => {
 
 module.exports = {
   ensurePaymentTables,
+  listPaymentProducts,
+  getPaymentProductById,
+  getPaymentProductBySkuId,
+  createPaymentProduct,
+  updatePaymentProduct,
+  listPaymentPromotions,
+  getPaymentPromotionById,
+  getActivePaymentPromotionsForProduct,
+  createPaymentPromotion,
+  updatePaymentPromotion,
   createPaymentOrder,
   getPaymentOrderByNo,
   getPaymentOrderDetailByNo,
