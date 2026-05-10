@@ -5,6 +5,7 @@ const {
   getRechargePackage,
   getRechargeBonusPackage
 } = require('./plans');
+const { parseSnapshotJson, normalizeQuota } = require('./paymentProductUtils');
 const { decryptRedeemCode } = require('./redeemCodeCrypto');
 const {
   PAYMENT_SUPPORT_WECHAT,
@@ -23,10 +24,18 @@ const {
   releaseClaims
 } = require('./paymentClaimService');
 
-const closeExpiredPaymentOrder = (executor, orderNo = '', now = new Date()) => repository.closeExpiredPaymentOrder(executor, {
-  orderNo,
-  now: toMysqlDateTime(now)
-});
+const closeExpiredPaymentOrder = async (executor, orderNo = '', now = new Date()) => {
+  const [result] = await repository.closeExpiredPaymentOrder(executor, {
+    orderNo,
+    now: toMysqlDateTime(now)
+  });
+  if (Number(result?.affectedRows || 0) > 0) {
+    await repository.deletePaymentBonusClaimsByOrderNo(executor, orderNo);
+  }
+  return [result];
+};
+
+const getOrderProductSnapshot = (order = {}) => parseSnapshotJson(order.product_snapshot_json) || {};
 
 const hasUserRedeemedSku = async (executor, payload = {}) => {
   const normalizedUserId = Number(payload.userId || 0);
@@ -47,11 +56,22 @@ const getBonusSkipNote = (assignment = {}) => (
 );
 
 const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Date(), options = {}) => {
-  const bonusPackage = getRechargeBonusPackage();
+  const productSnapshot = options.productSnapshot || getOrderProductSnapshot(order);
+  const bonusSkuId = productSnapshot.bonusRedeemSkuId || getRechargeBonusPackage().id;
+  const bonusQuotaUsd = Number(productSnapshot.bonusQuotaUsd ?? order.quota_usd ?? 0);
+  if (!bonusSkuId || bonusQuotaUsd <= 0) {
+    return {
+      assignedCode: null,
+      redeemCode: null,
+      alreadyUsed: true,
+      skipReason: 'already_used'
+    };
+  }
+
   const alreadyUsedByUser = await hasUserRedeemedSku(connection, {
     userId: order.user_id,
     productType: 'recharge',
-    skuId: bonusPackage.id
+    skuId: bonusSkuId
   });
   if (alreadyUsedByUser) {
     return {
@@ -79,7 +99,7 @@ const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Da
 
   const assignedCode = await repository.assignRedeemCodeToOrder(connection, {
     productType: 'recharge',
-    skuId: bonusPackage.id,
+    skuId: bonusSkuId,
     orderNo: order.order_no,
     userId: order.user_id,
     assignedAt: toMysqlDateTime(assignedAt)
@@ -100,7 +120,10 @@ const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Da
 };
 
 const assignPaymentFulfillment = async (connection, order = {}, productType = 'subscription', assignedAt = new Date(), options = {}) => {
-  const skuId = productType === 'recharge' ? order.plan_id : order.plan_id;
+  const productSnapshot = options.productSnapshot || getOrderProductSnapshot(order);
+  const skuId = productType === 'recharge'
+    ? productSnapshot.mainRedeemSkuId || order.plan_id
+    : order.plan_id;
   const assignedAtText = toMysqlDateTime(assignedAt);
   const assignCode = (targetSkuId) => repository.assignRedeemCodeToOrder(connection, {
     productType,
@@ -110,7 +133,10 @@ const assignPaymentFulfillment = async (connection, order = {}, productType = 's
     assignedAt: assignedAtText
   });
   const assignedCode = await assignCode(skuId);
-  const bonusAssignment = assignedCode ? await assignBonusRedeemCode(connection, order, assignedAt, options) : {};
+  const bonusAssignment = assignedCode ? await assignBonusRedeemCode(connection, order, assignedAt, {
+    ...options,
+    productSnapshot
+  }) : {};
   const redeemCode = assignedCode ? decryptRedeemCode(assignedCode) : null;
   const bonusRedeemCode = bonusAssignment.redeemCode || null;
   const bonusAlreadyUsed = bonusAssignment.skipReason === 'already_used';
@@ -232,8 +258,13 @@ const handlePaidOrder = async (pool, payload = {}) => {
     }
 
     const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
+    const productSnapshot = getOrderProductSnapshot(order);
     const plan = getPaymentPlan(order.plan_id);
-    const duration = getPaymentDuration(order.duration_id);
+    const duration = getPaymentDuration(productSnapshot.durationId || order.duration_id) || {
+      id: productSnapshot.durationId || order.duration_id,
+      label: productSnapshot.durationLabel || '',
+      months: Number(productSnapshot.durationMonths || 0)
+    };
     const rechargePackage = getRechargePackage(order.plan_id);
     const [markResult] = await repository.markOrderPaid(connection, {
       orderNo: payload.orderNo,
@@ -255,18 +286,20 @@ const handlePaidOrder = async (pool, payload = {}) => {
 
     if (productType === 'recharge') {
       const fulfillment = await assignPaymentFulfillment(connection, order, productType, paidAt, {
-        alipayBuyerId: payload.alipayBuyerId
+        alipayBuyerId: payload.alipayBuyerId,
+        productSnapshot
       });
 
-      if (!rechargePackage) {
+      if (!rechargePackage && !productSnapshot.mainRedeemSkuId) {
         const error = new Error('订单充值配置不存在');
         error.statusCode = 500;
         throw error;
       }
 
+      const baseQuotaUsd = normalizeQuota(productSnapshot.baseQuotaUsd || rechargePackage?.originalQuotaUsd || order.quota_usd || rechargePackage?.quotaUsd);
       const grantedQuotaUsd = fulfillment.bonusSkipReason
-        ? rechargePackage.originalQuotaUsd || order.quota_usd || rechargePackage.quotaUsd
-        : order.quota_usd || rechargePackage.quotaUsd;
+        ? baseQuotaUsd
+        : normalizeQuota(order.quota_usd || productSnapshot.quotaUsd || rechargePackage?.quotaUsd);
       await repository.updatePaymentOrderQuota(connection, {
         orderNo: payload.orderNo,
         quotaUsd: grantedQuotaUsd
@@ -282,8 +315,13 @@ const handlePaidOrder = async (pool, payload = {}) => {
       return { status: 'paid', orderNo: order.order_no, productType, alreadyPaid: false, ...fulfillment };
     }
 
-    if (!plan || !duration) {
+    if (!plan && !productSnapshot.dailyQuotaUsd) {
       const error = new Error('订单套餐配置不存在');
+      error.statusCode = 500;
+      throw error;
+    }
+    if (!duration?.months) {
+      const error = new Error('订单周期配置不存在');
       error.statusCode = 500;
       throw error;
     }
@@ -300,7 +338,7 @@ const handlePaidOrder = async (pool, payload = {}) => {
     const membership = {
       userId: order.user_id,
       planId: order.plan_id,
-      dailyQuotaUsd: plan.dailyQuotaUsd,
+      dailyQuotaUsd: productSnapshot.dailyQuotaUsd || plan.dailyQuotaUsd,
       startsAt: toMysqlDateTime(startsAt),
       expiresAt: toMysqlDateTime(expiresAt),
       orderNo: payload.orderNo
@@ -313,9 +351,12 @@ const handlePaidOrder = async (pool, payload = {}) => {
     }
 
     const bonusAssignment = await assignBonusRedeemCode(connection, order, paidAt, {
-      alipayBuyerId: payload.alipayBuyerId
+      alipayBuyerId: payload.alipayBuyerId,
+      productSnapshot
     });
-    const bonusQuotaUsd = bonusAssignment.skipReason ? 0 : Number(order.quota_usd || plan.bonusQuotaUsd || 0);
+    const bonusQuotaUsd = bonusAssignment.skipReason
+      ? 0
+      : Number(productSnapshot.bonusQuotaUsd ?? order.quota_usd ?? plan.bonusQuotaUsd ?? 0);
     if (bonusAssignment.skipReason) {
       await repository.updatePaymentOrderQuota(connection, {
         orderNo: payload.orderNo,
