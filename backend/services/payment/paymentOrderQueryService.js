@@ -4,6 +4,7 @@ const {
   getPaymentPlan,
   getRechargePackage
 } = require('./plans');
+const { parseSnapshotJson } = require('./paymentProductUtils');
 const { decryptRedeemCode } = require('./redeemCodeCrypto');
 const {
   PAYMENT_SUPPORT_WECHAT,
@@ -16,10 +17,24 @@ const {
   normalizeApiUsername
 } = require('./paymentUtils');
 
-const closeExpiredPaymentOrder = (executor, orderNo = '', now = new Date()) => repository.closeExpiredPaymentOrder(executor, {
-  orderNo,
-  now: toMysqlDateTime(now)
-});
+const closeExpiredPaymentOrder = async (executor, orderNo = '', now = new Date()) => {
+  const [result] = await repository.closeExpiredPaymentOrder(executor, {
+    orderNo,
+    now: toMysqlDateTime(now)
+  });
+  if (Number(result?.affectedRows || 0) > 0) {
+    await repository.deletePaymentBonusClaimsByOrderNo(executor, orderNo);
+  }
+  return [result];
+};
+
+const closeExpiredPaymentOrders = async (executor, now = new Date()) => {
+  const [result] = await repository.closeExpiredPaymentOrders(executor, toMysqlDateTime(now));
+  if (Number(result?.affectedRows || 0) > 0) {
+    await repository.deletePaymentBonusClaimsForClosedOrders(executor);
+  }
+  return [result];
+};
 
 const getRedeemCodeRowsById = async (executor, orders = []) => {
   const ids = normalizeRedeemCodeIds(orders.flatMap((order) => [
@@ -65,6 +80,7 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
   }
 
   const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
+  const productSnapshot = parseSnapshotJson(order.product_snapshot_json) || {};
   const product = productType === 'recharge'
     ? getRechargePackage(order.plan_id)
     : getPaymentPlan(order.plan_id);
@@ -75,8 +91,8 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
   return {
     orderNo: order.order_no,
     productType,
-    skuId: order.plan_id,
-    productName: product?.name || order.subject,
+    skuId: productSnapshot.skuId || order.plan_id,
+    productName: productSnapshot.name || product?.name || order.subject,
     amount: Number(order.amount || 0).toFixed(2),
     currency: order.currency || 'CNY',
     status: order.status,
@@ -96,12 +112,16 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
 
 const resolvePaymentProductName = (order = {}) => {
   const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
+  const productSnapshot = parseSnapshotJson(order.product_snapshot_json) || {};
   const product = productType === 'recharge'
     ? getRechargePackage(order.plan_id)
     : getPaymentPlan(order.plan_id);
   return {
-    productType,
-    productName: product?.name || order.subject || order.plan_id
+    productType: productSnapshot.productType || productType,
+    productName: productSnapshot.name || product?.name || order.subject || order.plan_id,
+    skuId: productSnapshot.skuId || order.plan_id,
+    productSnapshot,
+    promotionSnapshot: parseSnapshotJson(order.promotion_snapshot_json) || null
   };
 };
 
@@ -115,10 +135,12 @@ const mapAdminPaymentOrder = (order = {}, rowsById = new Map()) => {
     email: order.email || '',
     provider: order.provider || 'alipay',
     productType: product.productType,
-    skuId: order.plan_id,
+    skuId: product.skuId,
     durationId: order.duration_id,
     quotaUsd: order.quota_usd || null,
     productName: product.productName,
+    productSnapshot: product.productSnapshot,
+    promotionSnapshot: product.promotionSnapshot,
     subject: order.subject || '',
     amount: Number(order.amount || 0).toFixed(2),
     currency: order.currency || 'CNY',
@@ -138,7 +160,7 @@ const mapAdminPaymentOrder = (order = {}, rowsById = new Map()) => {
 
 const listAdminPaymentOrders = async (filters = {}, pool = getPool()) => {
   await repository.ensurePaymentTables(pool);
-  await repository.closeExpiredPaymentOrders(pool, toMysqlDateTime(new Date()));
+  await closeExpiredPaymentOrders(pool);
   const rows = await repository.listPaymentOrders(pool, {
     orderNo: String(filters.orderNo || '').trim(),
     status: ['pending', 'paid', 'closed'].includes(filters.status) ? filters.status : ''
@@ -198,6 +220,7 @@ const deleteAdminPaymentOrder = async ({ orderNo } = {}, pool = getPool()) => {
     error.statusCode = 500;
     throw error;
   }
+  await repository.deletePaymentBonusClaimsByOrderNo(pool, normalizedOrderNo);
 
   return {
     deleted: 1,

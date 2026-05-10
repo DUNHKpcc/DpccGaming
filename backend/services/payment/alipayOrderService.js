@@ -2,17 +2,12 @@ const { getPool } = require('../../config/database');
 const paymentConfig = require('../../config/payment');
 const repository = require('../../repositories/paymentRepository');
 const {
-  getPaymentPlan,
-  getPaymentDuration,
-  getRechargePackage,
-  getRechargeBonusPackage,
-  calculateOrderAmount
-} = require('./plans');
-const {
   buildAlipayPagePayForm,
   verifyAlipayNotifyParams
 } = require('./alipay');
-const { handlePaidOrder, hasUserRedeemedSku } = require('./paymentFulfillmentService');
+const { handlePaidOrder } = require('./paymentFulfillmentService');
+const { buildOrderProductSnapshot } = require('./paymentProductService');
+const { acquireUserClaim, releaseClaims } = require('./paymentClaimService');
 const {
   createOrderNo,
   addMinutes,
@@ -60,66 +55,79 @@ const ensureAlipayCreateConfig = () => {
   }
 };
 
-const createAlipayOrder = async ({ userId, productType = 'subscription', planId, durationId, rechargePackageId } = {}) => {
+const createAlipayOrder = async ({ userId, productType = 'subscription', productId, planId, durationId, rechargePackageId } = {}) => {
   const normalizedProductType = productType === 'recharge' ? 'recharge' : 'subscription';
-  const plan = getPaymentPlan(planId);
-  const duration = getPaymentDuration(durationId);
-  const rechargePackage = getRechargePackage(rechargePackageId || planId);
-  if (normalizedProductType === 'subscription' && (!plan || !duration)) {
-    const error = new Error('支付款项无效');
-    error.statusCode = 400;
-    throw error;
-  }
-  if (normalizedProductType === 'recharge' && !rechargePackage) {
-    const error = new Error('充值额度无效');
-    error.statusCode = 400;
-    throw error;
-  }
+  const requestedProductId = productId || (normalizedProductType === 'recharge' ? rechargePackageId || planId : planId);
   ensureAlipayCreateConfig();
 
   const pool = getPool();
   await repository.ensurePaymentTables(pool);
-  const rechargeBonusAlreadyUsed = normalizedProductType === 'recharge'
-    ? await hasUserRedeemedSku(pool, {
+  const orderNo = createOrderNo();
+  let productSnapshot = await buildOrderProductSnapshot({
+    productId: requestedProductId,
+    durationId,
+    userId
+  }, pool);
+  let promotionClaims = [];
+  const activePromotion = productSnapshot.product.activePromotion;
+  if (activePromotion?.limitOnce) {
+    const claimResult = await acquireUserClaim(pool, {
+      purpose: activePromotion.claimScopeKey || `promotion_${activePromotion.id}`,
       userId,
-      productType: 'recharge',
-      skuId: getRechargeBonusPackage().id
-    })
-    : false;
-  const rechargeQuotaUsd = normalizedProductType === 'recharge' && rechargeBonusAlreadyUsed
-    ? rechargePackage.originalQuotaUsd || rechargePackage.quotaUsd
-    : rechargePackage?.quotaUsd;
+      orderNo
+    });
+    if (claimResult.claimed) {
+      promotionClaims = claimResult.claims || [];
+    } else {
+      productSnapshot = await buildOrderProductSnapshot({
+        productId: requestedProductId,
+        durationId,
+        userId,
+        ignorePromotion: true
+      }, pool);
+    }
+  }
 
+  const { product, duration } = productSnapshot;
   const now = new Date();
   const expiresAt = addMinutes(now, PAYMENT_ORDER_LOCK_MINUTES);
-  const amount = normalizedProductType === 'recharge'
-    ? rechargePackage.price
-    : calculateOrderAmount(plan, duration);
   const order = {
-    orderNo: createOrderNo(),
+    orderNo,
     userId,
-    productType: normalizedProductType,
-    planId: normalizedProductType === 'recharge' ? rechargePackage.id : plan.id,
-    durationId: normalizedProductType === 'recharge' ? 'one_time' : duration.id,
-    quotaUsd: normalizedProductType === 'recharge' ? rechargeQuotaUsd : plan.bonusQuotaUsd,
-    amount,
-    subject: normalizedProductType === 'recharge' ? rechargePackage.subject : plan.subject,
-    body: normalizedProductType === 'recharge' ? `一次性充值 ${rechargeQuotaUsd} 美元额度` : `${duration.label}，赠送 ${plan.bonusQuotaUsd} 美元普通余额`,
+    productType: product.productType,
+    planId: product.skuId,
+    durationId: product.productType === 'recharge' ? 'one_time' : duration.id,
+    quotaUsd: productSnapshot.quotaUsd,
+    amount: product.price,
+    subject: product.subject,
+    body: product.productType === 'recharge'
+      ? `一次性充值 ${productSnapshot.quotaUsd} 美元额度`
+      : `${duration.label}，赠送 ${productSnapshot.quotaUsd} 美元普通余额`,
     expiresAt: toMysqlDateTime(expiresAt),
-    expiresInMinutes: PAYMENT_ORDER_LOCK_MINUTES
+    expiresInMinutes: PAYMENT_ORDER_LOCK_MINUTES,
+    productSnapshotJson: productSnapshot.productSnapshotJson,
+    promotionSnapshotJson: productSnapshot.promotionSnapshotJson
   };
 
-  await repository.createPaymentOrder(pool, order);
-
-  const formHtml = buildAlipayPagePayForm({
-    config: paymentConfig.alipay,
-    order
-  });
+  let formHtml;
+  try {
+    await repository.createPaymentOrder(pool, order);
+    formHtml = buildAlipayPagePayForm({
+      config: paymentConfig.alipay,
+      order
+    });
+  } catch (error) {
+    await releaseClaims(pool, {
+      orderNo,
+      claims: promotionClaims
+    });
+    throw error;
+  }
 
   return {
     orderNo: order.orderNo,
-    productType: normalizedProductType,
-    amount,
+    productType: product.productType,
+    amount: product.price,
     expiresAt: expiresAt.toISOString(),
     expiresInMinutes: PAYMENT_ORDER_LOCK_MINUTES,
     formHtml

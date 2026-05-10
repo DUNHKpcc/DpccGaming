@@ -90,6 +90,11 @@ const seedDefaultPaymentProducts = async (pool = getPool()) => {
   return { seeded };
 };
 
+const closeExpiredOrdersAndClaims = async (pool = getPool()) => {
+  await repository.closeExpiredPaymentOrders(pool, toMysqlDateTime(new Date()));
+  await repository.deletePaymentBonusClaimsForClosedOrders(pool);
+};
+
 const buildInventory = (stats = []) => {
   const availableBySku = new Map();
   stats.forEach((row = {}) => {
@@ -199,6 +204,7 @@ const getEffectivePromotionForProduct = async (pool, productId, options = {}) =>
 
 const getCatalog = async (options = {}, pool = getPool()) => {
   await seedDefaultPaymentProducts(pool);
+  await closeExpiredOrdersAndClaims(pool);
   const now = new Date();
   const products = await repository.listPaymentProducts(pool, { status: 'active' });
   const stats = await repository.getRedeemCodeStats(pool);
@@ -428,8 +434,9 @@ const updateAdminPaymentPromotion = async (payload = {}, pool = getPool()) => {
   return { promotion: mapPromotion(row) };
 };
 
-const buildOrderProductSnapshot = async ({ productId, durationId, userId } = {}, pool = getPool()) => {
+const buildOrderProductSnapshot = async ({ productId, durationId, userId, ignorePromotion = false } = {}, pool = getPool()) => {
   await seedDefaultPaymentProducts(pool);
+  await closeExpiredOrdersAndClaims(pool);
   const normalizedProductId = Number(productId || 0);
   const product = Number.isInteger(normalizedProductId) && normalizedProductId > 0
     ? await repository.getPaymentProductById(pool, normalizedProductId)
@@ -449,16 +456,29 @@ const buildOrderProductSnapshot = async ({ productId, durationId, userId } = {},
     throw error;
   }
 
-  const promotion = await getEffectivePromotionForProduct(pool, product.id, { userId });
-  const mapped = mapProductRow(product, { promotion });
+  const stats = await repository.getRedeemCodeStats(pool);
+  const availableFor = buildInventory(stats);
+  const redeemedSkuSet = await buildRedeemedSkuSet(pool, userId);
+  const promotion = ignorePromotion ? null : await getEffectivePromotionForProduct(pool, product.id, { userId });
+  const mapped = mapProductRow(product, {
+    promotion,
+    availableFor,
+    redeemedSkuSet
+  });
+  const normalizedBonusQuotaUsd = mapped.bonusRedeemCodeUsed ? '0.00' : mapped.bonusQuotaUsd;
+  const normalizedQuotaUsd = product.product_type === 'recharge'
+    ? (Number(mapped.baseQuotaUsd) + Number(normalizedBonusQuotaUsd)).toFixed(2)
+    : mapped.baseQuotaUsd;
   const amount = product.product_type === 'subscription'
     ? fromCents(toCents(mapped.price) * Number(duration.months || 1))
     : mapped.price;
   const quotaUsd = product.product_type === 'recharge'
-    ? mapped.quotaUsd
-    : mapped.bonusQuotaUsd;
+    ? normalizedQuotaUsd
+    : normalizedBonusQuotaUsd;
   const snapshot = {
     ...mapped,
+    bonusQuotaUsd: normalizedBonusQuotaUsd,
+    quotaUsd: normalizedQuotaUsd,
     price: amount,
     displayPrice: amount,
     durationId: duration.id,

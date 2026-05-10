@@ -619,6 +619,23 @@ const closeExpiredPaymentOrder = async (executor, payload = {}) => executor.exec
   [payload.orderNo, payload.now]
 );
 
+const deletePaymentBonusClaimsByOrderNo = async (executor, orderNo = '') => executor.execute(
+  `
+    DELETE FROM payment_bonus_claims
+    WHERE order_no = ?
+  `,
+  [orderNo]
+);
+
+const deletePaymentBonusClaimsForClosedOrders = async (executor) => executor.execute(
+  `
+    DELETE pbc
+    FROM payment_bonus_claims pbc
+    INNER JOIN payment_orders po ON po.order_no = pbc.order_no
+    WHERE po.status = 'closed'
+  `
+);
+
 const getPaymentOrderByNoForUpdate = async (executor, orderNo = '') => {
   const [rows] = await executor.execute(
     'SELECT * FROM payment_orders WHERE order_no = ? LIMIT 1 FOR UPDATE',
@@ -1000,6 +1017,8 @@ module.exports = {
   deleteUnpaidPaymentOrder,
   closeExpiredPaymentOrders,
   closeExpiredPaymentOrder,
+  deletePaymentBonusClaimsByOrderNo,
+  deletePaymentBonusClaimsForClosedOrders,
   getPaymentOrderByNoForUpdate,
   getPaymentOrderForUser,
   listAssignedRedeemCodeSkusForUser,
