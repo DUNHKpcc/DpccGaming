@@ -13,13 +13,15 @@ const {
   PAYMENT_API_USERNAME_WAIT_NOTE,
   BONUS_REDEEM_CODE_ALREADY_USED_NOTE,
   BONUS_REDEEM_CODE_PAYER_MISSING_NOTE,
-  BONUS_CLAIM_TYPE_ALIPAY_BUYER,
-  BONUS_CLAIM_TYPE_USER,
   toMysqlDateTime,
   addMonths,
   isPaymentAfterOrderExpiry,
   buildRedeemCodes
 } = require('./paymentUtils');
+const {
+  acquireUserAndPayerClaims,
+  releaseClaims
+} = require('./paymentClaimService');
 
 const closeExpiredPaymentOrder = (executor, orderNo = '', now = new Date()) => repository.closeExpiredPaymentOrder(executor, {
   orderNo,
@@ -36,104 +38,6 @@ const hasUserRedeemedSku = async (executor, payload = {}) => {
     skuId: payload.skuId
   });
   return Boolean(assignedCode);
-};
-
-const hasPayerClaimedBonusRedeemCode = async (executor, payload = {}) => {
-  const normalizedBuyerId = String(payload.alipayBuyerId || '').trim();
-  if (!normalizedBuyerId) return false;
-
-  const claim = await repository.getBonusRedeemCodeClaimByPayer(executor, {
-    alipayBuyerId: normalizedBuyerId,
-    currentOrderNo: payload.currentOrderNo
-  });
-  return Boolean(claim);
-};
-
-const createBonusClaim = async (executor, payload = {}) => {
-  const [result] = await repository.createPaymentBonusClaim(executor, {
-    claimType: payload.claimType,
-    claimKey: payload.claimKey,
-    orderNo: payload.orderNo,
-    userId: payload.userId
-  });
-  return Number(result?.affectedRows || 0) === 1;
-};
-
-const releaseBonusClaim = (executor, payload = {}) => {
-  if (!payload.claimKey) return Promise.resolve();
-  return repository.deletePaymentBonusClaim(executor, {
-    claimType: payload.claimType,
-    claimKey: payload.claimKey,
-    orderNo: payload.orderNo
-  });
-};
-
-const createBonusClaims = async (executor, payload = {}) => {
-  const userClaimKey = String(Number(payload.userId || 0));
-  const userClaimed = await createBonusClaim(executor, {
-    claimType: BONUS_CLAIM_TYPE_USER,
-    claimKey: userClaimKey,
-    orderNo: payload.orderNo,
-    userId: payload.userId
-  });
-  if (!userClaimed) {
-    return { claimed: false, reason: 'already_used' };
-  }
-
-  const normalizedBuyerId = String(payload.alipayBuyerId || '').trim();
-  if (!normalizedBuyerId) {
-    await releaseBonusClaim(executor, {
-      claimType: BONUS_CLAIM_TYPE_USER,
-      claimKey: userClaimKey,
-      orderNo: payload.orderNo
-    });
-    return { claimed: false, reason: 'payer_missing' };
-  }
-
-  if (await hasPayerClaimedBonusRedeemCode(executor, {
-    alipayBuyerId: normalizedBuyerId,
-    currentOrderNo: payload.orderNo
-  })) {
-    await releaseBonusClaim(executor, {
-      claimType: BONUS_CLAIM_TYPE_USER,
-      claimKey: userClaimKey,
-      orderNo: payload.orderNo
-    });
-    return { claimed: false, reason: 'already_used' };
-  }
-
-  const payerClaimed = await createBonusClaim(executor, {
-    claimType: BONUS_CLAIM_TYPE_ALIPAY_BUYER,
-    claimKey: normalizedBuyerId,
-    orderNo: payload.orderNo,
-    userId: payload.userId
-  });
-  if (!payerClaimed) {
-    await releaseBonusClaim(executor, {
-      claimType: BONUS_CLAIM_TYPE_USER,
-      claimKey: userClaimKey,
-      orderNo: payload.orderNo
-    });
-    return { claimed: false, reason: 'already_used' };
-  }
-
-  return {
-    claimed: true,
-    claims: [
-      { claimType: BONUS_CLAIM_TYPE_USER, claimKey: userClaimKey },
-      { claimType: BONUS_CLAIM_TYPE_ALIPAY_BUYER, claimKey: normalizedBuyerId }
-    ]
-  };
-};
-
-const releaseBonusClaims = async (executor, payload = {}) => {
-  const claims = Array.isArray(payload.claims) ? payload.claims : [];
-  for (const claim of claims) {
-    await releaseBonusClaim(executor, {
-      ...claim,
-      orderNo: payload.orderNo
-    });
-  }
 };
 
 const getBonusSkipNote = (assignment = {}) => (
@@ -158,7 +62,8 @@ const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Da
     };
   }
 
-  const claim = await createBonusClaims(connection, {
+  const claim = await acquireUserAndPayerClaims(connection, {
+    purpose: 'bonus',
     alipayBuyerId: options.alipayBuyerId,
     orderNo: order.order_no,
     userId: order.user_id
@@ -180,7 +85,7 @@ const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Da
     assignedAt: toMysqlDateTime(assignedAt)
   });
   if (!assignedCode) {
-    await releaseBonusClaims(connection, {
+    await releaseClaims(connection, {
       claims: claim.claims,
       orderNo: order.order_no
     });
