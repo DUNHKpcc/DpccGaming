@@ -56,13 +56,15 @@
               :key="plan.id"
               type="button"
               class="plan-card"
-              :class="{ selected: plan.id === selectedPlanId, 'has-plan-bonus': plan.hasPlanBonus }"
+              :class="{ selected: plan.id === selectedPlanId, 'has-card-badges': plan.promotionBadgeText || plan.hasPlanBonus }"
               :aria-pressed="plan.id === selectedPlanId"
               @click="selectPlan(plan.id)"
             >
               <span v-if="plan.badgeText" class="recommend-badge">{{ plan.badgeText }}</span>
-              <span v-if="plan.promotionBadgeText" class="recharge-bonus-badge">{{ plan.promotionBadgeText }}</span>
-              <span v-else-if="plan.hasPlanBonus" class="recharge-bonus-badge">{{ plan.bonusText }}</span>
+              <span v-if="plan.promotionBadgeText || plan.hasPlanBonus" class="bonus-badge-stack">
+                <span v-if="plan.promotionBadgeText" class="recharge-bonus-badge">{{ plan.promotionBadgeText }}</span>
+                <span v-if="plan.hasPlanBonus" class="recharge-bonus-badge">{{ plan.bonusText }}</span>
+              </span>
               <span class="plan-name">{{ plan.name }}</span>
               <strong>{{ plan.priceText }}</strong>
               <span class="daily-quota">{{ plan.dailyQuota }}</span>
@@ -89,14 +91,16 @@
                 :key="pack.id"
                 type="button"
                 class="plan-card"
-                :class="{ selected: pack.id === selectedRechargePackageId }"
+                :class="{ selected: pack.id === selectedRechargePackageId, 'has-card-badges': pack.promotionBadgeText || pack.hasRechargeBonus }"
                 :aria-pressed="pack.id === selectedRechargePackageId"
                 @click="selectRechargePackage(pack.id)"
               >
                 <span v-if="pack.badgeText" class="recommend-badge">{{ pack.badgeText }}</span>
                 <span class="plan-name">{{ pack.name }}</span>
-                <span v-if="pack.promotionBadgeText" class="recharge-bonus-badge">{{ pack.promotionBadgeText }}</span>
-                <span v-else-if="pack.hasRechargeBonus" class="recharge-bonus-badge">{{ pack.bonusText }}</span>
+                <span v-if="pack.promotionBadgeText || pack.hasRechargeBonus" class="bonus-badge-stack">
+                  <span v-if="pack.promotionBadgeText" class="recharge-bonus-badge">{{ pack.promotionBadgeText }}</span>
+                  <span v-if="pack.hasRechargeBonus" class="recharge-bonus-badge">{{ pack.bonusText }}</span>
+                </span>
                 <strong>{{ pack.priceText }}</strong>
                 <span class="daily-quota recharge-quota">
                   <span v-if="pack.hasRechargeBonus" class="quota-original">{{ pack.originalQuotaText }}</span>
@@ -843,7 +847,7 @@ onBeforeUnmount(stopCountdown)
   transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
 
-.plan-card.has-plan-bonus {
+.plan-card.has-card-badges {
   padding-top: clamp(3.25rem, 5vh, 4rem);
 }
 
@@ -888,7 +892,7 @@ onBeforeUnmount(stopCountdown)
   white-space: nowrap;
 }
 
-.plan-card.has-plan-bonus .recommend-badge {
+.plan-card.has-card-badges .recommend-badge {
   top: 1rem;
   right: auto;
   left: 1rem;
@@ -924,6 +928,23 @@ onBeforeUnmount(stopCountdown)
 .stock-line.used,
 .stock-warning {
   color: #f59e0b;
+}
+
+.bonus-badge-stack {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.42rem;
+}
+
+.bonus-badge-stack .recharge-bonus-badge {
+  position: relative;
+  top: auto;
+  right: auto;
 }
 
 .recharge-bonus-badge {
