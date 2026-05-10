@@ -509,8 +509,10 @@ const getRedeemCodeProducts = async (pool = getPool()) => {
   };
 
   products.forEach((product) => {
-    addOption(product.product_type, product.sku_id, product.name);
-    addOption('recharge', product.main_redeem_sku_id, `${product.name}兑换码`);
+    if (product.product_type === 'recharge') {
+      addOption('recharge', product.sku_id, product.name);
+      addOption('recharge', product.main_redeem_sku_id, `${product.name}兑换码`);
+    }
     addOption('recharge', product.bonus_redeem_sku_id, `${product.name}赠送码`);
   });
   return options;
