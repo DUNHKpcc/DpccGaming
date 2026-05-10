@@ -85,11 +85,65 @@ const listRechargePackages = () => RECHARGE_PACKAGES.map((pack) => ({ ...pack })
 
 const getRechargeBonusPackage = () => ({ ...RECHARGE_BONUS_PACKAGE });
 
+const getDefaultPlanFeatures = (planId = '') => {
+  if (planId === 'bronze') {
+    return ['✅适合轻量试用', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费', '💰月等值150$'];
+  }
+  if (planId === 'gold') {
+    return ['✅适合日常编码', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费', '💰月等值450$'];
+  }
+  return ['✅适合高频调用', '🎉每日凌晨自动重制额度', '⚠️额度用完后按余额扣费', '💰月等值1500$'];
+};
+
+const listDefaultPaymentProducts = () => [
+  ...PAYMENT_PLANS.map((plan, index) => ({
+    productType: 'subscription',
+    skuId: plan.id,
+    name: plan.name,
+    subject: plan.subject,
+    description: '',
+    basePrice: plan.price,
+    currency: 'CNY',
+    baseQuotaUsd: plan.bonusQuotaUsd,
+    dailyQuotaUsd: plan.dailyQuotaUsd,
+    mainRedeemSkuId: '',
+    bonusRedeemSkuId: RECHARGE_BONUS_PACKAGE.id,
+    bonusQuotaUsd: plan.bonusQuotaUsd,
+    recommended: plan.id === 'gold',
+    cardBadge: plan.id === 'gold' ? '推荐款项' : '',
+    cardFeatures: getDefaultPlanFeatures(plan.id),
+    orderNote: '',
+    sortOrder: index + 10,
+    status: 'active'
+  })),
+  ...RECHARGE_PACKAGES.map((pack, index) => ({
+    productType: 'recharge',
+    skuId: pack.id,
+    name: pack.name,
+    subject: pack.subject,
+    description: '',
+    basePrice: pack.price,
+    currency: 'CNY',
+    baseQuotaUsd: pack.originalQuotaUsd || pack.quotaUsd,
+    dailyQuotaUsd: null,
+    mainRedeemSkuId: pack.id,
+    bonusRedeemSkuId: RECHARGE_BONUS_PACKAGE.id,
+    bonusQuotaUsd: RECHARGE_BONUS_PACKAGE.quotaUsd,
+    recommended: false,
+    cardBadge: '',
+    cardFeatures: ['✅到账余额 · ⚡调用扣费', '🔒服务端锁定金额和额度'],
+    orderNote: '',
+    sortOrder: index + 10,
+    status: 'active'
+  }))
+];
+
 module.exports = {
   getPaymentPlan,
   getPaymentDuration,
   getRechargePackage,
   getRechargeBonusPackage,
+  listDefaultPaymentProducts,
   calculateOrderAmount,
   listPaymentPlans,
   listPaymentDurations,

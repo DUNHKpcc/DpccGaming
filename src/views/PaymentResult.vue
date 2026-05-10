@@ -170,7 +170,18 @@ const isSubscriptionManualRequired = computed(() => isSubscriptionPaid.value && 
 const isBonusSkipped = computed(() => isPaid.value && orderResult.value.fulfillmentStatus === 'bonus_skipped')
 const bonusNoticeText = computed(() => {
   const note = String(orderResult.value.supportNote || '').trim()
-  return note.includes('赠送兑换码') || note.includes('付款账号') ? note : ''
+  return note.includes('赠送兑换码')
+    || note.includes('付款账号')
+    || note.includes('支付ID')
+    || note.includes('限购促销')
+    ? note
+    : ''
+})
+const isPromotionPayerBlocked = computed(() => {
+  const note = String(orderResult.value.supportNote || '')
+  return isPaid.value && orderResult.value.fulfillmentStatus === 'manual_required' && (
+    note.includes('支付ID') || note.includes('限购促销')
+  )
 })
 const needsApiUsername = computed(() => isSubscriptionPaid.value && !orderResult.value.apiUsername)
 const redeemCodes = computed(() => {
@@ -218,6 +229,7 @@ const supportCopy = computed(() => (
 ))
 
 const titleText = computed(() => {
+  if (isPromotionPayerBlocked.value) return '支付成功，限购待核验'
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '支付成功，等待补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '支付成功，等待处理'
   if (needsApiUsername.value) return '支付成功，填写用户名'
@@ -229,6 +241,7 @@ const titleText = computed(() => {
 })
 
 const statusTone = computed(() => {
+  if (isPromotionPayerBlocked.value) return 'warning'
   if (isSubscriptionManualRequired.value) return 'warning'
   if (isSubscriptionPaid.value) return 'success'
   if (isBonusSkipped.value) return 'success'
@@ -240,6 +253,7 @@ const statusTone = computed(() => {
 })
 
 const statusIcon = computed(() => {
+  if (isPromotionPayerBlocked.value) return 'fa-solid fa-circle-exclamation'
   if (isSubscriptionManualRequired.value) return 'fa-solid fa-headset'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return 'fa-solid fa-clock'
   if (needsApiUsername.value) return 'fa-solid fa-user'
@@ -252,6 +266,7 @@ const statusIcon = computed(() => {
 })
 
 const statusHeading = computed(() => {
+  if (isPromotionPayerBlocked.value) return '你的支付ID已购买过'
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '用户名已提交，赠送码待补发'
   if (isSubscriptionManualRequired.value) return '已确认支付，赠送码待人工补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '用户名已提交，请等待 5 分钟'
@@ -265,6 +280,7 @@ const statusHeading = computed(() => {
 })
 
 const statusDescription = computed(() => {
+  if (isPromotionPayerBlocked.value) return bonusNoticeText.value || '你的支付ID已购买过本次限购促销，当前订单已支付但未自动发放，请联系售后补差价或退款。'
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '我们会处理月卡订阅，并通过售后补发赠送码。'
   if (isSubscriptionManualRequired.value) return '请提交你在另一个平台的用户名，赠送码库存不足的部分会由人工补发。'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '我们会按你提交的平台用户名处理月卡订阅。'
@@ -287,7 +303,9 @@ const paymentStatusText = computed(() => {
 })
 
 const redeemPlaceholderText = computed(() => (
-  isManualRequired.value
+  isPromotionPayerBlocked.value
+    ? '你的支付ID已购买过本次限购促销，当前订单已支付但未自动发放，请联系售后补差价或退款。'
+    : isManualRequired.value
     ? '当前档位兑换码库存不足，已转入人工发码。'
     : isPaymentFinalIncomplete.value
       ? '订单未完成支付，不会发放兑换码。'

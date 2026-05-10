@@ -5,6 +5,7 @@ const {
   getRechargePackage,
   getRechargeBonusPackage
 } = require('./plans');
+const { parseSnapshotJson, normalizeQuota } = require('./paymentProductUtils');
 const { decryptRedeemCode } = require('./redeemCodeCrypto');
 const {
   PAYMENT_SUPPORT_WECHAT,
@@ -13,18 +14,33 @@ const {
   PAYMENT_API_USERNAME_WAIT_NOTE,
   BONUS_REDEEM_CODE_ALREADY_USED_NOTE,
   BONUS_REDEEM_CODE_PAYER_MISSING_NOTE,
-  BONUS_CLAIM_TYPE_ALIPAY_BUYER,
-  BONUS_CLAIM_TYPE_USER,
+  PROMOTION_PAYER_ALREADY_USED_NOTE,
+  PROMOTION_PAYER_MISSING_NOTE,
   toMysqlDateTime,
   addMonths,
   isPaymentAfterOrderExpiry,
   buildRedeemCodes
 } = require('./paymentUtils');
+const {
+  acquirePayerClaim,
+  acquireUserAndPayerClaims,
+  releaseClaims
+} = require('./paymentClaimService');
 
-const closeExpiredPaymentOrder = (executor, orderNo = '', now = new Date()) => repository.closeExpiredPaymentOrder(executor, {
-  orderNo,
-  now: toMysqlDateTime(now)
-});
+const closeExpiredPaymentOrder = async (executor, orderNo = '', now = new Date()) => {
+  const [result] = await repository.closeExpiredPaymentOrder(executor, {
+    orderNo,
+    now: toMysqlDateTime(now)
+  });
+  if (Number(result?.affectedRows || 0) > 0) {
+    await repository.deletePaymentBonusClaimsByOrderNo(executor, orderNo);
+  }
+  return [result];
+};
+
+const getOrderProductSnapshot = (order = {}) => parseSnapshotJson(order.product_snapshot_json) || {};
+
+const getOrderPromotionSnapshot = (order = {}) => parseSnapshotJson(order.promotion_snapshot_json) || {};
 
 const hasUserRedeemedSku = async (executor, payload = {}) => {
   const normalizedUserId = Number(payload.userId || 0);
@@ -38,104 +54,6 @@ const hasUserRedeemedSku = async (executor, payload = {}) => {
   return Boolean(assignedCode);
 };
 
-const hasPayerClaimedBonusRedeemCode = async (executor, payload = {}) => {
-  const normalizedBuyerId = String(payload.alipayBuyerId || '').trim();
-  if (!normalizedBuyerId) return false;
-
-  const claim = await repository.getBonusRedeemCodeClaimByPayer(executor, {
-    alipayBuyerId: normalizedBuyerId,
-    currentOrderNo: payload.currentOrderNo
-  });
-  return Boolean(claim);
-};
-
-const createBonusClaim = async (executor, payload = {}) => {
-  const [result] = await repository.createPaymentBonusClaim(executor, {
-    claimType: payload.claimType,
-    claimKey: payload.claimKey,
-    orderNo: payload.orderNo,
-    userId: payload.userId
-  });
-  return Number(result?.affectedRows || 0) === 1;
-};
-
-const releaseBonusClaim = (executor, payload = {}) => {
-  if (!payload.claimKey) return Promise.resolve();
-  return repository.deletePaymentBonusClaim(executor, {
-    claimType: payload.claimType,
-    claimKey: payload.claimKey,
-    orderNo: payload.orderNo
-  });
-};
-
-const createBonusClaims = async (executor, payload = {}) => {
-  const userClaimKey = String(Number(payload.userId || 0));
-  const userClaimed = await createBonusClaim(executor, {
-    claimType: BONUS_CLAIM_TYPE_USER,
-    claimKey: userClaimKey,
-    orderNo: payload.orderNo,
-    userId: payload.userId
-  });
-  if (!userClaimed) {
-    return { claimed: false, reason: 'already_used' };
-  }
-
-  const normalizedBuyerId = String(payload.alipayBuyerId || '').trim();
-  if (!normalizedBuyerId) {
-    await releaseBonusClaim(executor, {
-      claimType: BONUS_CLAIM_TYPE_USER,
-      claimKey: userClaimKey,
-      orderNo: payload.orderNo
-    });
-    return { claimed: false, reason: 'payer_missing' };
-  }
-
-  if (await hasPayerClaimedBonusRedeemCode(executor, {
-    alipayBuyerId: normalizedBuyerId,
-    currentOrderNo: payload.orderNo
-  })) {
-    await releaseBonusClaim(executor, {
-      claimType: BONUS_CLAIM_TYPE_USER,
-      claimKey: userClaimKey,
-      orderNo: payload.orderNo
-    });
-    return { claimed: false, reason: 'already_used' };
-  }
-
-  const payerClaimed = await createBonusClaim(executor, {
-    claimType: BONUS_CLAIM_TYPE_ALIPAY_BUYER,
-    claimKey: normalizedBuyerId,
-    orderNo: payload.orderNo,
-    userId: payload.userId
-  });
-  if (!payerClaimed) {
-    await releaseBonusClaim(executor, {
-      claimType: BONUS_CLAIM_TYPE_USER,
-      claimKey: userClaimKey,
-      orderNo: payload.orderNo
-    });
-    return { claimed: false, reason: 'already_used' };
-  }
-
-  return {
-    claimed: true,
-    claims: [
-      { claimType: BONUS_CLAIM_TYPE_USER, claimKey: userClaimKey },
-      { claimType: BONUS_CLAIM_TYPE_ALIPAY_BUYER, claimKey: normalizedBuyerId }
-    ]
-  };
-};
-
-const releaseBonusClaims = async (executor, payload = {}) => {
-  const claims = Array.isArray(payload.claims) ? payload.claims : [];
-  for (const claim of claims) {
-    await releaseBonusClaim(executor, {
-      ...claim,
-      orderNo: payload.orderNo
-    });
-  }
-};
-
 const getBonusSkipNote = (assignment = {}) => (
   assignment.skipReason === 'payer_missing'
     ? BONUS_REDEEM_CODE_PAYER_MISSING_NOTE
@@ -143,11 +61,22 @@ const getBonusSkipNote = (assignment = {}) => (
 );
 
 const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Date(), options = {}) => {
-  const bonusPackage = getRechargeBonusPackage();
+  const productSnapshot = options.productSnapshot || getOrderProductSnapshot(order);
+  const bonusSkuId = productSnapshot.bonusRedeemSkuId || getRechargeBonusPackage().id;
+  const bonusQuotaUsd = Number(productSnapshot.bonusQuotaUsd ?? order.quota_usd ?? 0);
+  if (!bonusSkuId || bonusQuotaUsd <= 0) {
+    return {
+      assignedCode: null,
+      redeemCode: null,
+      alreadyUsed: true,
+      skipReason: 'already_used'
+    };
+  }
+
   const alreadyUsedByUser = await hasUserRedeemedSku(connection, {
     userId: order.user_id,
     productType: 'recharge',
-    skuId: bonusPackage.id
+    skuId: bonusSkuId
   });
   if (alreadyUsedByUser) {
     return {
@@ -158,7 +87,8 @@ const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Da
     };
   }
 
-  const claim = await createBonusClaims(connection, {
+  const claim = await acquireUserAndPayerClaims(connection, {
+    purpose: 'bonus',
     alipayBuyerId: options.alipayBuyerId,
     orderNo: order.order_no,
     userId: order.user_id
@@ -174,13 +104,13 @@ const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Da
 
   const assignedCode = await repository.assignRedeemCodeToOrder(connection, {
     productType: 'recharge',
-    skuId: bonusPackage.id,
+    skuId: bonusSkuId,
     orderNo: order.order_no,
     userId: order.user_id,
     assignedAt: toMysqlDateTime(assignedAt)
   });
   if (!assignedCode) {
-    await releaseBonusClaims(connection, {
+    await releaseClaims(connection, {
       claims: claim.claims,
       orderNo: order.order_no
     });
@@ -195,7 +125,10 @@ const assignBonusRedeemCode = async (connection, order = {}, assignedAt = new Da
 };
 
 const assignPaymentFulfillment = async (connection, order = {}, productType = 'subscription', assignedAt = new Date(), options = {}) => {
-  const skuId = productType === 'recharge' ? order.plan_id : order.plan_id;
+  const productSnapshot = options.productSnapshot || getOrderProductSnapshot(order);
+  const skuId = productType === 'recharge'
+    ? productSnapshot.mainRedeemSkuId || order.plan_id
+    : order.plan_id;
   const assignedAtText = toMysqlDateTime(assignedAt);
   const assignCode = (targetSkuId) => repository.assignRedeemCodeToOrder(connection, {
     productType,
@@ -205,7 +138,10 @@ const assignPaymentFulfillment = async (connection, order = {}, productType = 's
     assignedAt: assignedAtText
   });
   const assignedCode = await assignCode(skuId);
-  const bonusAssignment = assignedCode ? await assignBonusRedeemCode(connection, order, assignedAt, options) : {};
+  const bonusAssignment = assignedCode ? await assignBonusRedeemCode(connection, order, assignedAt, {
+    ...options,
+    productSnapshot
+  }) : {};
   const redeemCode = assignedCode ? decryptRedeemCode(assignedCode) : null;
   const bonusRedeemCode = bonusAssignment.redeemCode || null;
   const bonusAlreadyUsed = bonusAssignment.skipReason === 'already_used';
@@ -283,6 +219,55 @@ const setSubscriptionUsernameRequired = async (connection, order = {}, bonusAssi
   };
 };
 
+const acquirePromotionPayerClaim = async (connection, order = {}, payload = {}) => {
+  const promotionSnapshot = getOrderPromotionSnapshot(order);
+  if (!promotionSnapshot.limitOnce) {
+    return { claimed: true, claims: [], promotionSnapshot: null };
+  }
+
+  const claimResult = await acquirePayerClaim(connection, {
+    purpose: promotionSnapshot.claimScopeKey || `promotion_${promotionSnapshot.id}`,
+    alipayBuyerId: payload.alipayBuyerId,
+    orderNo: order.order_no,
+    userId: order.user_id
+  });
+
+  return {
+    ...claimResult,
+    promotionSnapshot
+  };
+};
+
+const setPromotionManualReview = async (connection, order = {}, payerClaim = {}) => {
+  const supportNote = payerClaim.reason === 'payer_missing'
+    ? PROMOTION_PAYER_MISSING_NOTE
+    : PROMOTION_PAYER_ALREADY_USED_NOTE;
+
+  await repository.updatePaymentOrderFulfillment(connection, {
+    orderNo: order.order_no,
+    fulfillmentStatus: 'manual_required',
+    redeemCodeId: null,
+    bonusRedeemCodeId: null,
+    redeemCode: null,
+    bonusRedeemCode: null,
+    redeemUrl: null,
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote
+  });
+
+  return {
+    fulfillmentStatus: 'manual_required',
+    redeemCode: null,
+    bonusRedeemCode: null,
+    redeemCodes: [],
+    promotionPayerRejected: true,
+    promotionPayerRejectReason: payerClaim.reason || 'already_used',
+    redeemUrl: '',
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote
+  };
+};
+
 const handlePaidOrder = async (pool, payload = {}) => {
   await repository.ensurePaymentTables(pool);
   const connection = await pool.getConnection();
@@ -327,8 +312,16 @@ const handlePaidOrder = async (pool, payload = {}) => {
     }
 
     const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
+    const productSnapshot = getOrderProductSnapshot(order);
+    const promotionPayerClaim = await acquirePromotionPayerClaim(connection, order, {
+      alipayBuyerId: payload.alipayBuyerId
+    });
     const plan = getPaymentPlan(order.plan_id);
-    const duration = getPaymentDuration(order.duration_id);
+    const duration = getPaymentDuration(productSnapshot.durationId || order.duration_id) || {
+      id: productSnapshot.durationId || order.duration_id,
+      label: productSnapshot.durationLabel || '',
+      months: Number(productSnapshot.durationMonths || 0)
+    };
     const rechargePackage = getRechargePackage(order.plan_id);
     const [markResult] = await repository.markOrderPaid(connection, {
       orderNo: payload.orderNo,
@@ -347,21 +340,35 @@ const handlePaidOrder = async (pool, payload = {}) => {
       error.statusCode = 400;
       throw error;
     }
+    if (!promotionPayerClaim.claimed) {
+      const fulfillment = await setPromotionManualReview(connection, order, promotionPayerClaim);
+      await connection.commit();
+      transactionClosed = true;
+      return {
+        status: 'paid',
+        orderNo: order.order_no,
+        productType,
+        alreadyPaid: false,
+        ...fulfillment
+      };
+    }
 
     if (productType === 'recharge') {
       const fulfillment = await assignPaymentFulfillment(connection, order, productType, paidAt, {
-        alipayBuyerId: payload.alipayBuyerId
+        alipayBuyerId: payload.alipayBuyerId,
+        productSnapshot
       });
 
-      if (!rechargePackage) {
+      if (!rechargePackage && !productSnapshot.mainRedeemSkuId) {
         const error = new Error('订单充值配置不存在');
         error.statusCode = 500;
         throw error;
       }
 
+      const baseQuotaUsd = normalizeQuota(productSnapshot.baseQuotaUsd || rechargePackage?.originalQuotaUsd || order.quota_usd || rechargePackage?.quotaUsd);
       const grantedQuotaUsd = fulfillment.bonusSkipReason
-        ? rechargePackage.originalQuotaUsd || order.quota_usd || rechargePackage.quotaUsd
-        : order.quota_usd || rechargePackage.quotaUsd;
+        ? baseQuotaUsd
+        : normalizeQuota(order.quota_usd || productSnapshot.quotaUsd || rechargePackage?.quotaUsd);
       await repository.updatePaymentOrderQuota(connection, {
         orderNo: payload.orderNo,
         quotaUsd: grantedQuotaUsd
@@ -377,8 +384,13 @@ const handlePaidOrder = async (pool, payload = {}) => {
       return { status: 'paid', orderNo: order.order_no, productType, alreadyPaid: false, ...fulfillment };
     }
 
-    if (!plan || !duration) {
+    if (!plan && !productSnapshot.dailyQuotaUsd) {
       const error = new Error('订单套餐配置不存在');
+      error.statusCode = 500;
+      throw error;
+    }
+    if (!duration?.months) {
+      const error = new Error('订单周期配置不存在');
       error.statusCode = 500;
       throw error;
     }
@@ -395,7 +407,7 @@ const handlePaidOrder = async (pool, payload = {}) => {
     const membership = {
       userId: order.user_id,
       planId: order.plan_id,
-      dailyQuotaUsd: plan.dailyQuotaUsd,
+      dailyQuotaUsd: productSnapshot.dailyQuotaUsd || plan.dailyQuotaUsd,
       startsAt: toMysqlDateTime(startsAt),
       expiresAt: toMysqlDateTime(expiresAt),
       orderNo: payload.orderNo
@@ -408,9 +420,12 @@ const handlePaidOrder = async (pool, payload = {}) => {
     }
 
     const bonusAssignment = await assignBonusRedeemCode(connection, order, paidAt, {
-      alipayBuyerId: payload.alipayBuyerId
+      alipayBuyerId: payload.alipayBuyerId,
+      productSnapshot
     });
-    const bonusQuotaUsd = bonusAssignment.skipReason ? 0 : Number(order.quota_usd || plan.bonusQuotaUsd || 0);
+    const bonusQuotaUsd = bonusAssignment.skipReason
+      ? 0
+      : Number(productSnapshot.bonusQuotaUsd ?? order.quota_usd ?? plan.bonusQuotaUsd ?? 0);
     if (bonusAssignment.skipReason) {
       await repository.updatePaymentOrderQuota(connection, {
         orderNo: payload.orderNo,

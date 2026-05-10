@@ -1,9 +1,6 @@
 const { getPool } = require('../../config/database');
 const repository = require('../../repositories/paymentRepository');
-const {
-  getRechargePackage,
-  getRechargeBonusPackage
-} = require('./plans');
+const { getRedeemCodeProducts } = require('./paymentProductService');
 const {
   encryptRedeemCode,
   decryptRedeemCode
@@ -14,13 +11,13 @@ const {
   maskRedeemCode
 } = require('./paymentUtils');
 
-const normalizeRedeemProduct = (productType = '', skuId = '') => {
-  const normalizedProductType = productType === 'recharge' ? 'recharge' : '';
+const normalizeRedeemProduct = async (productType = '', skuId = '', pool = getPool()) => {
+  const normalizedProductType = ['recharge', 'subscription'].includes(productType) ? productType : '';
   const normalizedSkuId = String(skuId || '').trim();
-  const bonusPackage = getRechargeBonusPackage();
-  const product = normalizedProductType === 'recharge'
-    ? getRechargePackage(normalizedSkuId) || (normalizedSkuId === bonusPackage.id ? bonusPackage : null)
-    : null;
+  const products = await getRedeemCodeProducts(pool);
+  const product = products.find((item) => (
+    item.productType === normalizedProductType && item.skuId === normalizedSkuId
+  ));
   if (!product) {
     const error = new Error('兑换码档位无效');
     error.statusCode = 400;
@@ -30,7 +27,7 @@ const normalizeRedeemProduct = (productType = '', skuId = '') => {
 };
 
 const importRedeemCodes = async ({ productType, skuId, codes } = {}, pool = getPool()) => {
-  const normalizedProduct = normalizeRedeemProduct(productType, skuId);
+  const normalizedProduct = await normalizeRedeemProduct(productType, skuId, pool);
   const normalizedCodes = normalizeRedeemCodes(codes);
   if (normalizedCodes.length === 0) {
     const error = new Error('请输入兑换码');
