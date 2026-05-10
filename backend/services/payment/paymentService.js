@@ -25,6 +25,14 @@ const {
   handlePaidOrder
 } = require('./paymentFulfillmentService');
 const {
+  listAdminPaymentProducts,
+  createAdminPaymentProduct,
+  updateAdminPaymentProduct,
+  copyAdminPaymentProduct,
+  createAdminPaymentPromotion,
+  updateAdminPaymentPromotion
+} = require('./paymentProductService');
+const {
   toMysqlDateTime,
   PAYMENT_SUPPORT_WECHAT,
   PAYMENT_SUPPORT_NOTE,
@@ -44,6 +52,12 @@ module.exports = {
   getAdminPaymentOrderDetail,
   deleteAdminPaymentOrder,
   submitPaymentOrderApiUsername,
+  listAdminPaymentProducts,
+  createAdminPaymentProduct,
+  updateAdminPaymentProduct,
+  copyAdminPaymentProduct,
+  createAdminPaymentPromotion,
+  updateAdminPaymentPromotion,
   createAlipayOrder,
   handleAlipayNotify,
   handlePaidOrder,

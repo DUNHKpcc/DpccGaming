@@ -681,6 +681,20 @@ const getBonusRedeemCodeClaimByPayer = async (executor, payload = {}) => {
   return rows[0] || null;
 };
 
+const getPaymentBonusClaim = async (executor, payload = {}) => {
+  const [rows] = await executor.execute(
+    `
+      SELECT *
+      FROM payment_bonus_claims
+      WHERE claim_type = ?
+        AND claim_key = ?
+      LIMIT 1
+    `,
+    [payload.claimType, payload.claimKey]
+  );
+  return rows[0] || null;
+};
+
 const createPaymentBonusClaim = async (executor, payload = {}) => executor.execute(
   `
     INSERT IGNORE INTO payment_bonus_claims
@@ -991,6 +1005,7 @@ module.exports = {
   listAssignedRedeemCodeSkusForUser,
   getAssignedRedeemCodeForUserSku,
   getBonusRedeemCodeClaimByPayer,
+  getPaymentBonusClaim,
   createPaymentBonusClaim,
   deletePaymentBonusClaim,
   getMembershipByUserId,
