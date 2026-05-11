@@ -8,8 +8,15 @@ const buildAuditContext = (req) => ({
   userAgent: req.headers?.['user-agent'] || ''
 });
 
-const getRedeemCodeCatalog = (req, res) => {
-  res.json(paymentService.getRedeemCodeCatalog());
+const getRedeemCodeCatalog = async (req, res) => {
+  try {
+    res.json(await paymentService.getRedeemCodeCatalog());
+  } catch (error) {
+    console.error('获取兑换码档位失败:', error);
+    res.status(error.statusCode || 500).json({
+      message: error.message || '获取兑换码档位失败'
+    });
+  }
 };
 
 const listRedeemCodes = async (req, res) => {

@@ -110,7 +110,7 @@ const listDefaultPaymentProducts = () => [
     bonusRedeemSkuId: RECHARGE_BONUS_PACKAGE.id,
     bonusQuotaUsd: plan.bonusQuotaUsd,
     recommended: plan.id === 'gold',
-    cardBadge: plan.id === 'gold' ? '推荐款项' : '',
+    cardBadge: '',
     cardFeatures: getDefaultPlanFeatures(plan.id),
     orderNote: '',
     sortOrder: index + 10,

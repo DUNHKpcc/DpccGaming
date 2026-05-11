@@ -147,6 +147,7 @@ const mapProductRow = (row = {}, options = {}) => {
   const activePromotion = effective.activePromotion ? mapPromotion(effective.activePromotion) : null;
   const productType = row.product_type === 'recharge' ? 'recharge' : 'subscription';
   const baseQuotaUsd = normalizeQuota(row.base_quota_usd);
+  const baseBonusQuotaUsd = normalizeQuota(row.bonus_quota_usd);
   const bonusQuotaUsd = effective.bonusQuotaUsd;
   const quotaUsd = productType === 'recharge'
     ? (Number(baseQuotaUsd) + Number(bonusQuotaUsd)).toFixed(2)
@@ -169,6 +170,7 @@ const mapProductRow = (row = {}, options = {}) => {
     originalPrice: effective.basePrice,
     currency: row.currency || 'CNY',
     baseQuotaUsd,
+    baseBonusQuotaUsd,
     quotaUsd,
     dailyQuotaUsd: row.daily_quota_usd === null ? null : normalizeQuota(row.daily_quota_usd),
     mainRedeemSkuId,
@@ -501,6 +503,7 @@ const buildOrderProductSnapshot = async ({ productId, durationId, userId, ignore
 const getRedeemCodeProducts = async (pool = getPool()) => {
   await seedDefaultPaymentProducts(pool);
   const products = await repository.listPaymentProducts(pool, {});
+  const bonusPackage = getRechargeBonusPackage();
   const seen = new Set();
   const options = [];
   const addOption = (productType, skuId, label) => {
@@ -515,7 +518,10 @@ const getRedeemCodeProducts = async (pool = getPool()) => {
       addOption('recharge', product.sku_id, product.name);
       addOption('recharge', product.main_redeem_sku_id, `${product.name}兑换码`);
     }
-    addOption('recharge', product.bonus_redeem_sku_id, `${product.name}赠送码`);
+    const bonusLabel = product.bonus_redeem_sku_id === bonusPackage.id
+      ? bonusPackage.name
+      : `${product.name}赠送码`;
+    addOption('recharge', product.bonus_redeem_sku_id, bonusLabel);
   });
   return options;
 };

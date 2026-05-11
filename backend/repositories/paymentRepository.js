@@ -1,4 +1,19 @@
+const { toMysqlDateTime } = require('../services/payment/paymentUtils');
+
 let paymentTablesInitPromise = null;
+
+const decimalOrDefault = (value, fallback = '0.00') => (
+  value === null || value === undefined ? fallback : value
+);
+
+const normalizeOptionalDateTime = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isFinite(date.getTime()) ? toMysqlDateTime(date) : null;
+};
 
 const ensurePaymentTables = async (pool) => {
   if (!paymentTablesInitPromise) {
@@ -471,10 +486,10 @@ const createPaymentPromotion = async (executor, promotion = {}) => executor.exec
     promotion.productId,
     promotion.title,
     promotion.badgeText || null,
-    promotion.startsAt || null,
-    promotion.endsAt || null,
-    promotion.promotionPrice || null,
-    promotion.promotionBonusQuotaUsd || '0.00',
+    normalizeOptionalDateTime(promotion.startsAt),
+    normalizeOptionalDateTime(promotion.endsAt),
+    promotion.promotionPrice === null || promotion.promotionPrice === undefined ? null : promotion.promotionPrice,
+    decimalOrDefault(promotion.promotionBonusQuotaUsd),
     promotion.limitOnce ? 1 : 0,
     promotion.limitScope || 'user',
     promotion.claimScopeKey || null,
@@ -500,10 +515,10 @@ const updatePaymentPromotion = async (executor, promotion = {}) => executor.exec
   [
     promotion.title,
     promotion.badgeText || null,
-    promotion.startsAt || null,
-    promotion.endsAt || null,
-    promotion.promotionPrice || null,
-    promotion.promotionBonusQuotaUsd || '0.00',
+    normalizeOptionalDateTime(promotion.startsAt),
+    normalizeOptionalDateTime(promotion.endsAt),
+    promotion.promotionPrice === null || promotion.promotionPrice === undefined ? null : promotion.promotionPrice,
+    decimalOrDefault(promotion.promotionBonusQuotaUsd),
     promotion.limitOnce ? 1 : 0,
     promotion.limitScope || 'user',
     promotion.claimScopeKey || null,
