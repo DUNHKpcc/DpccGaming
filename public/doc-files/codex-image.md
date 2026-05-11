@@ -27,6 +27,10 @@ profile = "dpcc"
   env_key = "OPENAI_API_KEY"
   requires_openai_auth = false
   wire_api = "responses"
+
+  stream_idle_timeout_ms = 900000
+  stream_max_retries = 0
+  request_max_retries = 4
 ```
 
 通过修改模型ID来实现对image2模型的调用，本质上通过codex生图的底层调用逻辑
