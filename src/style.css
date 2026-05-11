@@ -502,6 +502,19 @@ button:active {
   image-rendering: crisp-edges;
 }
 
+.el-overlay {
+  z-index: 4000 !important;
+}
+
+.el-popper {
+  z-index: 5000 !important;
+}
+
+.el-message,
+.el-notification {
+  z-index: 6000 !important;
+}
+
 @media (max-width: 768px) {
   .game-modal-iframe {
     height: 300px;

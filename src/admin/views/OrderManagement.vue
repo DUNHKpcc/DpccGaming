@@ -163,7 +163,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElDrawer, ElMessage, ElMessageBox, ElSkeleton } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { apiCall } from '../../utils/api'
 

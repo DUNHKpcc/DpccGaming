@@ -83,121 +83,151 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="250" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openProductDrawer(row)">编辑</el-button>
             <el-button size="small" @click="copyProduct(row)">复制</el-button>
-            <el-button size="small" type="primary" @click="openPromotionDialog(row)">促销</el-button>
+            <el-button size="small" type="primary" @click="openPromotionDialog(row)">
+              {{ row.activePromotion ? '编辑促销' : '新增促销' }}
+            </el-button>
+            <el-button v-if="row.activePromotion" size="small" @click="openPromotionDialog(row, true)">新增促销</el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-drawer
-      v-model="productDrawerVisible"
-      :title="editingProductId ? '编辑档位' : '新增档位'"
-      size="560px"
+    <Teleport to="body">
+      <div v-if="productDrawerVisible" class="product-dialog-mask" @click.self="productDrawerVisible = false">
+        <section
+          class="product-dialog-shell"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="editingProductId ? '编辑档位' : '新增档位'"
+        >
+          <header class="product-dialog-header">
+            <h2>{{ editingProductId ? '编辑档位' : '新增档位' }}</h2>
+            <el-button text circle @click="productDrawerVisible = false">
+              <i class="fa fa-times" aria-hidden="true"></i>
+            </el-button>
+          </header>
+
+          <div class="product-dialog-body">
+            <el-form label-position="top" @submit.prevent>
+              <el-row :gutter="12">
+                <el-col :span="12">
+                  <el-form-item label="类型">
+                    <el-radio-group
+                      v-model="productForm.productType"
+                      :disabled="Boolean(editingProductId)"
+                      class="product-type-toggle"
+                    >
+                      <el-radio-button label="subscription">订阅月卡</el-radio-button>
+                      <el-radio-button label="recharge">充值额度</el-radio-button>
+                    </el-radio-group>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="SKU">
+                    <el-input v-model="productForm.skuId" :disabled="Boolean(editingProductId)" placeholder="bronze 或 usd-25" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-form-item label="名称">
+                <el-input v-model="productForm.name" placeholder="黄金月卡" />
+              </el-form-item>
+              <el-form-item label="支付宝标题">
+                <el-input v-model="productForm.subject" placeholder="DPCC API Gold Monthly Card" />
+              </el-form-item>
+              <el-form-item label="描述">
+                <el-input v-model="productForm.description" type="textarea" :rows="2" resize="vertical" />
+              </el-form-item>
+
+              <el-row :gutter="12">
+                <el-col :span="12">
+                  <el-form-item label="金额 CNY">
+                    <el-input-number v-model="productForm.basePrice" class="product-full-control" :min="0" :precision="2" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="排序">
+                    <el-input-number v-model="productForm.sortOrder" class="product-full-control" :precision="0" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="12">
+                <el-col :span="12">
+                  <el-form-item :label="productForm.productType === 'subscription' ? '月卡赠送额度 USD' : '到账额度 USD'">
+                    <el-input-number v-model="productForm.baseQuotaUsd" class="product-full-control" :min="0" :precision="2" />
+                  </el-form-item>
+                </el-col>
+                <el-col v-if="productForm.productType === 'subscription'" :span="12">
+                  <el-form-item label="每日额度 USD">
+                    <el-input-number v-model="productForm.dailyQuotaUsd" class="product-full-control" :min="0" :precision="2" />
+                  </el-form-item>
+                </el-col>
+                <el-col v-else :span="12">
+                  <el-form-item label="主兑换码 SKU">
+                    <el-input v-model="productForm.mainRedeemSkuId" placeholder="默认同 SKU" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="12">
+                <el-col :span="12">
+                  <el-form-item label="赠送码 SKU">
+                    <el-input v-model="productForm.bonusRedeemSkuId" placeholder="usd-30-bonus" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="赠送额度 USD">
+                    <el-input-number v-model="productForm.bonusQuotaUsd" class="product-full-control" :min="0" :precision="2" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-form-item label="卡片角标">
+                <el-input v-model="productForm.cardBadge" placeholder="限时优惠 / 热门档位" />
+              </el-form-item>
+              <el-form-item label="卡片文案">
+                <el-input v-model="productForm.cardFeaturesText" type="textarea" :rows="4" resize="vertical" placeholder="一行一个卖点" />
+              </el-form-item>
+              <el-form-item label="下单提示">
+                <el-input v-model="productForm.orderNote" type="textarea" :rows="2" resize="vertical" />
+              </el-form-item>
+
+              <div class="product-form-switches">
+                <el-switch v-model="productForm.recommended" active-text="推荐" />
+                <el-switch
+                  v-model="productForm.status"
+                  active-value="active"
+                  inactive-value="inactive"
+                  active-text="上架"
+                  inactive-text="下架"
+                />
+              </div>
+            </el-form>
+          </div>
+
+          <footer class="product-dialog-actions">
+            <el-button @click="productDrawerVisible = false">取消</el-button>
+            <el-button type="primary" :loading="isSavingProduct" @click="saveProduct">保存</el-button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
+
+    <el-dialog
+      v-model="promotionDialogVisible"
+      append-to-body
+      destroy-on-close
+      :lock-scroll="false"
+      :transition="promotionDialogTransition"
+      title="促销设置"
+      width="560px"
+      @closed="handlePromotionDialogClosed"
     >
-      <el-form label-position="top" @submit.prevent>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="类型">
-              <el-select v-model="productForm.productType" :disabled="Boolean(editingProductId)" class="product-full-control">
-                <el-option label="订阅月卡" value="subscription" />
-                <el-option label="充值额度" value="recharge" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="SKU">
-              <el-input v-model="productForm.skuId" :disabled="Boolean(editingProductId)" placeholder="bronze 或 usd-25" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item label="名称">
-          <el-input v-model="productForm.name" placeholder="黄金月卡" />
-        </el-form-item>
-        <el-form-item label="支付宝标题">
-          <el-input v-model="productForm.subject" placeholder="DPCC API Gold Monthly Card" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="productForm.description" type="textarea" :rows="2" resize="vertical" />
-        </el-form-item>
-
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="金额 CNY">
-              <el-input-number v-model="productForm.basePrice" class="product-full-control" :min="0" :precision="2" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="排序">
-              <el-input-number v-model="productForm.sortOrder" class="product-full-control" :precision="0" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item :label="productForm.productType === 'subscription' ? '月卡赠送额度 USD' : '到账额度 USD'">
-              <el-input-number v-model="productForm.baseQuotaUsd" class="product-full-control" :min="0" :precision="2" />
-            </el-form-item>
-          </el-col>
-          <el-col v-if="productForm.productType === 'subscription'" :span="12">
-            <el-form-item label="每日额度 USD">
-              <el-input-number v-model="productForm.dailyQuotaUsd" class="product-full-control" :min="0" :precision="2" />
-            </el-form-item>
-          </el-col>
-          <el-col v-else :span="12">
-            <el-form-item label="主兑换码 SKU">
-              <el-input v-model="productForm.mainRedeemSkuId" placeholder="默认同 SKU" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="赠送码 SKU">
-              <el-input v-model="productForm.bonusRedeemSkuId" placeholder="usd-30-bonus" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="赠送额度 USD">
-              <el-input-number v-model="productForm.bonusQuotaUsd" class="product-full-control" :min="0" :precision="2" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item label="卡片角标">
-          <el-input v-model="productForm.cardBadge" placeholder="推荐款项 / 限时优惠" />
-        </el-form-item>
-        <el-form-item label="卡片文案">
-          <el-input v-model="productForm.cardFeaturesText" type="textarea" :rows="4" resize="vertical" placeholder="一行一个卖点" />
-        </el-form-item>
-        <el-form-item label="下单提示">
-          <el-input v-model="productForm.orderNote" type="textarea" :rows="2" resize="vertical" />
-        </el-form-item>
-
-        <div class="product-form-switches">
-          <el-switch v-model="productForm.recommended" active-text="推荐" />
-          <el-switch
-            v-model="productForm.status"
-            active-value="active"
-            inactive-value="inactive"
-            active-text="上架"
-            inactive-text="下架"
-          />
-        </div>
-
-        <div class="drawer-actions">
-          <el-button @click="productDrawerVisible = false">取消</el-button>
-          <el-button type="primary" :loading="isSavingProduct" @click="saveProduct">保存</el-button>
-        </div>
-      </el-form>
-    </el-drawer>
-
-    <el-dialog v-model="promotionDialogVisible" title="促销设置" width="560px">
       <el-form label-position="top" @submit.prevent>
         <el-form-item label="所属档位">
           <el-input :model-value="selectedProduct?.name || ''" disabled />
@@ -244,7 +274,7 @@
         </div>
       </el-form>
       <template #footer>
-        <el-button @click="promotionDialogVisible = false">取消</el-button>
+        <el-button @click="closePromotionDialog">取消</el-button>
         <el-button type="primary" :loading="isSavingPromotion" @click="savePromotion">保存促销</el-button>
       </template>
     </el-dialog>
@@ -252,8 +282,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { onMounted, reactive, ref } from 'vue'
+import { ElCol, ElDatePicker, ElDialog, ElInputNumber, ElMessage, ElRadioButton, ElRadioGroup, ElRow, ElSwitch } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { apiCall } from '../../utils/api'
 
@@ -299,6 +329,10 @@ const editingProductId = ref(null)
 const selectedProduct = ref(null)
 const productForm = reactive(emptyProductForm())
 const promotionForm = reactive(emptyPromotionForm())
+const promotionDialogTransition = {
+  name: 'promotion-dialog-static',
+  css: false
+}
 const filters = reactive({
   keyword: '',
   productType: '',
@@ -309,6 +343,10 @@ const resetReactive = (target, source) => {
   Object.keys(target).forEach((key) => delete target[key])
   Object.assign(target, source)
 }
+
+const toNumericPayload = (value, fallback = 0) => (
+  value === '' || value === null || value === undefined ? String(fallback) : String(value)
+)
 
 const productTypeText = (value) => (value === 'recharge' ? '充值额度' : '订阅月卡')
 
@@ -324,18 +362,9 @@ const formatDate = (value) => {
   return date.toLocaleString('zh-CN')
 }
 
-const activePromotionByProduct = computed(() => {
-  const map = new Map()
-  products.value.forEach((product) => {
-    const active = (product.promotions || []).find((item) => item.status === 'active')
-    if (active) map.set(product.id, active)
-  })
-  return map
-})
-
 const normalizeProductFromApi = (product = {}) => ({
   ...product,
-  activePromotion: product.activePromotion || activePromotionByProduct.value.get(product.id) || null
+  activePromotion: product.activePromotion || null
 })
 
 const fetchProducts = async () => {
@@ -367,7 +396,7 @@ const openProductDrawer = (product = null) => {
     dailyQuotaUsd: Number(product.dailyQuotaUsd || 0),
     mainRedeemSkuId: product.mainRedeemSkuId || '',
     bonusRedeemSkuId: product.bonusRedeemSkuId || '',
-    bonusQuotaUsd: Number(product.bonusQuotaUsd || 0),
+    bonusQuotaUsd: Number((product.baseBonusQuotaUsd ?? product.bonusQuotaUsd) || 0),
     recommended: Boolean(product.recommended),
     cardBadge: product.cardBadge || '',
     cardFeaturesText: (product.features || []).join('\n'),
@@ -421,33 +450,43 @@ const saveProduct = async () => {
 const copyProduct = async (product) => {
   if (!product?.id) return
   try {
-    const result = await apiCall(`/admin/payment-products/${product.id}/copy`, { method: 'POST' })
-    products.value = [normalizeProductFromApi(result.product), ...products.value]
+    await apiCall(`/admin/payment-products/${product.id}/copy`, { method: 'POST' })
+    await fetchProducts()
     ElMessage.success('已复制为下架副本')
   } catch (error) {
     ElMessage.error(error.message || '复制支付档位失败')
   }
 }
 
-const openPromotionDialog = (product) => {
+const openPromotionDialog = (product, forceCreate = false) => {
   selectedProduct.value = product
-  const promotion = product.activePromotion || (product.promotions || [])[0] || null
+  const promotion = forceCreate ? null : product.activePromotion
   resetReactive(promotionForm, promotion ? {
     id: promotion.id,
     title: promotion.title || '',
     badgeText: promotion.badgeText || '',
     startsAt: promotion.startsAt || '',
     endsAt: promotion.endsAt || '',
-    promotionPrice: Number(promotion.promotionPrice || product.basePrice || 0),
-    promotionBonusQuotaUsd: Number(promotion.promotionBonusQuotaUsd || product.bonusQuotaUsd || 0),
+    promotionPrice: Number((promotion.promotionPrice ?? product.basePrice) || 0),
+    promotionBonusQuotaUsd: Number((promotion.promotionBonusQuotaUsd ?? product.baseBonusQuotaUsd ?? product.bonusQuotaUsd) || 0),
     limitOnce: Boolean(promotion.limitOnce),
     status: promotion.status || 'active'
   } : {
     ...emptyPromotionForm(),
     promotionPrice: Number(product.basePrice || 0),
-    promotionBonusQuotaUsd: Number(product.bonusQuotaUsd || 0)
+    promotionBonusQuotaUsd: Number((product.baseBonusQuotaUsd ?? product.bonusQuotaUsd) || 0)
   })
   promotionDialogVisible.value = true
+}
+
+const closePromotionDialog = () => {
+  promotionDialogVisible.value = false
+}
+
+const handlePromotionDialogClosed = () => {
+  if (promotionDialogVisible.value) return
+  selectedProduct.value = null
+  resetReactive(promotionForm, emptyPromotionForm())
 }
 
 const savePromotion = async () => {
@@ -456,8 +495,8 @@ const savePromotion = async () => {
   try {
     const payload = {
       ...promotionForm,
-      promotionPrice: String(promotionForm.promotionPrice || 0),
-      promotionBonusQuotaUsd: String(promotionForm.promotionBonusQuotaUsd || 0)
+      promotionPrice: toNumericPayload(promotionForm.promotionPrice),
+      promotionBonusQuotaUsd: toNumericPayload(promotionForm.promotionBonusQuotaUsd)
     }
     const endpoint = promotionForm.id
       ? `/admin/payment-promotions/${promotionForm.id}`
@@ -466,7 +505,7 @@ const savePromotion = async () => {
       method: promotionForm.id ? 'PUT' : 'POST',
       body: JSON.stringify(payload)
     })
-    promotionDialogVisible.value = false
+    closePromotionDialog()
     ElMessage.success('促销已保存')
     await fetchProducts()
   } catch (error) {
@@ -531,6 +570,18 @@ onMounted(fetchProducts)
   width: 100%;
 }
 
+.product-type-toggle {
+  width: 100%;
+}
+
+.product-type-toggle :deep(.el-radio-button) {
+  flex: 1;
+}
+
+.product-type-toggle :deep(.el-radio-button__inner) {
+  width: 100%;
+}
+
 .product-form-switches {
   display: flex;
   align-items: center;
@@ -538,11 +589,56 @@ onMounted(fetchProducts)
   margin: 0.5rem 0 1.25rem;
 }
 
-.drawer-actions {
+.product-dialog-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.product-dialog-shell {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  box-shadow: 0 24px 72px rgba(15, 23, 42, 0.26);
+}
+
+.product-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.product-dialog-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.product-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.product-dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
-  padding-top: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
 @media (max-width: 820px) {
