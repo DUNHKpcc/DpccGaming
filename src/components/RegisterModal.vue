@@ -119,7 +119,7 @@ const togglePasswordVisibility = () => {
 .register-modal-mask {
   position: fixed;
   inset: 0;
-  z-index: 2147483647;
+  z-index: 2147483000;
   display: grid;
   place-items: center;
   padding: 20px;
@@ -318,7 +318,7 @@ const togglePasswordVisibility = () => {
   width: calc(100% + clamp(120px, 10vw, 180px));
   height: 100%;
   z-index: 1;
-  background-image: url('/Ai/LoginBackground.png');
+  background-image: url('/Ai/LoginBackground.webp');
   background-repeat: no-repeat;
   background-position: 96% center;
   transform: scale(1.05);

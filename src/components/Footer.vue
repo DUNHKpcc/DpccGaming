@@ -214,9 +214,10 @@ const themeStore = useThemeStore()
 const currentLogo = computed(() => (themeStore.isDark ? '/logo.png' : '/logo_light.png'))
 const downloadPickerRef = ref(null)
 const isDownloadPickerOpen = ref(false)
+const downloadBasePath = import.meta.env.VITE_DOWNLOAD_BASE_URL || 'https://dpccgaming.xyz/downloads/dpcc-switch'
 const downloadTargets = {
-  windows: '/dpcc-app/DPCC-SWITCH-3.13.0-release-setup.exe',
-  macos: '/dpcc-app/DPCC-SWITCH_3.13.0_aarch64.dmg'
+  windows: `${downloadBasePath}/DPCC-SWITCH-3.13.0-release-setup.exe`,
+  macos: `${downloadBasePath}/DPCC-SWITCH_3.13.0_aarch64.dmg`
 }
 
 const closeDownloadPicker = () => {
