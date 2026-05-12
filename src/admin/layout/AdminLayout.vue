@@ -43,6 +43,7 @@
 </template>
 
 <script setup>
+import 'element-plus/dist/index.css'
 import { useRoute } from 'vue-router'
 
 defineProps({
@@ -74,9 +75,16 @@ const menuItems = [
 
 <style scoped>
 .admin-layout {
+  --el-color-primary: #000000;
+  --el-color-primary-dark-2: #000000;
+  --el-color-primary-light-3: #333333;
+  --el-color-primary-light-5: #666666;
+  --el-color-primary-light-7: #999999;
+  --el-color-primary-light-8: #cccccc;
+  --el-color-primary-light-9: #f2f2f2;
   min-height: 100vh;
-  background: #f4f6fb;
-  color: #111827;
+  background: #f5f5f5;
+  color: #111111;
   overflow: hidden;
 }
 
@@ -87,8 +95,8 @@ const menuItems = [
 .admin-sidebar {
   display: flex;
   flex-direction: column;
-  background: #111827;
-  color: #f8fafc;
+  background: #111111;
+  color: #ffffff;
 }
 
 .admin-brand {
@@ -106,8 +114,8 @@ const menuItems = [
   width: 2.35rem;
   height: 2.35rem;
   border-radius: 0.65rem;
-  background: #3b82f6;
-  color: #ffffff;
+  background: #ffffff;
+  color: #000000;
   font-weight: 900;
 }
 
@@ -125,7 +133,7 @@ const menuItems = [
 
 .admin-brand small {
   margin-top: 0.2rem;
-  color: rgba(248, 250, 252, 0.58);
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .admin-menu {
@@ -138,12 +146,12 @@ const menuItems = [
   height: 46px;
   margin: 0.25rem 0.75rem;
   border-radius: 0.5rem;
-  color: rgba(248, 250, 252, 0.72);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .admin-menu :deep(.el-menu-item.is-active),
 .admin-menu :deep(.el-menu-item:hover) {
-  background: rgba(59, 130, 246, 0.18);
+  background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
 }
 
@@ -164,7 +172,7 @@ const menuItems = [
   justify-content: space-between;
   gap: 1rem;
   padding: 0 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #dddddd;
   background: #ffffff;
 }
 
@@ -175,7 +183,7 @@ const menuItems = [
 }
 
 .admin-topbar p {
-  color: #64748b;
+  color: #666666;
   font-size: 0.78rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -189,7 +197,7 @@ const menuItems = [
 
 .admin-topbar small {
   margin-top: 0.15rem;
-  color: #64748b;
+  color: #666666;
 }
 
 .admin-topbar-actions {

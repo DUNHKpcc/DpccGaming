@@ -462,7 +462,7 @@ onMounted(async () => {
 .redeem-inventory-toolbar span,
 .redeem-stat-item span,
 .redeem-stat-item small {
-  color: #64748b;
+  color: #666666;
 }
 
 .redeem-card-header strong,
@@ -491,7 +491,7 @@ onMounted(async () => {
 .redeem-inventory-toolbar {
   flex: 0 0 auto;
   padding: 1rem;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #e8e8e8;
 }
 
 .redeem-filters {
@@ -513,16 +513,16 @@ onMounted(async () => {
   gap: 0.75rem;
   padding: 0.85rem 1rem;
   overflow-x: auto;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #e8e8e8;
 }
 
 .redeem-stat-item {
   flex: 0 0 10rem;
   cursor: pointer;
   padding: 0.7rem 0.8rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #dddddd;
   border-radius: 0.45rem;
-  background: #f8fafc;
+  background: #f7f7f7;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -530,9 +530,9 @@ onMounted(async () => {
 }
 
 .redeem-stat-item.active {
-  border-color: #2563eb;
-  background: #eff6ff;
-  box-shadow: inset 0 0 0 1px #2563eb;
+  border-color: #000000;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #000000;
 }
 
 .redeem-stat-item strong {
@@ -553,11 +553,11 @@ onMounted(async () => {
   flex: 0 0 auto;
   justify-content: flex-end;
   padding: 0.85rem 1rem;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid #e8e8e8;
 }
 
 .redeem-code-text {
-  color: #111827;
+  color: #111111;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   word-break: break-all;
 }

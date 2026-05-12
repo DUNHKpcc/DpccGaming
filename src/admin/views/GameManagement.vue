@@ -277,7 +277,7 @@ onMounted(async () => {
   flex: 0 0 auto;
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #e8e8e8;
 }
 
 .admin-search-input {
@@ -323,7 +323,7 @@ onMounted(async () => {
   max-width: 34rem;
   margin-top: 0.25rem;
   overflow: hidden;
-  color: #64748b;
+  color: #666666;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -333,7 +333,7 @@ onMounted(async () => {
   flex: 0 0 auto;
   justify-content: flex-end;
   padding: 0.85rem 1rem;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid #e8e8e8;
 }
 
 .el-button i {

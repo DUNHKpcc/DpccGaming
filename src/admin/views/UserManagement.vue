@@ -420,7 +420,7 @@ onMounted(() => {
   flex: 0 0 auto;
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #e8e8e8;
 }
 
 .admin-search-input {
@@ -448,7 +448,7 @@ onMounted(() => {
 
 .admin-user-cell small {
   margin-top: 0.2rem;
-  color: #64748b;
+  color: #666666;
 }
 
 .el-button i {
@@ -460,7 +460,7 @@ onMounted(() => {
   flex: 0 0 auto;
   justify-content: flex-end;
   padding: 0.85rem 1rem;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid #e8e8e8;
 }
 
 @media (max-width: 720px) {
