@@ -568,15 +568,28 @@ const loadPaymentCatalog = async () => {
   }
 }
 
-const submitAlipayForm = (formHtml) => {
-  const wrapper = document.createElement('div')
-  wrapper.style.display = 'none'
-  wrapper.innerHTML = formHtml
-  const form = wrapper.querySelector('form')
-  if (!form) {
+const submitAlipayForm = (alipayForm) => {
+  if (!alipayForm?.action || !alipayForm?.params || typeof alipayForm.params !== 'object') {
     throw new Error('支付宝支付表单无效')
   }
-  document.body.appendChild(wrapper)
+  const actionUrl = new URL(alipayForm.action)
+  if (!['https:', 'http:'].includes(actionUrl.protocol)) {
+    throw new Error('支付宝支付地址无效')
+  }
+
+  const form = document.createElement('form')
+  form.style.display = 'none'
+  form.action = actionUrl.href
+  form.method = alipayForm.method || 'post'
+  form.acceptCharset = alipayForm.charset || 'utf-8'
+  Object.entries(alipayForm.params).forEach(([key, value]) => {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = key
+    input.value = String(value ?? '')
+    form.appendChild(input)
+  })
+  document.body.appendChild(form)
   form.submit()
 }
 
@@ -608,7 +621,7 @@ const redirectToAlipay = async () => {
     if (result.orderNo) {
       sessionStorage.setItem('lastPaymentOrderNo', result.orderNo)
     }
-    submitAlipayForm(result.formHtml)
+    submitAlipayForm(result.alipayForm)
   } catch (error) {
     paymentError.value = error.message || '创建支付订单失败'
     isCreatingOrder.value = false

@@ -157,6 +157,11 @@ const apiUsernameInput = ref('')
 const apiUsernameMessage = ref('')
 const isSubmittingApiUsername = ref(false)
 let pollTimerId = null
+let pollStartedAt = 0
+let pollDelayMs = 4000
+
+const MAX_PAYMENT_RESULT_POLL_MS = 120000
+const MAX_PAYMENT_RESULT_POLL_DELAY_MS = 30000
 const PAYMENT_NOTIFY_GRACE_MS = 2 * 60 * 1000
 
 const queryOrderNo = computed(() => String(route.query.out_trade_no || route.query.orderNo || '').trim())
@@ -168,6 +173,7 @@ const isSubscriptionOrder = computed(() => orderResult.value.productType === 'su
 const isSubscriptionPaid = computed(() => isPaid.value && isSubscriptionOrder.value)
 const isSubscriptionManualRequired = computed(() => isSubscriptionPaid.value && orderResult.value.fulfillmentStatus === 'manual_required')
 const isBonusSkipped = computed(() => isPaid.value && orderResult.value.fulfillmentStatus === 'bonus_skipped')
+const promotionPayerRejectReason = computed(() => String(orderResult.value.promotionPayerRejectReason || '').trim())
 const bonusNoticeText = computed(() => {
   const note = String(orderResult.value.supportNote || '').trim()
   return note.includes('赠送兑换码')
@@ -177,12 +183,9 @@ const bonusNoticeText = computed(() => {
     ? note
     : ''
 })
-const isPromotionPayerBlocked = computed(() => {
-  const note = String(orderResult.value.supportNote || '')
-  return isPaid.value && orderResult.value.fulfillmentStatus === 'manual_required' && (
-    note.includes('支付ID') || note.includes('限购促销')
-  )
-})
+const isPromotionPayerMissing = computed(() => isPaid.value && promotionPayerRejectReason.value === 'payer_missing')
+const isPromotionPayerAlreadyUsed = computed(() => isPaid.value && promotionPayerRejectReason.value === 'already_used')
+const isPromotionPayerBlocked = computed(() => isPromotionPayerMissing.value || isPromotionPayerAlreadyUsed.value)
 const needsApiUsername = computed(() => isSubscriptionPaid.value && !orderResult.value.apiUsername)
 const redeemCodes = computed(() => {
   if (Array.isArray(orderResult.value.redeemCodes) && orderResult.value.redeemCodes.length) {
@@ -218,9 +221,16 @@ const apiUsernameText = computed(() => {
   if (isSubscriptionPaid.value) return '待填写'
   return '-'
 })
+const appendSupportWechat = (message = '') => {
+  const normalizedMessage = String(message || '').trim()
+  const contactText = `售后微信 ${supportWechat.value}`
+  if (!normalizedMessage) return contactText
+  if (normalizedMessage.includes(supportWechat.value)) return normalizedMessage
+  return `${normalizedMessage} ${contactText}。`
+}
 const supportCopy = computed(() => (
   bonusNoticeText.value
-    ? bonusNoticeText.value
+    ? appendSupportWechat(bonusNoticeText.value)
     : isSubscriptionManualRequired.value
     ? `添加微信 ${supportWechat.value}，请同时提供订单号和 DPCC-API 用户名，售后会补发赠送码。`
     : isSubscriptionPaid.value
@@ -266,7 +276,8 @@ const statusIcon = computed(() => {
 })
 
 const statusHeading = computed(() => {
-  if (isPromotionPayerBlocked.value) return '你的支付ID已购买过'
+  if (isPromotionPayerMissing.value) return '未收到支付宝支付ID'
+  if (isPromotionPayerAlreadyUsed.value) return '你的支付ID已购买过'
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '用户名已提交，赠送码待补发'
   if (isSubscriptionManualRequired.value) return '已确认支付，赠送码待人工补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '用户名已提交，请等待 5 分钟'
@@ -280,7 +291,7 @@ const statusHeading = computed(() => {
 })
 
 const statusDescription = computed(() => {
-  if (isPromotionPayerBlocked.value) return bonusNoticeText.value || '你的支付ID已购买过本次限购促销，当前订单已支付但未自动发放，请联系售后补差价或退款。'
+  if (isPromotionPayerBlocked.value) return appendSupportWechat(bonusNoticeText.value || '你的支付ID已购买过本次限购促销，当前订单已支付但未自动发放，请联系售后补差价或退款。')
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '我们会处理月卡订阅，并通过售后补发赠送码。'
   if (isSubscriptionManualRequired.value) return '请提交你在另一个平台的用户名，赠送码库存不足的部分会由人工补发。'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '我们会按你提交的平台用户名处理月卡订阅。'
@@ -304,7 +315,7 @@ const paymentStatusText = computed(() => {
 
 const redeemPlaceholderText = computed(() => (
   isPromotionPayerBlocked.value
-    ? '你的支付ID已购买过本次限购促销，当前订单已支付但未自动发放，请联系售后补差价或退款。'
+    ? appendSupportWechat('你的支付ID已购买过本次限购促销，当前订单已支付但未自动发放，请联系售后补差价或退款。')
     : isManualRequired.value
     ? '当前档位兑换码库存不足，已转入人工发码。'
     : isPaymentFinalIncomplete.value
@@ -327,20 +338,41 @@ const formatDateTime = (value) => {
 
 const stopPolling = () => {
   if (pollTimerId) {
-    window.clearInterval(pollTimerId)
+    window.clearTimeout(pollTimerId)
     pollTimerId = null
   }
 }
 
-const startPolling = () => {
+const shouldStopPolling = () => {
+  if (document.hidden) return true
+  if (orderResult.value.status === 'paid') return true
+  if (isPaymentFinalIncomplete.value) return true
+  return pollStartedAt > 0 && Date.now() - pollStartedAt >= MAX_PAYMENT_RESULT_POLL_MS
+}
+
+const schedulePolling = () => {
   stopPolling()
-  pollTimerId = window.setInterval(() => {
-    if (orderResult.value.status === 'paid') {
-      stopPolling()
-      return
-    }
-    loadOrderResult({ silent: true })
-  }, 4000)
+  if (shouldStopPolling()) return
+  pollTimerId = window.setTimeout(async () => {
+    await loadOrderResult({ silent: true })
+    pollDelayMs = Math.min(Math.round(pollDelayMs * 1.5), MAX_PAYMENT_RESULT_POLL_DELAY_MS)
+    schedulePolling()
+  }, pollDelayMs)
+}
+
+const startPolling = () => {
+  pollStartedAt = Date.now()
+  pollDelayMs = 4000
+  schedulePolling()
+}
+
+const handleVisibilityChange = async () => {
+  if (document.hidden) {
+    stopPolling()
+    return
+  }
+  await loadOrderResult({ silent: true })
+  startPolling()
 }
 
 const loadOrderResult = async (options = {}) => {
@@ -411,8 +443,12 @@ const copyRedeemCode = (code) => copyText(code)
 onMounted(() => {
   loadOrderResult()
   startPolling()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
-onBeforeUnmount(stopPolling)
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  stopPolling()
+})
 </script>
 
 <style scoped>

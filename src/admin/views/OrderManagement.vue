@@ -61,8 +61,15 @@
             <span :class="['status-pill', `is-${row.status || 'pending'}`]">{{ statusText(row.status) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="发放" width="130">
-          <template #default="{ row }">{{ fulfillmentText(row.fulfillmentStatus) }}</template>
+        <el-table-column label="发放" min-width="230">
+          <template #default="{ row }">
+            <div class="fulfillment-cell">
+              <span :class="['fulfillment-pill', `is-${fulfillmentMeta(row).tone}`]">
+                {{ fulfillmentMeta(row).title }}
+              </span>
+              <small>{{ fulfillmentMeta(row).detail }}</small>
+            </div>
+          </template>
         </el-table-column>
         <el-table-column label="创建时间" width="180">
           <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
@@ -112,7 +119,16 @@
         </div>
         <div>
           <dt>发放状态</dt>
-          <dd>{{ fulfillmentText(selectedOrder.fulfillmentStatus) }}</dd>
+          <dd>
+            <span :class="['fulfillment-pill', `is-${fulfillmentMeta(selectedOrder).tone}`]">
+              {{ fulfillmentMeta(selectedOrder).title }}
+            </span>
+            <p class="fulfillment-detail">{{ fulfillmentMeta(selectedOrder).detail }}</p>
+          </dd>
+        </div>
+        <div v-if="selectedOrder.supportNote">
+          <dt>发放说明</dt>
+          <dd>{{ selectedOrder.supportNote }}</dd>
         </div>
         <div>
           <dt>金额</dt>
@@ -122,13 +138,14 @@
           <dt>DPCC-API 用户名</dt>
           <dd>{{ selectedOrder.apiUsername }}</dd>
         </div>
-        <div v-if="selectedOrder.maskedRedeemCode">
-          <dt>兑换码</dt>
-          <dd>{{ selectedOrder.maskedRedeemCode }}</dd>
-        </div>
-        <div v-if="selectedOrder.maskedBonusRedeemCode">
-          <dt>赠送码</dt>
-          <dd>{{ selectedOrder.maskedBonusRedeemCode }}</dd>
+        <div v-if="displayRedeemCodes(selectedOrder).length">
+          <dt>兑换码明细</dt>
+          <dd class="redeem-code-list">
+            <span v-for="item in displayRedeemCodes(selectedOrder)" :key="item.label">
+              <b>{{ item.label }}</b>
+              <code>{{ item.code }}</code>
+            </span>
+          </dd>
         </div>
         <div v-if="selectedOrder.alipayTradeNo">
           <dt>支付宝交易号</dt>
@@ -257,6 +274,80 @@ const fulfillmentText = (value) => {
   return '待处理'
 }
 
+const displayRedeemCodes = (order = {}) => {
+  if (Array.isArray(order.maskedRedeemCodes) && order.maskedRedeemCodes.length) {
+    return order.maskedRedeemCodes.filter((item) => item?.code)
+  }
+  return [
+    order.maskedRedeemCode ? { label: '原有额度', code: order.maskedRedeemCode } : null,
+    order.maskedBonusRedeemCode ? { label: '赠送 $30', code: order.maskedBonusRedeemCode } : null
+  ].filter(Boolean)
+}
+
+const fulfillmentMeta = (order = {}) => {
+  const fulfillmentStatus = typeof order === 'string' ? order : order.fulfillmentStatus
+  const paymentStatus = typeof order === 'string' ? '' : order.status
+  const productType = typeof order === 'string' ? '' : order.productType
+  const apiUsername = typeof order === 'string' ? '' : String(order.apiUsername || '').trim()
+  const supportNote = typeof order === 'string' ? '' : String(order.supportNote || '').trim()
+  const redeemCodeCount = typeof order === 'string' ? 0 : displayRedeemCodes(order).length
+
+  if (fulfillmentStatus === 'code_assigned') {
+    return {
+      title: '已自动发放',
+      detail: redeemCodeCount > 1 ? '主兑换码和赠送码均已发放' : '兑换码已发放',
+      tone: 'done'
+    }
+  }
+  if (fulfillmentStatus === 'bonus_skipped') {
+    return {
+      title: '主码已发，赠送跳过',
+      detail: supportNote || '赠送码已按用户或支付宝付款账号领取规则跳过',
+      tone: 'warning'
+    }
+  }
+  if (fulfillmentStatus === 'manual_required') {
+    return {
+      title: '需人工处理',
+      detail: supportNote || '已支付但未自动发放完整权益，请人工核验库存、限购或付款账号',
+      tone: 'danger'
+    }
+  }
+  if (fulfillmentStatus === 'username_required') {
+    return {
+      title: '待提交用户名',
+      detail: supportNote || '月卡已确认，等待用户提交 DPCC-API 平台用户名',
+      tone: 'warning'
+    }
+  }
+  if (fulfillmentStatus === 'username_submitted') {
+    return {
+      title: '用户名已提交',
+      detail: apiUsername ? `已提交 ${apiUsername}，等待后台处理月卡权益` : '已提交用户名，等待后台处理月卡权益',
+      tone: 'done'
+    }
+  }
+  if (paymentStatus === 'closed') {
+    return {
+      title: '不发放',
+      detail: '订单已关闭，未进入发放流程',
+      tone: 'muted'
+    }
+  }
+  if (paymentStatus === 'paid') {
+    return {
+      title: fulfillmentText(fulfillmentStatus),
+      detail: productType === 'subscription' ? '月卡订单等待后续处理' : '已支付，等待兑换码处理',
+      tone: 'warning'
+    }
+  }
+  return {
+    title: '待支付后发放',
+    detail: '订单尚未支付，暂不发放权益',
+    tone: 'muted'
+  }
+}
+
 const formatDate = (value) => {
   if (!value) return '-'
   const date = new Date(value)
@@ -295,7 +386,7 @@ onMounted(async () => {
   flex: 0 0 auto;
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #dddddd;
 }
 
 .order-search-input {
@@ -318,7 +409,7 @@ onMounted(async () => {
 
 .admin-order-table small {
   margin-top: 0.2rem;
-  color: #64748b;
+  color: #666666;
 }
 
 .order-link {
@@ -351,6 +442,84 @@ onMounted(async () => {
   color: #fff;
 }
 
+.fulfillment-cell {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.fulfillment-cell small,
+.fulfillment-detail {
+  color: #666666;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.fulfillment-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  padding: 0.16rem 0.5rem;
+  border: 1px solid #000;
+  border-radius: 999px;
+  color: #000;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.fulfillment-pill.is-done {
+  background: #000;
+  color: #fff;
+}
+
+.fulfillment-pill.is-warning {
+  border-color: #a16207;
+  color: #854d0e;
+  background: #fef3c7;
+}
+
+.fulfillment-pill.is-danger {
+  border-color: #b91c1c;
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.fulfillment-pill.is-muted {
+  border-color: #cccccc;
+  color: #666666;
+  background: #f7f7f7;
+}
+
+.fulfillment-detail {
+  margin: 0.4rem 0 0;
+}
+
+.redeem-code-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.redeem-code-list span {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.redeem-code-list b {
+  color: #666666;
+  font-size: 0.78rem;
+}
+
+.redeem-code-list code {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.24rem 0.38rem;
+  border: 1px solid #dddddd;
+  border-radius: 0.35rem;
+  background: #f7f7f7;
+  color: #111111;
+  word-break: break-all;
+}
+
 .order-detail-list {
   display: grid;
   gap: 0.85rem;
@@ -359,17 +528,17 @@ onMounted(async () => {
 
 .order-detail-list div {
   padding-bottom: 0.85rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #dddddd;
 }
 
 .order-detail-list dt {
-  color: #64748b;
+  color: #666666;
   font-size: 0.78rem;
 }
 
 .order-detail-list dd {
   margin: 0.22rem 0 0;
-  color: #111827;
+  color: #111111;
   word-break: break-all;
 }
 

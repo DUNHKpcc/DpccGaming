@@ -521,7 +521,7 @@ onMounted(fetchProducts)
 <style scoped>
 .admin-panel-card {
   height: calc(100vh - 116px);
-  border: 1px solid #e5e7eb;
+  border: 1px solid #dddddd;
   border-radius: 0.5rem;
 }
 
@@ -557,7 +557,7 @@ onMounted(fetchProducts)
 .product-table small,
 .promotion-cell small {
   margin-top: 0.25rem;
-  color: #64748b;
+  color: #666666;
 }
 
 .promotion-cell {
@@ -596,7 +596,7 @@ onMounted(fetchProducts)
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(15, 23, 42, 0.42);
+  background: rgba(0, 0, 0, 0.42);
 }
 
 .product-dialog-shell {
@@ -607,7 +607,7 @@ onMounted(fetchProducts)
   overflow: hidden;
   border-radius: 0.5rem;
   background: #ffffff;
-  box-shadow: 0 24px 72px rgba(15, 23, 42, 0.26);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.26);
 }
 
 .product-dialog-header {
@@ -616,7 +616,7 @@ onMounted(fetchProducts)
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #dddddd;
 }
 
 .product-dialog-header h2 {
@@ -637,7 +637,7 @@ onMounted(fetchProducts)
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid #dddddd;
   background: #ffffff;
 }
 
