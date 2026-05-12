@@ -37,6 +37,8 @@ const AI_PROGRESS_MODE_LABELS = {
   'dual-loop': '双 AI 轮询'
 }
 
+const MAX_ROOM_MESSAGES = 500
+
 export default {
   data() {
     return {
@@ -180,10 +182,15 @@ export default {
         }
       }
       chat.messages.push(nextMessage)
+      this.trimChatMessages(chat)
       return {
         action: 'appended',
         message: nextMessage
       }
+    },
+    trimChatMessages(chat) {
+      if (!Array.isArray(chat?.messages) || chat.messages.length <= MAX_ROOM_MESSAGES) return
+      chat.messages.splice(0, chat.messages.length - MAX_ROOM_MESSAGES)
     },
     buildChatPreviewFromMessage(message) {
       if (!message) {
@@ -370,6 +377,7 @@ export default {
 
         const rawMessages = Array.isArray(data?.messages) ? data.messages : []
         chat.messages = rawMessages.map((item) => this.mapMessage(item))
+        this.trimChatMessages(chat)
         chat.messagesLoaded = true
         if (Number(roomId) === Number(this.currentChatId)) {
           chat.unread = 0

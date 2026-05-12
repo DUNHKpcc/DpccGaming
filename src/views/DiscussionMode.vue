@@ -849,6 +849,7 @@ export default {
       this.activeChatMoreSection = ''
       this.closeMessageContextMenu()
       this.refreshCurrentChatPreviewHighlights()
+      this.refreshMessagePolling()
     },
     codeText() {
       this.refreshRightPanelCodeHighlight()

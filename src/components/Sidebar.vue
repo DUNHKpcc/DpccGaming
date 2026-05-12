@@ -240,20 +240,43 @@ const clearUnreadPolling = () => {
   }
 }
 
+const canPollUnreadStatus = () => {
+  return isLoggedIn.value && !document.hidden && navigator.onLine !== false
+}
+
 const startUnreadPolling = () => {
   clearUnreadPolling()
-  if (!isLoggedIn.value) return
+  if (!canPollUnreadStatus()) return
   unreadPollingTimer = setInterval(() => {
     fetchUnreadStatus()
   }, 25000)
 }
 
 const handleWindowFocus = () => {
+  if (document.hidden) return
   fetchUnreadStatus()
 }
 
 const handleNotificationsUpdated = () => {
   fetchUnreadStatus()
+}
+
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    clearUnreadPolling()
+    return
+  }
+  fetchUnreadStatus()
+  startUnreadPolling()
+}
+
+const handleNetworkOnline = () => {
+  fetchUnreadStatus()
+  startUnreadPolling()
+}
+
+const handleNetworkOffline = () => {
+  clearUnreadPolling()
 }
 
 const handleNavItemIntent = (item) => {
@@ -412,6 +435,9 @@ onMounted(() => {
   window.addEventListener('resize', checkScreenSize)
   window.addEventListener('focus', handleWindowFocus)
   window.addEventListener('notifications:updated', handleNotificationsUpdated)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('online', handleNetworkOnline)
+  window.addEventListener('offline', handleNetworkOffline)
   
   // 延迟初始化悬浮侧边栏动画
   setTimeout(() => {
@@ -428,6 +454,9 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkScreenSize)
   window.removeEventListener('focus', handleWindowFocus)
   window.removeEventListener('notifications:updated', handleNotificationsUpdated)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('online', handleNetworkOnline)
+  window.removeEventListener('offline', handleNetworkOffline)
   
   // 清理定时器
   if (hoverTimeout.value) {

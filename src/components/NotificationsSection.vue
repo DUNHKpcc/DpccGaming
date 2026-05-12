@@ -286,6 +286,15 @@ const teardownNotificationSocket = () => {
   socket.value = null
 }
 
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    teardownNotificationSocket()
+    return
+  }
+  fetchNotifications(1, true)
+  setupNotificationSocket()
+}
+
 const fetchNotifications = async (page = 1, reset = false) => {
   if (!authStore.isLoggedIn) return
 
@@ -591,10 +600,14 @@ const formatTime = (dateString) => {
 onMounted(() => {
   stabilizeNotificationsScroll({ rebuild: true })
   fetchNotifications(1, true)
-  setupNotificationSocket()
+  if (!document.hidden) {
+    setupNotificationSocket()
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   clearScrollResetTimers()
   teardownNotificationSocket()
 })

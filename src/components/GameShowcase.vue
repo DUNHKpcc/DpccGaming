@@ -329,6 +329,23 @@ const executeCardAnimation = (cards) => {
 
 // 防抖变量
 let animationInProgress = false
+let localScrollTriggers = []
+
+const trackScrollTween = (tween) => {
+  if (tween?.scrollTrigger) {
+    localScrollTriggers.push(tween.scrollTrigger)
+  }
+  return tween
+}
+
+const getLocalAnimatedElements = () => {
+  return [
+    sectionTitle.value,
+    sectionSubtitle.value,
+    mainCard.value,
+    ...cardRefs.value.filter(Boolean)
+  ].filter(Boolean)
+}
 
 // 初始化滚动卡片动画（一张一张从上至下出现）
 const initScrollCardAnimations = () => {
@@ -341,7 +358,7 @@ const initScrollCardAnimations = () => {
   })
   
   // 标题动画
-  gsap.to([sectionTitle.value, sectionSubtitle.value], {
+  trackScrollTween(gsap.to([sectionTitle.value, sectionSubtitle.value], {
     opacity: 1,
     y: 0,
     duration: 0.8,
@@ -352,7 +369,7 @@ const initScrollCardAnimations = () => {
       end: 'bottom 30%',
       toggleActions: 'play none none reverse'
     }
-  })
+  }))
 
   // 为每个卡片创建独立的滚动触发器
   cards.forEach((card, index) => {
@@ -369,7 +386,7 @@ const initScrollCardAnimations = () => {
     })
     
     // 为每个卡片创建独立的滚动触发器
-    ScrollTrigger.create({
+    const trigger = ScrollTrigger.create({
       trigger: card,
       start: 'top 85%',
       end: 'bottom 15%',
@@ -386,6 +403,7 @@ const initScrollCardAnimations = () => {
         delay: index * 0.3 // 每个卡片依次延迟出现
       })
     })
+    localScrollTriggers.push(trigger)
   })
 }
 
@@ -491,11 +509,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // 清理所有ScrollTrigger
-  ScrollTrigger.getAll().forEach(trigger => trigger.kill())
-  
-  // 清理所有GSAP动画
-  gsap.killTweensOf("*")
+  localScrollTriggers.forEach(trigger => trigger.kill())
+  localScrollTriggers = []
+  gsap.killTweensOf(getLocalAnimatedElements())
 })
 </script>
 

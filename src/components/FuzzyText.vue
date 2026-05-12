@@ -203,7 +203,7 @@ onMounted(() => {
         }
       }
     })
-    themeObserver.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    themeObserver.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme'] })
   }
 })
 

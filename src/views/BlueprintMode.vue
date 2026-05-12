@@ -367,7 +367,7 @@ const loadTutorialAsset = (step) => {
 
     if (!mediaStatus.videoDone && typeof document !== 'undefined') {
       const video = document.createElement('video')
-      video.preload = 'auto'
+      video.preload = 'metadata'
       video.muted = true
       video.playsInline = true
 

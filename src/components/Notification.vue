@@ -75,7 +75,7 @@ const removeNotification = (id) => {
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 30000;
+  z-index: 2147483647;
   width: min(92vw, 431px);
 }
 

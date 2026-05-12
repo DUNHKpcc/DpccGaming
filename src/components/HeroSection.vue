@@ -1,7 +1,7 @@
 ﻿<template>
   <section class="hero-section relative">
     <!-- Waves background -->
-    <div class="waves-bg absolute inset-0">
+    <div v-if="shouldRenderWaves" class="waves-bg absolute inset-0">
       <a-waves class="block w-full h-full"><svg class="js-svg"></svg></a-waves>
     </div>
     <!-- Banner title pinned to section bottom -->
@@ -68,8 +68,14 @@ const heroSubtitle = ref(null)
 const heroActions = ref(null)
 
 const heroSubtitleText = 'A game aggregation platform for individual developers'
+const shouldRenderWaves = ref(
+  window.matchMedia('(min-width: 768px)').matches &&
+  !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+)
 
 let heroTimeline = null
+let motionMediaQuery = null
+let widthMediaQuery = null
 
 const scrollToGames = () => {
   router.push('/games')
@@ -146,6 +152,27 @@ const initScrollAnimations = () => {
   })
 }
 
+const updateWavePreference = () => {
+  shouldRenderWaves.value = Boolean(widthMediaQuery?.matches) && !Boolean(motionMediaQuery?.matches)
+}
+
+const addMediaQueryListener = (query, handler) => {
+  if (query.addEventListener) {
+    query.addEventListener('change', handler)
+  } else {
+    query.addListener(handler)
+  }
+}
+
+const removeMediaQueryListener = (query, handler) => {
+  if (!query) return
+  if (query.removeEventListener) {
+    query.removeEventListener('change', handler)
+  } else {
+    query.removeListener(handler)
+  }
+}
+
 
 // Waves background implementation (self-contained)
 class Noise {
@@ -200,6 +227,8 @@ class AWaves extends HTMLElement {
     this._onVisibility = this.onVisibilityChange.bind(this)
     this._onIntersect = this.onIntersect.bind(this)
     this._resizeTimer = null
+    this._mouseFrame = 0
+    this._pendingMouse = null
     this._io = null
     this._visible = true
   }
@@ -228,13 +257,16 @@ class AWaves extends HTMLElement {
     document.removeEventListener('visibilitychange', this._onVisibility)
     if (this._io) { this._io.disconnect(); this._io = null }
     if (this._raf) cancelAnimationFrame(this._raf)
+    if (this._mouseFrame) cancelAnimationFrame(this._mouseFrame)
     this._raf = 0
+    this._mouseFrame = 0
+    this._pendingMouse = null
     if (this._resizeTimer) { clearTimeout(this._resizeTimer); this._resizeTimer = null }
   }
   bindEvents() {
     window.addEventListener('resize', this._onResize)
-    window.addEventListener('mousemove', this._onMouseMove)
-    this.addEventListener('touchmove', this._onTouchMove, { passive: false })
+    window.addEventListener('mousemove', this._onMouseMove, { passive: true })
+    this.addEventListener('touchmove', this._onTouchMove, { passive: true })
     document.addEventListener('visibilitychange', this._onVisibility)
   }
   onVisibilityChange() {
@@ -265,14 +297,27 @@ class AWaves extends HTMLElement {
       }
     }, 100)
   }
-  onMouseMove(e) { this.updateMousePosition(e.pageX, e.pageY) }
-  onTouchMove(e) { e.preventDefault(); const t = e.touches[0]; this.updateMousePosition(t.clientX, t.clientY) }
+  onMouseMove(e) { this.queueMousePosition(e.clientX, e.clientY) }
+  onTouchMove(e) {
+    const t = e.touches[0]
+    if (t) this.queueMousePosition(t.clientX, t.clientY)
+  }
+  queueMousePosition(x, y) {
+    this._pendingMouse = { x, y }
+    if (this._mouseFrame) return
+    this._mouseFrame = requestAnimationFrame(() => {
+      this._mouseFrame = 0
+      const point = this._pendingMouse
+      this._pendingMouse = null
+      if (point) this.updateMousePosition(point.x, point.y)
+    })
+  }
   updateMousePosition(x, y) {
     const m = this.mouse
     // Use cached bounding from setSize (avoid layout thrash on every move)
     if (!this.bounding) this.bounding = this.getBoundingClientRect()
     m.x = x - this.bounding.left
-    m.y = y - this.bounding.top + window.scrollY
+    m.y = y - this.bounding.top
     if (!m.set) { m.sx = m.x; m.sy = m.y; m.lx = m.x; m.ly = m.y; m.set = true }
   }
   setSize() {
@@ -385,6 +430,12 @@ if (!customElements.get('a-waves')) {
 }
 
 onMounted(() => {
+  motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  widthMediaQuery = window.matchMedia('(min-width: 768px)')
+  updateWavePreference()
+  addMediaQueryListener(motionMediaQuery, updateWavePreference)
+  addMediaQueryListener(widthMediaQuery, updateWavePreference)
+
   requestAnimationFrame(() => {
     initAnimations()
     initScrollAnimations()
@@ -398,6 +449,11 @@ onUnmounted(() => {
     heroTimeline.kill()
     heroTimeline = null
   }
+
+  removeMediaQueryListener(motionMediaQuery, updateWavePreference)
+  removeMediaQueryListener(widthMediaQuery, updateWavePreference)
+  motionMediaQuery = null
+  widthMediaQuery = null
 })
 </script>
 

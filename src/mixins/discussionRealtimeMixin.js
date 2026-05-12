@@ -2,26 +2,64 @@ import { io } from 'socket.io-client'
 import { API_BASE_URL, apiCall } from '../utils/api'
 import { normalizeChatMoreSettings } from '../utils/discussionChatMore'
 
+const MESSAGE_POLL_INTERVAL_MS = 15000
+
 export default {
   data() {
     return {
       socket: null,
       subscribedRoomIds: {},
       messagePollTimer: null,
-      messagePollPending: false
+      messagePollPending: false,
+      messageVisibilityHandler: null
     }
   },
   methods: {
     startMessagePolling() {
+      this.ensureMessageVisibilityHandler()
+      if (!this.shouldUseMessagePolling()) return
       if (this.messagePollTimer) return
       this.messagePollTimer = window.setInterval(() => {
         this.pollLatestMessages()
-      }, 3000)
+      }, MESSAGE_POLL_INTERVAL_MS)
     },
     stopMessagePolling() {
       if (!this.messagePollTimer) return
       window.clearInterval(this.messagePollTimer)
       this.messagePollTimer = null
+    },
+    ensureMessageVisibilityHandler() {
+      if (this.messageVisibilityHandler) return
+      this.messageVisibilityHandler = () => {
+        this.refreshMessagePolling()
+        if (!document.hidden) {
+          this.pollLatestMessages({ force: true })
+        }
+      }
+      document.addEventListener('visibilitychange', this.messageVisibilityHandler)
+    },
+    removeMessageVisibilityHandler() {
+      if (!this.messageVisibilityHandler) return
+      document.removeEventListener('visibilitychange', this.messageVisibilityHandler)
+      this.messageVisibilityHandler = null
+    },
+    refreshMessagePolling() {
+      this.stopMessagePolling()
+      this.startMessagePolling()
+    },
+    getActivePollingRoom() {
+      const activeRoomId = Number(this.currentChatId)
+      if (!activeRoomId) return null
+      return this.chats.find((item) => Number(item?.id) === activeRoomId) || null
+    },
+    isActiveRoomRealtimeHealthy() {
+      const activeRoom = this.getActivePollingRoom()
+      if (!activeRoom) return false
+      return Boolean(this.socket?.connected && this.isSocketRoomSubscribed(activeRoom.id))
+    },
+    shouldUseMessagePolling() {
+      if (document.hidden) return false
+      return Boolean(this.getActivePollingRoom()) && !this.isActiveRoomRealtimeHealthy()
     },
     isSocketRoomSubscribed(roomId) {
       const key = String(Number(roomId) || '')
@@ -81,18 +119,18 @@ export default {
     },
     async pollLatestMessages(options = {}) {
       if (this.messagePollPending) return
-      const rooms = this.chats.filter((item) => Number(item?.id))
-      if (!rooms.length) return
+      if (document.hidden) return
+      const activeRoom = this.getActivePollingRoom()
+      if (!activeRoom) return
 
-      const allRealtimeHealthy = this.socket?.connected
-        && rooms.every((room) => this.isSocketRoomSubscribed(room.id))
-      if (allRealtimeHealthy && !options.force) return
+      if (this.isActiveRoomRealtimeHealthy() && !options.force) {
+        this.stopMessagePolling()
+        return
+      }
 
       this.messagePollPending = true
       try {
-        for (const chat of rooms) {
-          await this.pollRoomLatestMessages(chat, options)
-        }
+        await this.pollRoomLatestMessages(activeRoom, options)
       } catch {
         // 静默失败，下一轮继续补拉。
       } finally {
@@ -125,6 +163,7 @@ export default {
         this.subscribedRoomIds = {}
         this.syncSocketSubscriptions()
         this.pollLatestMessages({ force: true })
+        this.stopMessagePolling()
       })
 
       this.socket.on('discussion:message', (payload) => {
@@ -161,10 +200,12 @@ export default {
 
       this.socket.on('disconnect', () => {
         this.subscribedRoomIds = {}
+        this.startMessagePolling()
       })
 
       this.socket.on('connect_error', () => {
         this.subscribedRoomIds = {}
+        this.startMessagePolling()
       })
     },
     teardownSocket() {
@@ -176,6 +217,7 @@ export default {
       this.socket.disconnect()
       this.socket = null
       this.subscribedRoomIds = {}
+      this.removeMessageVisibilityHandler()
     },
     joinSocketRoom(roomId) {
       const parsedRoomId = Number(roomId)
@@ -228,6 +270,7 @@ export default {
         .forEach((id) => this.leaveSocketRoom(id))
 
       await Promise.all(desiredRoomIds.map((id) => this.joinSocketRoom(id)))
+      this.refreshMessagePolling()
     },
     handleSocketMessage(payload) {
       const roomId = Number(payload?.roomId)
