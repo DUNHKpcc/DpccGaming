@@ -10,6 +10,8 @@ const {
   PAYMENT_SUPPORT_WECHAT,
   PAYMENT_SUPPORT_NOTE,
   PAYMENT_REDEEM_URL,
+  PROMOTION_PAYER_ALREADY_USED_NOTE,
+  PROMOTION_PAYER_MISSING_NOTE,
   toMysqlDateTime,
   buildRedeemCodes,
   getRedeemCodeByLabel,
@@ -59,6 +61,13 @@ const buildOrderRedeemCodes = (order = {}, rowsById = new Map(), options = {}) =
   return assignedCodes.length > 0 ? assignedCodes : buildRedeemCodes(order, options);
 };
 
+const getPromotionPayerRejectReason = (supportNote = '') => {
+  const normalizedNote = String(supportNote || '').trim();
+  if (normalizedNote === PROMOTION_PAYER_MISSING_NOTE) return 'payer_missing';
+  if (normalizedNote === PROMOTION_PAYER_ALREADY_USED_NOTE) return 'already_used';
+  return '';
+};
+
 const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool()) => {
   const normalizedOrderNo = String(orderNo || '').trim();
   if (!normalizedOrderNo) {
@@ -104,6 +113,7 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
     redeemUrl: order.redeem_url || PAYMENT_REDEEM_URL,
     supportWechat: order.support_wechat || PAYMENT_SUPPORT_WECHAT,
     supportNote: order.support_note || PAYMENT_SUPPORT_NOTE,
+    promotionPayerRejectReason: getPromotionPayerRejectReason(order.support_note),
     paidAt: order.paid_at || null,
     expiresAt: order.expires_at || null,
     createdAt: order.created_at || null
@@ -147,6 +157,9 @@ const mapAdminPaymentOrder = (order = {}, rowsById = new Map()) => {
     status: order.status,
     fulfillmentStatus: order.fulfillment_status || 'pending',
     apiUsername: order.api_username || '',
+    supportWechat: order.support_wechat || PAYMENT_SUPPORT_WECHAT,
+    supportNote: order.support_note || PAYMENT_SUPPORT_NOTE,
+    promotionPayerRejectReason: getPromotionPayerRejectReason(order.support_note),
     maskedRedeemCode: getRedeemCodeByLabel(maskedRedeemCodes, (label) => label === '原有额度'),
     maskedBonusRedeemCode: getRedeemCodeByLabel(maskedRedeemCodes, (label) => label.includes('赠送')),
     maskedRedeemCodes,

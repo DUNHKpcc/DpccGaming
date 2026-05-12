@@ -24,6 +24,9 @@ const {
 const {
   acquirePayerClaim,
   acquireUserAndPayerClaims,
+  buildLegacyPromotionClaimPurpose,
+  buildPromotionClaimPurpose,
+  buildScopedClaim,
   releaseClaims
 } = require('./paymentClaimService');
 
@@ -225,8 +228,29 @@ const acquirePromotionPayerClaim = async (connection, order = {}, payload = {}) 
     return { claimed: true, claims: [], promotionSnapshot: null };
   }
 
+  const normalizedBuyerId = String(payload.alipayBuyerId || '').trim();
+  if (normalizedBuyerId) {
+    const legacyPayerClaim = buildScopedClaim(
+      buildLegacyPromotionClaimPurpose(promotionSnapshot),
+      'alipay_buyer',
+      normalizedBuyerId
+    );
+    const legacyClaimRow = await repository.getPaymentBonusClaim(connection, legacyPayerClaim);
+    if (legacyClaimRow?.order_no) {
+      const legacyOrder = await repository.getPaymentOrderByNo(connection, legacyClaimRow.order_no);
+      const legacyProductSnapshot = getOrderProductSnapshot(legacyOrder);
+      if (Number(legacyProductSnapshot.id || 0) === Number(promotionSnapshot.productId || 0)) {
+        return {
+          claimed: false,
+          reason: 'already_used',
+          promotionSnapshot
+        };
+      }
+    }
+  }
+
   const claimResult = await acquirePayerClaim(connection, {
-    purpose: promotionSnapshot.claimScopeKey || `promotion_${promotionSnapshot.id}`,
+    purpose: buildPromotionClaimPurpose(promotionSnapshot),
     alipayBuyerId: payload.alipayBuyerId,
     orderNo: order.order_no,
     userId: order.user_id
@@ -280,12 +304,14 @@ const handlePaidOrder = async (pool, payload = {}) => {
     if (!order) {
       const error = new Error('支付订单不存在');
       error.statusCode = 404;
+      error.nonRetryable = true;
       throw error;
     }
 
     if (Number(order.amount).toFixed(2) !== Number(payload.totalAmount).toFixed(2)) {
       const error = new Error('支付金额不匹配');
       error.statusCode = 400;
+      error.nonRetryable = true;
       throw error;
     }
 
@@ -295,9 +321,10 @@ const handlePaidOrder = async (pool, payload = {}) => {
       return { status: 'paid', orderNo: order.order_no, alreadyPaid: true };
     }
     const paidAt = payload.paidAt || new Date();
-    if (!['pending', 'closed'].includes(order.status)) {
+    if (order.status !== 'pending') {
       const error = new Error('支付订单不是待支付状态');
       error.statusCode = 400;
+      error.nonRetryable = true;
       throw error;
     }
     if (isPaymentAfterOrderExpiry(order, paidAt)) {
@@ -338,6 +365,7 @@ const handlePaidOrder = async (pool, payload = {}) => {
       }
       const error = new Error('支付订单不是待支付状态');
       error.statusCode = 400;
+      error.nonRetryable = true;
       throw error;
     }
     if (!promotionPayerClaim.claimed) {

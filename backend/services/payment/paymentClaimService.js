@@ -48,6 +48,20 @@ const buildScopedClaim = (purpose = '', scope = '', key = '') => {
   };
 };
 
+const buildLegacyPromotionClaimPurpose = (promotion = {}) => (
+  String(
+    promotion.claimScopeKey
+    ?? promotion.claim_scope_key
+    ?? ''
+  ).trim() || `promotion_${promotion.id}`
+);
+
+const buildPromotionClaimPurpose = (promotion = {}) => {
+  const productId = Number(promotion.productId ?? promotion.product_id ?? 0);
+  const scopeKey = buildLegacyPromotionClaimPurpose(promotion);
+  return productId > 0 ? `product_${productId}:${scopeKey}` : scopeKey;
+};
+
 const hasPayerClaimedBonusRedeemCode = async (executor, payload = {}) => {
   const normalizedBuyerId = String(payload.alipayBuyerId || '').trim();
   if (!normalizedBuyerId) return false;
@@ -142,6 +156,8 @@ module.exports = {
   releaseClaim,
   releaseClaims,
   buildScopedClaim,
+  buildLegacyPromotionClaimPurpose,
+  buildPromotionClaimPurpose,
   acquireUserClaim,
   acquirePayerClaim,
   acquireUserAndPayerClaims

@@ -24,6 +24,16 @@ const getEnv = (key, fallback = '') => {
 
 const trimTrailingSlash = (value = '') => String(value || '').replace(/\/+$/, '');
 
+const parseList = (value = '') => String(value || '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const parsePositiveNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
 const resolveConfigPath = (value = '') => {
   const rawPath = String(value || '').trim();
   if (!rawPath) return '';
@@ -71,6 +81,8 @@ module.exports = {
     alipayPublicKey: getPemConfig('ALIPAY_PUBLIC_KEY_PATH', 'ALIPAY_PUBLIC_KEY', 'PUBLIC KEY'),
     sellerId: getEnv('ALIPAY_SELLER_ID', getEnv('ALIPAY_PID', '')),
     returnUrl: getEnv('ALIPAY_RETURN_URL', `${publicUrl}/payment/result`),
-    notifyUrl: getEnv('ALIPAY_NOTIFY_URL', `${publicUrl}/api/payments/alipay/notify`)
+    notifyUrl: getEnv('ALIPAY_NOTIFY_URL', `${publicUrl}/api/payments/alipay/notify`),
+    notifyIpWhitelist: parseList(getEnv('ALIPAY_NOTIFY_IP_WHITELIST', '')),
+    notifyTimeWindowMinutes: parsePositiveNumber(getEnv('ALIPAY_NOTIFY_TIME_WINDOW_MINUTES', ''), 1440)
   }
 };

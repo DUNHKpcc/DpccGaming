@@ -163,6 +163,23 @@ const ensurePaymentTables = async (pool) => {
           CONSTRAINT fk_payment_promotions_product_id FOREIGN KEY (product_id) REFERENCES payment_products(id) ON DELETE CASCADE
         )
       `),
+        pool.execute(`
+        CREATE TABLE IF NOT EXISTS payment_notifications (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          provider VARCHAR(24) NOT NULL DEFAULT 'alipay',
+          notify_id VARCHAR(128) NOT NULL,
+          order_no VARCHAR(64) DEFAULT NULL,
+          trade_no VARCHAR(96) DEFAULT NULL,
+          status VARCHAR(24) NOT NULL DEFAULT 'processing',
+          error_message VARCHAR(255) DEFAULT NULL,
+          notified_at DATETIME DEFAULT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_payment_notifications_provider_notify (provider, notify_id),
+          INDEX idx_payment_notifications_order_no (order_no),
+          INDEX idx_payment_notifications_status (status)
+        )
+      `),
       ]);
 
       await pool.execute('ALTER TABLE payment_orders ADD COLUMN expires_at DATETIME DEFAULT NULL')
@@ -667,6 +684,20 @@ const getPaymentOrderForUser = async (executor, payload = {}) => {
   return rows[0] || null;
 };
 
+const countPendingPaymentOrdersForUser = async (executor, payload = {}) => {
+  const [rows] = await executor.execute(
+    `
+      SELECT COUNT(*) AS count
+      FROM payment_orders
+      WHERE user_id = ?
+        AND status = 'pending'
+        AND (expires_at IS NULL OR expires_at > ?)
+    `,
+    [payload.userId, payload.now]
+  );
+  return Number(rows[0]?.count || 0);
+};
+
 const listAssignedRedeemCodeSkusForUser = async (executor, userId) => {
   const [rows] = await executor.execute(
     `
@@ -755,6 +786,47 @@ const deletePaymentBonusClaim = async (executor, payload = {}) => executor.execu
   ]
 );
 
+const createPaymentNotification = async (executor, payload = {}) => executor.execute(
+  `
+    INSERT IGNORE INTO payment_notifications
+      (provider, notify_id, order_no, trade_no, status, notified_at)
+    VALUES (?, ?, ?, ?, 'processing', ?)
+  `,
+  [
+    payload.provider || 'alipay',
+    payload.notifyId,
+    payload.orderNo || null,
+    payload.tradeNo || null,
+    payload.notifiedAt || null
+  ]
+);
+
+const updatePaymentNotificationStatus = async (executor, payload = {}) => executor.execute(
+  `
+    UPDATE payment_notifications
+    SET status = ?,
+        error_message = ?
+    WHERE provider = ? AND notify_id = ?
+  `,
+  [
+    payload.status,
+    payload.errorMessage || null,
+    payload.provider || 'alipay',
+    payload.notifyId
+  ]
+);
+
+const deletePaymentNotification = async (executor, payload = {}) => executor.execute(
+  `
+    DELETE FROM payment_notifications
+    WHERE provider = ? AND notify_id = ?
+  `,
+  [
+    payload.provider || 'alipay',
+    payload.notifyId
+  ]
+);
+
 const getMembershipByUserId = async (executor, userId) => {
   const [rows] = await executor.execute(
     'SELECT * FROM user_api_memberships WHERE user_id = ? LIMIT 1',
@@ -771,7 +843,7 @@ const markOrderPaid = async (executor, order = {}) => executor.execute(
         alipay_buyer_id = ?,
         paid_at = ?
     WHERE order_no = ?
-      AND status IN ('pending', 'closed')
+      AND status = 'pending'
       AND (expires_at IS NULL OR expires_at >= ?)
   `,
   [order.alipayTradeNo, order.alipayBuyerId || null, order.paidAt, order.orderNo, order.paidAt]
@@ -1036,12 +1108,16 @@ module.exports = {
   deletePaymentBonusClaimsForClosedOrders,
   getPaymentOrderByNoForUpdate,
   getPaymentOrderForUser,
+  countPendingPaymentOrdersForUser,
   listAssignedRedeemCodeSkusForUser,
   getAssignedRedeemCodeForUserSku,
   getBonusRedeemCodeClaimByPayer,
   getPaymentBonusClaim,
   createPaymentBonusClaim,
   deletePaymentBonusClaim,
+  createPaymentNotification,
+  updatePaymentNotificationStatus,
+  deletePaymentNotification,
   getMembershipByUserId,
   markOrderPaid,
   insertMembership,

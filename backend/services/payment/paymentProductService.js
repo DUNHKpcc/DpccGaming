@@ -12,11 +12,16 @@ const {
   normalizeProductType,
   normalizeQuota,
   parseJsonArray,
+  parseSnapshotJson,
   resolveEffectiveProduct,
   stringifyJsonArray,
   toCents
 } = require('./paymentProductUtils');
-const { buildScopedClaim } = require('./paymentClaimService');
+const {
+  buildLegacyPromotionClaimPurpose,
+  buildPromotionClaimPurpose,
+  buildScopedClaim
+} = require('./paymentClaimService');
 const { toMysqlDateTime } = require('./paymentUtils');
 
 const toDbProduct = (product = {}) => ({
@@ -114,14 +119,30 @@ const buildRedeemedSkuSet = async (pool, userId) => {
 
 const getPromotionClaim = (promotion = {}, userId) => {
   if (!promotion?.limit_once || !userId) return null;
-  const purpose = promotion.claim_scope_key || `promotion_${promotion.id}`;
+  const purpose = buildPromotionClaimPurpose(promotion);
   return buildScopedClaim(purpose, 'user', userId);
+};
+
+const isClaimFromSameProduct = async (pool, claim = {}, promotion = {}) => {
+  if (!claim?.order_no) return false;
+  const order = await repository.getPaymentOrderByNo(pool, claim.order_no);
+  const productSnapshot = parseSnapshotJson(order?.product_snapshot_json) || {};
+  const promotionProductId = Number(promotion.productId ?? promotion.product_id ?? 0);
+  return Boolean(promotionProductId && Number(productSnapshot.id || 0) === promotionProductId);
 };
 
 const hasPromotionClaim = async (pool, promotion = {}, userId) => {
   const claim = getPromotionClaim(promotion, userId);
   if (!claim) return false;
-  return Boolean(await repository.getPaymentBonusClaim(pool, claim));
+  if (await repository.getPaymentBonusClaim(pool, claim)) return true;
+
+  const legacyClaim = buildScopedClaim(
+    buildLegacyPromotionClaimPurpose(promotion),
+    'user',
+    userId
+  );
+  const legacyClaimRow = await repository.getPaymentBonusClaim(pool, legacyClaim);
+  return isClaimFromSameProduct(pool, legacyClaimRow, promotion);
 };
 
 const mapPromotion = (row = {}) => ({
