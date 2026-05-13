@@ -119,6 +119,8 @@ const normalizeAlipayBuyerId = (...sources) => {
     if (buyerId) return buyerId;
     const buyerUserId = String(source?.buyer_user_id || source?.buyerUserId || '').trim();
     if (buyerUserId) return buyerUserId;
+    const buyerOpenId = String(source?.buyer_open_id || source?.buyerOpenId || '').trim();
+    if (buyerOpenId) return buyerOpenId;
   }
   return '';
 };
