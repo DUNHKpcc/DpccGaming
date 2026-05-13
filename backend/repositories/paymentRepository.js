@@ -34,7 +34,7 @@ const ensurePaymentTables = async (pool) => {
           subject VARCHAR(128) NOT NULL,
           status ENUM('pending', 'paid', 'closed') NOT NULL DEFAULT 'pending',
           alipay_trade_no VARCHAR(96) DEFAULT NULL,
-          alipay_buyer_id VARCHAR(96) DEFAULT NULL,
+          alipay_buyer_id VARCHAR(128) DEFAULT NULL,
           paid_at DATETIME DEFAULT NULL,
           expires_at DATETIME DEFAULT NULL,
           fulfillment_status VARCHAR(24) NOT NULL DEFAULT 'pending',
@@ -87,7 +87,7 @@ const ensurePaymentTables = async (pool) => {
         CREATE TABLE IF NOT EXISTS payment_bonus_claims (
           id INT AUTO_INCREMENT PRIMARY KEY,
           claim_type VARCHAR(24) NOT NULL,
-          claim_key VARCHAR(128) NOT NULL,
+          claim_key VARCHAR(320) NOT NULL,
           order_no VARCHAR(64) NOT NULL,
           user_id INT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -257,9 +257,14 @@ const ensurePaymentTables = async (pool) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
           throw error;
         });
-      await pool.execute('ALTER TABLE payment_orders ADD COLUMN alipay_buyer_id VARCHAR(96) DEFAULT NULL AFTER alipay_trade_no')
+      await pool.execute('ALTER TABLE payment_orders ADD COLUMN alipay_buyer_id VARCHAR(128) DEFAULT NULL AFTER alipay_trade_no')
         .catch((error) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders MODIFY COLUMN alipay_buyer_id VARCHAR(128) DEFAULT NULL')
+        .catch((error) => {
+          if (error?.code === 'ER_BAD_FIELD_ERROR') return null;
           throw error;
         });
       await pool.execute('ALTER TABLE payment_orders ADD INDEX idx_payment_orders_alipay_buyer_id (alipay_buyer_id)')
@@ -310,6 +315,11 @@ const ensurePaymentTables = async (pool) => {
       await pool.execute('ALTER TABLE redeem_codes ADD INDEX idx_redeem_codes_assigned_user_sku (assigned_user_id, product_type, sku_id, status)')
         .catch((error) => {
           if (error?.code === 'ER_DUP_KEYNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_bonus_claims MODIFY COLUMN claim_key VARCHAR(320) NOT NULL')
+        .catch((error) => {
+          if (error?.code === 'ER_BAD_FIELD_ERROR') return null;
           throw error;
         });
     })().catch((error) => {
