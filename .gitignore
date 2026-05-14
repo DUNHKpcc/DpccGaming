@@ -19,3 +19,4 @@ docs/
 .worktrees/
 backend/tests
 tests/
+.obsidian/
