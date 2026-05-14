@@ -16,6 +16,7 @@ const DocsPlaceholder = () => import('../views/DocsPlaceholder.vue')
 const DiscussionMode = () => import('../views/DiscussionMode.vue')
 const CookiePolicy = () => import('../views/CookiePolicy.vue')
 const Payment = () => import('../views/Payment.vue')
+const PaymentOrders = () => import('../views/PaymentOrders.vue')
 const PaymentResult = () => import('../views/PaymentResult.vue')
 
 const routes = [
@@ -114,6 +115,12 @@ const routes = [
     path: '/payment',
     name: 'Payment',
     component: Payment
+  },
+  {
+    path: '/payment/orders',
+    name: 'PaymentOrders',
+    component: PaymentOrders,
+    meta: { requiresAuth: true }
   },
   {
     path: '/payment/result',

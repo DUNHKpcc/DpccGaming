@@ -82,6 +82,10 @@
                 <i class="fa fa-user"></i>
                 账户详情
               </router-link>
+              <router-link to="/payment/orders" class="dropdown-item" @click="closeDropdown">
+                <i class="fa fa-receipt"></i>
+                历史订单
+              </router-link>
               <router-link v-if="isAdmin" to="/admin" class="dropdown-item" target="_blank" rel="noopener" @click="closeDropdown">
                 <i class="fa fa-cog"></i>
                 管理后台
