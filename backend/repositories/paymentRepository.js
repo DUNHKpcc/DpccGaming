@@ -630,6 +630,21 @@ const listPaymentOrders = async (executor, filters = {}) => {
   return rows;
 };
 
+const listPaymentOrdersForUser = async (executor, payload = {}) => {
+  const limit = Math.max(1, Math.min(100, Number.parseInt(payload.limit, 10) || 50));
+  const [rows] = await executor.execute(
+    `
+      SELECT *
+      FROM payment_orders
+      WHERE user_id = ?
+      ORDER BY id DESC
+      LIMIT ?
+    `,
+    [payload.userId, limit]
+  );
+  return rows;
+};
+
 const deleteUnpaidPaymentOrder = async (executor, orderNo = '') => executor.execute(
   `
     DELETE FROM payment_orders
@@ -1111,6 +1126,7 @@ module.exports = {
   getPaymentOrderByNo,
   getPaymentOrderDetailByNo,
   listPaymentOrders,
+  listPaymentOrdersForUser,
   deleteUnpaidPaymentOrder,
   closeExpiredPaymentOrders,
   closeExpiredPaymentOrder,

@@ -15,6 +15,7 @@ const createOrderLimiter = rateLimit({
 });
 
 router.get('/catalog', optionalAuthenticateToken, paymentController.getPaymentCatalog);
+router.get('/orders', authenticateToken, paymentController.listUserPaymentOrders);
 router.get('/orders/:orderNo', authenticateToken, paymentController.getPaymentOrderResult);
 router.post('/orders/:orderNo/api-username', authenticateToken, paymentController.submitPaymentOrderApiUsername);
 router.post('/alipay/orders', authenticateToken, createOrderLimiter, paymentController.createAlipayOrder);

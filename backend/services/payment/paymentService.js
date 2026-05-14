@@ -11,6 +11,7 @@ const {
 } = require('./redeemCodeService');
 const {
   getPaymentOrderResult,
+  listUserPaymentOrders,
   listAdminPaymentOrders,
   getAdminPaymentOrderDetail,
   deleteAdminPaymentOrder,
@@ -48,6 +49,7 @@ module.exports = {
   deleteRedeemCode,
   deleteRedeemCodes,
   getPaymentOrderResult,
+  listUserPaymentOrders,
   listAdminPaymentOrders,
   getAdminPaymentOrderDetail,
   deleteAdminPaymentOrder,

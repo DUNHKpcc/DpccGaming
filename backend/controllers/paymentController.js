@@ -58,6 +58,21 @@ const getPaymentOrderResult = async (req, res) => {
   }
 };
 
+const listUserPaymentOrders = async (req, res) => {
+  try {
+    const result = await paymentService.listUserPaymentOrders({
+      userId: req.user.userId,
+      query: req.query
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      message: toPublicErrorMessage('查询历史订单失败') || error.message || '查询历史订单失败'
+    });
+  }
+};
+
 const submitPaymentOrderApiUsername = async (req, res) => {
   try {
     const result = await paymentService.submitPaymentOrderApiUsername({
@@ -96,6 +111,7 @@ const handleAlipayNotify = async (req, res) => {
 module.exports = {
   getPaymentCatalog,
   createAlipayOrder,
+  listUserPaymentOrders,
   getPaymentOrderResult,
   submitPaymentOrderApiUsername,
   handleAlipayNotify

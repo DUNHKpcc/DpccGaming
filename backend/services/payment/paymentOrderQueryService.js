@@ -185,6 +185,41 @@ const listAdminPaymentOrders = async (filters = {}, pool = getPool()) => {
   };
 };
 
+const normalizeOrderListLimit = (value) => Math.max(1, Math.min(100, Number.parseInt(value, 10) || 50));
+
+const mapUserPaymentOrder = (order = {}) => {
+  const product = resolvePaymentProductName(order);
+  return {
+    orderNo: order.order_no,
+    provider: order.provider || 'alipay',
+    productType: product.productType,
+    skuId: product.skuId,
+    productName: product.productName,
+    amount: Number(order.amount || 0).toFixed(2),
+    currency: order.currency || 'CNY',
+    status: order.status,
+    fulfillmentStatus: order.fulfillment_status || 'pending',
+    apiUsername: order.api_username || '',
+    paidAt: order.paid_at || null,
+    expiresAt: order.expires_at || null,
+    createdAt: order.created_at || null,
+    updatedAt: order.updated_at || null
+  };
+};
+
+const listUserPaymentOrders = async ({ userId, query = {} } = {}, pool = getPool()) => {
+  await repository.ensurePaymentTables(pool);
+  await closeExpiredPaymentOrders(pool);
+  const rows = await repository.listPaymentOrdersForUser(pool, {
+    userId,
+    limit: normalizeOrderListLimit(query.limit)
+  });
+
+  return {
+    orders: rows.map(mapUserPaymentOrder)
+  };
+};
+
 const getAdminPaymentOrderDetail = async ({ orderNo } = {}, pool = getPool()) => {
   const normalizedOrderNo = String(orderNo || '').trim();
   if (!normalizedOrderNo) {
@@ -307,6 +342,7 @@ const submitPaymentOrderApiUsername = async ({ userId, orderNo, apiUsername } = 
 
 module.exports = {
   getPaymentOrderResult,
+  listUserPaymentOrders,
   listAdminPaymentOrders,
   getAdminPaymentOrderDetail,
   deleteAdminPaymentOrder,
