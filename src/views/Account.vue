@@ -64,13 +64,6 @@
                     class="hidden"
                     @change="onAvatarFileChange"
                   />
-                  <input
-                    ref="coverInputRef"
-                    type="file"
-                    accept="image/*"
-                    class="hidden"
-                    @change="onCoverFileChange"
-                  />
                   <button
                     type="button"
                     @click="openAvatarPicker"
@@ -293,16 +286,8 @@
               </section>
             </div>
 
-            <section class="glass-card widget widget-player-data p-0">
-              <PlayerDataPanel
-                :user="currentUser"
-                :games="gameStore.games"
-                :library-games="libraryGames"
-                :cover-uploading="coverUploading"
-                :profile-saving="profileSaving"
-                @request-cover-upload="openCoverPicker"
-                @auto-save-profile="onPlayerProfileAutoSave"
-              />
+            <section class="widget widget-player-data p-0">
+              <AccountHistoryPanel :is-logged-in="isLoggedIn" />
             </section>
 
             <AccountModalShell
@@ -573,9 +558,9 @@ import { useModalStore } from '../stores/modal'
 import { useNotificationStore } from '../stores/notification'
 import { docsList } from '../data/docsList'
 import NotificationsSection from '../components/NotificationsSection.vue'
-import PlayerDataPanel from '../components/PlayerDataPanel.vue'
 import UserLevelBadge from '../components/UserLevelBadge.vue'
 import AccountModalShell from '../components/account/AccountModalShell.vue'
+import AccountHistoryPanel from '../components/account/AccountHistoryPanel.vue'
 import AccountUserIdentity from '../components/account/AccountUserIdentity.vue'
 import { useAccountFriends } from '../composables/useAccountFriends'
 import { useAccountProfile } from '../composables/useAccountProfile'
@@ -642,10 +627,7 @@ const {
   libraryGames,
   libraryLoading,
   avatarInputRef,
-  coverInputRef,
   avatarUploading,
-  coverUploading,
-  profileSaving,
   wechatBinding,
   wechatBound,
   wechatBoundLabel,
@@ -657,10 +639,7 @@ const {
   startGoogleBind,
   logout,
   openAvatarPicker,
-  openCoverPicker,
   onAvatarFileChange,
-  onCoverFileChange,
-  onPlayerProfileAutoSave,
   getGameCoverUrl,
   getGameVideoUrl,
   hasPlayableVideo,
