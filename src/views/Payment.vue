@@ -10,13 +10,6 @@
           </div>
         </div>
 
-        <div class="payment-header-actions">
-          <div class="payment-secure-pill">
-            <i class="fa-solid fa-lock secure-icon" aria-hidden="true"></i>
-            <span class="status-dot"></span>
-            HTTPS + 服务端签名
-          </div>
-        </div>
       </header>
 
       <main class="payment-workspace">
@@ -56,8 +49,30 @@
               :class="{ active: isSubscriptionMode }"
               :aria-hidden="!isSubscriptionMode"
             >
-              <div class="recharge-scroll-hint">向右滑动查看更多档位</div>
-              <div class="plan-grid tier-scroll-grid" aria-label="月卡订阅规格，可横向滚动">
+              <div class="tier-control-bar">
+                <div class="recharge-scroll-hint">向右滑动查看更多档位</div>
+                <div class="tier-nav-buttons" aria-label="月卡订阅档位切换">
+                  <button
+                    type="button"
+                    class="tier-nav-button"
+                    :disabled="!canMoveSubscriptionPrev"
+                    aria-label="上一档月卡订阅规格"
+                    @click="moveSubscriptionTier(-1)"
+                  >
+                    <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="tier-nav-button"
+                    :disabled="!canMoveSubscriptionNext"
+                    aria-label="下一档月卡订阅规格"
+                    @click="moveSubscriptionTier(1)"
+                  >
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                  </button>
+                </div>
+              </div>
+              <div ref="subscriptionTierGrid" class="plan-grid tier-scroll-grid" aria-label="月卡订阅规格，可横向滚动">
                 <button
                   v-for="plan in plans"
                   :key="plan.id"
@@ -99,8 +114,30 @@
               :class="{ active: !isSubscriptionMode }"
               :aria-hidden="isSubscriptionMode"
             >
-              <div class="recharge-scroll-hint">向右滑动查看更多额度</div>
-              <div class="plan-grid tier-scroll-grid recharge-grid" aria-label="额度充值规格，可横向滚动">
+              <div class="tier-control-bar">
+                <div class="recharge-scroll-hint">向右滑动查看更多额度</div>
+                <div class="tier-nav-buttons" aria-label="额度充值档位切换">
+                  <button
+                    type="button"
+                    class="tier-nav-button"
+                    :disabled="!canMoveRechargePrev"
+                    aria-label="上一档额度充值规格"
+                    @click="moveRechargeTier(-1)"
+                  >
+                    <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="tier-nav-button"
+                    :disabled="!canMoveRechargeNext"
+                    aria-label="下一档额度充值规格"
+                    @click="moveRechargeTier(1)"
+                  >
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                  </button>
+                </div>
+              </div>
+              <div ref="rechargeTierGrid" class="plan-grid tier-scroll-grid recharge-grid" aria-label="额度充值规格，可横向滚动">
                 <button
                   v-for="pack in rechargePackages"
                   :key="pack.id"
@@ -274,7 +311,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { apiCall } from '../utils/api'
 
 const ORDER_LOCK_SECONDS = 5 * 60
@@ -357,6 +394,8 @@ const emptyRechargePackage = {
 const selectedPlanId = ref('')
 const selectedDurationId = ref('1m')
 const selectedRechargePackageId = ref('')
+const subscriptionTierGrid = ref(null)
+const rechargeTierGrid = ref(null)
 
 const selectProductMode = (mode) => {
   productMode.value = mode
@@ -385,6 +424,12 @@ const selectedDuration = computed(() => durations.value.find((duration) => durat
 const selectedRechargePackage = computed(() => (
   rechargePackages.value.find((pack) => pack.id === selectedRechargePackageId.value) || rechargePackages.value[0] || emptyRechargePackage
 ))
+const selectedSubscriptionIndex = computed(() => plans.value.findIndex((plan) => plan.id === selectedPlanId.value))
+const selectedRechargeIndex = computed(() => rechargePackages.value.findIndex((pack) => pack.id === selectedRechargePackageId.value))
+const canMoveSubscriptionPrev = computed(() => selectedSubscriptionIndex.value > 0)
+const canMoveSubscriptionNext = computed(() => selectedSubscriptionIndex.value >= 0 && selectedSubscriptionIndex.value < plans.value.length - 1)
+const canMoveRechargePrev = computed(() => selectedRechargeIndex.value > 0)
+const canMoveRechargeNext = computed(() => selectedRechargeIndex.value >= 0 && selectedRechargeIndex.value < rechargePackages.value.length - 1)
 const pageKicker = computed(() => (isSubscriptionMode.value ? '月卡充值中心' : '普通额度充值中心'))
 const paymentTitle = computed(() => (isSubscriptionMode.value ? '选择月卡款项' : '选择充值额度'))
 const paymentDescription = computed(() => (
@@ -496,6 +541,33 @@ const clearOrderLock = () => {
   orderExpiresAt.value = ''
   countdownNow.value = Date.now()
   stopCountdown()
+}
+
+const getTierTargetIndex = (items, currentIndex, direction) => {
+  if (!items.length || currentIndex < 0) return -1
+  return Math.min(Math.max(currentIndex + direction, 0), items.length - 1)
+}
+
+const scrollTierCardIntoView = async (gridRef, index) => {
+  await nextTick()
+  const targetCard = gridRef.value?.children?.item(index)
+  if (targetCard && typeof targetCard.scrollIntoView === 'function') {
+    targetCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+  }
+}
+
+const moveSubscriptionTier = (direction) => {
+  const targetIndex = getTierTargetIndex(plans.value, selectedSubscriptionIndex.value, direction)
+  if (targetIndex < 0) return
+  selectPlan(plans.value[targetIndex].id)
+  scrollTierCardIntoView(subscriptionTierGrid, targetIndex)
+}
+
+const moveRechargeTier = (direction) => {
+  const targetIndex = getTierTargetIndex(rechargePackages.value, selectedRechargeIndex.value, direction)
+  if (targetIndex < 0) return
+  selectRechargePackage(rechargePackages.value[targetIndex].id)
+  scrollTierCardIntoView(rechargeTierGrid, targetIndex)
 }
 
 const loadPaymentCatalog = async () => {
