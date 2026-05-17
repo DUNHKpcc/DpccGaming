@@ -169,17 +169,20 @@ import { useNotificationStore } from '../stores/notification'
 import CommentSection from '../components/CommentSection.vue'
 import { highlightCodeAsync, warmupCodeHighlighter } from '../utils/asyncCodeHighlighter'
 import { apiCall } from '../utils/api'
+import { fetchPublicDocs } from '../utils/contentApi'
+import { normalizeDocs } from '../utils/contentCatalog'
 import { buildDocsCatalog } from '../utils/docsCatalog.js'
 import { extractMarkdownHeadings } from '../utils/docsNavigation.js'
 import { renderMarkdownToHtml } from '../utils/markdownRenderer.mjs'
 
-const docs = docsList
+const staticDocs = import.meta.env.DEV ? normalizeDocs(docsList) : []
+const docs = ref(staticDocs)
 const route = useRoute()
 const authStore = useAuthStore()
 const modalStore = useModalStore()
 const notificationStore = useNotificationStore()
-const getDocById = docId => docs.find(doc => doc.id === String(docId || '').trim()) || null
-const selectedDoc = ref(getDocById(route.query.doc) || docs[0] || null)
+const getDocById = docId => docs.value.find(doc => doc.id === String(docId || '').trim()) || null
+const selectedDoc = ref(getDocById(route.query.doc) || docs.value[0] || null)
 const renderedMarkdown = ref('')
 const isLoadingDoc = ref(false)
 const docError = ref('')
@@ -196,7 +199,7 @@ const docSearchQuery = ref('')
 let headingElements = []
 let scrollRaf = 0
 
-const docGroups = computed(() => buildDocsCatalog(docs, docSearchQuery.value))
+const docGroups = computed(() => buildDocsCatalog(docs.value, docSearchQuery.value))
 
 const outlineItems = computed(() => {
   const nested = headings.value.filter(item => item.level >= 2)
@@ -388,6 +391,19 @@ const selectDoc = async (doc) => {
   ])
 }
 
+const loadDocsCatalog = async () => {
+  try {
+    const apiDocs = await fetchPublicDocs()
+    if (apiDocs.length) {
+      docs.value = apiDocs
+      selectedDoc.value = getDocById(route.query.doc) || docs.value[0] || null
+    }
+  } catch {
+    docs.value = staticDocs
+    selectedDoc.value = getDocById(route.query.doc) || docs.value[0] || null
+  }
+}
+
 const scrollToHeading = (id) => {
   const container = readerScrollRef.value
   const content = markdownContentRef.value
@@ -412,7 +428,8 @@ const handleReaderScroll = () => {
 }
 
 onMounted(async () => {
-  docs.forEach((doc) => {
+  await loadDocsCatalog()
+  docs.value.forEach((doc) => {
     imagesLoaded[doc.id] = false
   })
   warmupCodeHighlighter()

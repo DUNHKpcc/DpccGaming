@@ -8,6 +8,7 @@ const Account = () => import('../views/Account.vue')
 const AdminPanel = () => import('../admin/views/AdminPanel.vue')
 const UserManagement = () => import('../admin/views/UserManagement.vue')
 const GameManagement = () => import('../admin/views/GameManagement.vue')
+const ContentManagement = () => import('../admin/views/ContentManagement.vue')
 const RedeemCodeManagement = () => import('../admin/views/RedeemCodeManagement.vue')
 const OrderManagement = () => import('../admin/views/OrderManagement.vue')
 const PaymentProductManagement = () => import('../admin/views/PaymentProductManagement.vue')
@@ -62,6 +63,12 @@ const routes = [
     path: '/admin/games',
     name: 'GameManagement',
     component: GameManagement,
+    meta: { requiresAuth: true, requiresAdmin: true, hideSidebar: true, hideTopbar: true, hideOverlays: true }
+  },
+  {
+    path: '/admin/content',
+    name: 'ContentManagement',
+    component: ContentManagement,
     meta: { requiresAuth: true, requiresAdmin: true, hideSidebar: true, hideTopbar: true, hideOverlays: true }
   },
   {

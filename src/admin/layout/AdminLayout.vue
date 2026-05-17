@@ -67,6 +67,7 @@ const menuItems = [
   { path: '/admin', label: '审核管理', icon: 'fa fa-check-circle' },
   { path: '/admin/users', label: '用户管理', icon: 'fa fa-users' },
   { path: '/admin/games', label: '游戏管理', icon: 'fa fa-gamepad' },
+  { path: '/admin/content', label: '内容管理', icon: 'fa fa-newspaper' },
   { path: '/admin/orders', label: '订单管理', icon: 'fa fa-receipt' },
   { path: '/admin/payment-products', label: '支付档位', icon: 'fa fa-credit-card' },
   { path: '/admin/redeem-codes', label: '兑换码管理', icon: 'fa fa-ticket' }

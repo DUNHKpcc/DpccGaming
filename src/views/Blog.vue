@@ -51,11 +51,15 @@
 </template>
 
 <script setup>
-import { reactive, onMounted } from 'vue'
+import { reactive, onMounted, ref } from 'vue'
 import { blogPosts } from '../data/blogPosts'
+import { normalizeBlogPosts } from '../utils/contentCatalog'
+import { fetchPublicBlogPosts } from '../utils/contentApi'
 
 const imagesLoaded = reactive({})
 const imageErrors = reactive({})
+const staticBlogPosts = import.meta.env.DEV ? normalizeBlogPosts(blogPosts) : []
+const posts = ref(staticBlogPosts)
 
 const handleImageLoad = (event, post) => {
   imagesLoaded[post.cardId] = true
@@ -68,26 +72,24 @@ const handleImageError = (event, post) => {
 }
 
 const initializeCards = () => {
-  posts.forEach(post => {
+  posts.value.forEach(post => {
     imagesLoaded[post.cardId] = false
   })
 }
 
-onMounted(() => {
+const loadBlogPosts = async () => {
+  try {
+    const apiPosts = await fetchPublicBlogPosts()
+    if (apiPosts.length) {
+      posts.value = apiPosts
+    }
+  } catch {
+    posts.value = staticBlogPosts
+  }
   initializeCards()
-})
+}
 
-const posts = blogPosts.map((p, index) => ({
-  ...p,
-  cardId: `${p.imageName || 'blog'}-${index}`,
-  image: `/Blog/${p.imageName}`,
-  dateLabel: p.date?.includes(' ')
-    ? p.date.slice(0, p.date.lastIndexOf(' '))
-    : p.date,
-  author: p.date?.includes(' ')
-    ? p.date.slice(p.date.lastIndexOf(' ') + 1)
-    : 'SunJiaHao'
-}))
+onMounted(loadBlogPosts)
 </script>
 
 <style scoped>
