@@ -164,10 +164,22 @@
 </template>
 
 <script>
-import { apiCall } from '../../utils/api'
 import { docsList } from '../../data/docsList'
 import { useNotificationStore } from '../../stores/notification'
 import { highlightCodeAsync, warmupCodeHighlighter } from '../../utils/asyncCodeHighlighter'
+import {
+  DISCUSSION_DOCUMENT_ACCEPT,
+  DISCUSSION_DOCUMENT_SOURCE_LOCAL,
+  DISCUSSION_DOCUMENT_SOURCE_OFFICIAL,
+  canRenderRoomDocumentAsMarkdown,
+  createOfficialDocumentFile,
+  deleteRoomDocument,
+  fetchRoomDocuments,
+  mergeRoomDocument,
+  normalizeRoomDocument,
+  selectCurrentRoomDocument,
+  uploadRoomDocument
+} from '../../utils/discussionDocuments'
 import { escapeHtml, renderInlineMarkdown, renderMarkdownToHtml, resolveDocAssetUrl } from '../../utils/markdownRenderer.mjs'
 
 const DOC_DELETE_CONFIRM_WINDOW_MS = 5000
@@ -190,7 +202,7 @@ export default {
   },
   data() {
     return {
-      documentAccept: '.pdf,.md,.txt,.doc,.docx',
+      documentAccept: DISCUSSION_DOCUMENT_ACCEPT,
       roomDocumentsByRoom: {},
       selectedDocumentIdByRoom: {},
       docsPanelLockedByRoom: {},
@@ -205,7 +217,7 @@ export default {
       deletingDocumentId: null,
       pendingDeleteDocumentId: null,
       deleteConfirmTimer: null,
-      pendingDocumentSource: 'local',
+      pendingDocumentSource: DISCUSSION_DOCUMENT_SOURCE_LOCAL,
       showOfficialDocsPicker: false,
       officialDocs: docsList,
       notificationStore: useNotificationStore()
@@ -350,10 +362,7 @@ export default {
       }
 
       const url = String(document.url || '').trim()
-      const mimeType = String(document.mimeType || '').toLowerCase()
-      const canRenderMarkdown = /\.md($|\?)/i.test(url) || mimeType.includes('markdown') || mimeType.startsWith('text/')
-
-      if (!url || !canRenderMarkdown) {
+      if (!canRenderRoomDocumentAsMarkdown(document)) {
         this.renderedMarkdown = ''
         this.docsPreviewError = ''
         this.docsPreviewLoading = false
@@ -377,27 +386,7 @@ export default {
         this.docsPreviewLoading = false
       }
     },
-    normalizeRoomDocument(document = {}) {
-      const name = String(document.name || document.file_name || '').trim()
-      if (!name) return null
-
-      const fallbackId = `${name}-${document.uploaded_at || document.created_at || Date.now()}`
-      const id = String(document.id || document.document_id || fallbackId).trim()
-      const pageCount = Number.parseInt(document.page_count, 10)
-
-      return {
-        id,
-        name,
-        url: String(document.url || document.file_url || '').trim(),
-        size: Number(document.size || document.file_size || 0),
-        mimeType: String(document.mime_type || '').trim(),
-        pageCount: Number.isInteger(pageCount) && pageCount > 0 ? pageCount : null,
-        status: String(document.status || 'uploaded').trim() || 'uploaded',
-        source: String(document.source || 'upload').trim() || 'upload',
-        previewText: String(document.preview_text || '').trim(),
-        uploadedAt: document.uploaded_at || document.created_at || null
-      }
-    },
+    normalizeRoomDocument,
     setCurrentRoomDocuments(roomId, documents = []) {
       const roomKey = String(Number(roomId) || '')
       if (!roomKey) return
@@ -453,10 +442,8 @@ export default {
 
       this.docsLoading = true
       try {
-        const data = await apiCall(`/discussion/rooms/${roomId}/documents`)
-        const documents = Array.isArray(data?.documents)
-          ? data.documents.map((doc) => this.normalizeRoomDocument(doc)).filter(Boolean)
-          : []
+        const data = await fetchRoomDocuments(roomId)
+        const documents = data.documents
         this.setCurrentRoomDocuments(roomId, documents)
         if (data?.selectedDocumentId) {
           this.setCurrentRoomSelectedDocument(roomId, data.selectedDocumentId)
@@ -484,10 +471,7 @@ export default {
       this.setCurrentRoomSelectedDocument(this.currentChat.id, documentId)
       this.docsError = ''
       try {
-        await apiCall(`/discussion/rooms/${roomId}/documents/current`, {
-          method: 'PATCH',
-          body: JSON.stringify({ documentId })
-        })
+        await selectCurrentRoomDocument(roomId, documentId)
       } catch (error) {
         this.setCurrentRoomSelectedDocument(roomId, previousId)
         this.docsError = error.message || '切换文档失败'
@@ -496,12 +480,14 @@ export default {
     openDocumentUploader(options = {}) {
       if (!this.currentChat || this.uploadingDocument) return
       const lockToLibrary = options?.lockToLibrary !== false
-      const source = options?.source === 'official' ? 'official' : 'local'
+      const source = options?.source === DISCUSSION_DOCUMENT_SOURCE_OFFICIAL
+        ? DISCUSSION_DOCUMENT_SOURCE_OFFICIAL
+        : DISCUSSION_DOCUMENT_SOURCE_LOCAL
       if (lockToLibrary) {
         this.setDocsPanelLocked(this.currentChat.id, true)
       }
-      if (source === 'official') {
-        this.pendingDocumentSource = 'official'
+      if (source === DISCUSSION_DOCUMENT_SOURCE_OFFICIAL) {
+        this.pendingDocumentSource = DISCUSSION_DOCUMENT_SOURCE_OFFICIAL
         this.docsError = ''
         this.showOfficialDocsPicker = true
         return
@@ -518,7 +504,7 @@ export default {
     async onDocumentFileChange(event) {
       const file = event?.target?.files?.[0]
       if (!file) {
-        this.pendingDocumentSource = 'local'
+        this.pendingDocumentSource = DISCUSSION_DOCUMENT_SOURCE_LOCAL
         return
       }
       if (!this.currentChat) {
@@ -530,16 +516,17 @@ export default {
       this.uploadingDocument = true
       this.docsError = ''
       try {
-        const data = await this.uploadRoomDocument(file, this.pendingDocumentSource)
+        const data = await uploadRoomDocument({
+          roomId: this.currentChat.id,
+          file,
+          source: this.pendingDocumentSource
+        })
         const normalized = this.normalizeRoomDocument(data?.document || null)
         if (!normalized) {
           throw new Error('文档上传成功，但返回数据无效')
         }
 
-        const nextDocuments = [
-          normalized,
-          ...this.currentRoomDocuments.filter((doc) => String(doc.id) !== String(normalized.id))
-        ]
+        const nextDocuments = mergeRoomDocument(this.currentRoomDocuments, normalized)
         this.setCurrentRoomDocuments(this.currentChat.id, nextDocuments)
         this.setCurrentRoomSelectedDocument(this.currentChat.id, data?.selectedDocumentId || normalized.id)
         this.setDocsPanelLocked(this.currentChat.id, true)
@@ -547,13 +534,13 @@ export default {
         this.docsError = error.message || '文档上传失败'
       } finally {
         this.uploadingDocument = false
-        this.pendingDocumentSource = 'local'
+        this.pendingDocumentSource = DISCUSSION_DOCUMENT_SOURCE_LOCAL
         if (event?.target) event.target.value = ''
       }
     },
     closeOfficialDocsPicker() {
       this.showOfficialDocsPicker = false
-      this.pendingDocumentSource = 'local'
+      this.pendingDocumentSource = DISCUSSION_DOCUMENT_SOURCE_LOCAL
     },
     async selectOfficialDocument(doc) {
       if (!doc?.file || !this.currentChat || this.uploadingDocument) return
@@ -561,24 +548,18 @@ export default {
       this.uploadingDocument = true
       this.docsError = ''
       try {
-        const response = await fetch(doc.file)
-        if (!response.ok) {
-          throw new Error('官方文档读取失败')
-        }
-
-        const markdown = await response.text()
-        const fileName = String(doc.file.split('/').pop() || `${doc.id || 'official-doc'}.md`).trim() || 'official-doc.md'
-        const file = new File([markdown], fileName, { type: 'text/markdown' })
-        const data = await this.uploadRoomDocument(file, 'official')
+        const file = await createOfficialDocumentFile(doc)
+        const data = await uploadRoomDocument({
+          roomId: this.currentChat.id,
+          file,
+          source: DISCUSSION_DOCUMENT_SOURCE_OFFICIAL
+        })
         const normalized = this.normalizeRoomDocument(data?.document || null)
         if (!normalized) {
           throw new Error('文档上传成功，但返回数据无效')
         }
 
-        const nextDocuments = [
-          normalized,
-          ...this.currentRoomDocuments.filter((item) => String(item.id) !== String(normalized.id))
-        ]
+        const nextDocuments = mergeRoomDocument(this.currentRoomDocuments, normalized)
         this.setCurrentRoomDocuments(this.currentChat.id, nextDocuments)
         this.setCurrentRoomSelectedDocument(this.currentChat.id, data?.selectedDocumentId || normalized.id)
         this.setDocsPanelLocked(this.currentChat.id, true)
@@ -587,22 +568,8 @@ export default {
         this.docsError = error.message || '官方文档上传失败'
       } finally {
         this.uploadingDocument = false
-        this.pendingDocumentSource = 'local'
+        this.pendingDocumentSource = DISCUSSION_DOCUMENT_SOURCE_LOCAL
       }
-    },
-    async uploadRoomDocument(file, source = 'local') {
-      const roomId = Number(this.currentChat?.id || 0)
-      if (!roomId) {
-        throw new Error('当前没有可用房间')
-      }
-
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('source', source === 'official' ? 'official' : 'upload')
-      return apiCall(`/discussion/rooms/${roomId}/documents`, {
-        method: 'POST',
-        body: formData
-      })
     },
     async openDocumentFromPreviewRequest(request) {
       const roomId = Number(request?.roomId || 0)
@@ -645,9 +612,7 @@ export default {
       this.deletingDocumentId = doc.id
       this.docsError = ''
       try {
-        const data = await apiCall(`/discussion/rooms/${roomId}/documents/${doc.id}`, {
-          method: 'DELETE'
-        })
+        const data = await deleteRoomDocument(roomId, doc.id)
         const roomKey = String(roomId)
         const nextDocuments = this.currentRoomDocuments.filter((item) => String(item.id) !== String(doc.id))
         this.roomDocumentsByRoom = {
@@ -682,10 +647,7 @@ export default {
         const normalized = this.normalizeRoomDocument(detail.document)
         if (normalized) {
           const existing = Array.isArray(this.roomDocumentsByRoom[roomKey]) ? this.roomDocumentsByRoom[roomKey] : []
-          const nextDocuments = [
-            normalized,
-            ...existing.filter((item) => String(item.id) !== String(normalized.id))
-          ]
+          const nextDocuments = mergeRoomDocument(existing, normalized)
           this.setCurrentRoomDocuments(roomId, nextDocuments)
           this.setDocsPanelLocked(roomId, true)
         }
