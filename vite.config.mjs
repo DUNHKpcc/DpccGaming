@@ -3,6 +3,8 @@ import vue from '@vitejs/plugin-vue'
 import ElementPlus from 'unplugin-element-plus/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import fs from 'fs'
+import path from 'path'
 
 const createManualChunk = (id) => {
   const normalizedId = id.replaceAll('\\', '/')
@@ -41,6 +43,16 @@ const createManualChunk = (id) => {
   return 'vendor'
 }
 
+const removeLegacyContentPublicDirs = () => ({
+  name: 'remove-legacy-content-public-dirs',
+  closeBundle() {
+    const legacyDirs = ['Blog', 'doc-files', 'doc-covers', 'docsPhoto']
+    legacyDirs.forEach((dirName) => {
+      fs.rmSync(path.resolve('dist', dirName), { recursive: true, force: true })
+    })
+  }
+})
+
 export default defineConfig({
   plugins: [
     vue({
@@ -57,7 +69,8 @@ export default defineConfig({
         })
       ]
     }),
-    ElementPlus()
+    ElementPlus(),
+    removeLegacyContentPublicDirs()
   ],
   server: {
     port: 8080,
