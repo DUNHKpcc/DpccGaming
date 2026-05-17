@@ -16,17 +16,6 @@ const appConfig = require('./backend/config/app');
 const { initDatabase } = require('./backend/config/database');
 const { errorHandler } = require('./backend/middleware/auth');
 
-const authRoutes = require('./backend/routes/auth');
-const gameRoutes = require('./backend/routes/games');
-const adminRoutes = require('./backend/routes/admin');
-const commentRoutes = require('./backend/routes/comments');
-const notificationRoutes = require('./backend/routes/notifications');
-const aiRoutes = require('./backend/routes/ai');
-const debugRoutes = require('./backend/routes/debug');
-const cookieRoutes = require('./backend/routes/cookies');
-const discussionRoutes = require('./backend/routes/discussion');
-const blueprintRoutes = require('./backend/routes/blueprints');
-const paymentRoutes = require('./backend/routes/payments');
 const { initDiscussionRealtime } = require('./backend/utils/discussionRealtime');
 
 const app = express();
@@ -111,6 +100,19 @@ console.log('Upload root:', process.env.UPLOADS_PATH);
 console.log('Games root:', process.env.GAMES_ROOT_PATH);
 console.log('Code root:', process.env.CODE_ROOT_PATH);
 
+const authRoutes = require('./backend/routes/auth');
+const gameRoutes = require('./backend/routes/games');
+const adminRoutes = require('./backend/routes/admin');
+const commentRoutes = require('./backend/routes/comments');
+const notificationRoutes = require('./backend/routes/notifications');
+const aiRoutes = require('./backend/routes/ai');
+const debugRoutes = require('./backend/routes/debug');
+const cookieRoutes = require('./backend/routes/cookies');
+const discussionRoutes = require('./backend/routes/discussion');
+const blueprintRoutes = require('./backend/routes/blueprints');
+const paymentRoutes = require('./backend/routes/payments');
+const contentRoutes = require('./backend/routes/content');
+
 app.use(cors({
   origin: appConfig.cors.origins,
   credentials: true
@@ -146,6 +148,7 @@ app.use('/api/cookies', cookieRoutes);
 app.use('/api/discussion', discussionRoutes);
 app.use('/api/blueprints', blueprintRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/content', contentRoutes);
 
 app.use(errorHandler);
 
@@ -188,6 +191,7 @@ async function startServer() {
       console.log('   - /api/discussion/* (讨论模式/好友/匹配)');
       console.log('   - /api/blueprints/* (蓝图种子/副本持久化)');
       console.log('   - /api/payments/* (支付订单与支付宝回调)');
+      console.log('   - /api/content/* (Blog/AiDocs公开内容)');
       console.log('   - /uploads/* (静态文件)');
       console.log('   - /games/* (游戏文件)');
       console.log('='.repeat(50));
