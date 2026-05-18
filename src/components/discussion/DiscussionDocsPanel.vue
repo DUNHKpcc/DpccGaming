@@ -167,6 +167,8 @@
 import { docsList } from '../../data/docsList'
 import { useNotificationStore } from '../../stores/notification'
 import { highlightCodeAsync, warmupCodeHighlighter } from '../../utils/asyncCodeHighlighter'
+import { fetchPublicDocs } from '../../utils/contentApi'
+import { normalizeDocs } from '../../utils/contentCatalog'
 import {
   DISCUSSION_DOCUMENT_ACCEPT,
   DISCUSSION_DOCUMENT_SOURCE_LOCAL,
@@ -177,6 +179,7 @@ import {
   fetchRoomDocuments,
   mergeRoomDocument,
   normalizeRoomDocument,
+  resolveDiscussionDocAssetUrl,
   selectCurrentRoomDocument,
   uploadRoomDocument
 } from '../../utils/discussionDocuments'
@@ -219,7 +222,7 @@ export default {
       deleteConfirmTimer: null,
       pendingDocumentSource: DISCUSSION_DOCUMENT_SOURCE_LOCAL,
       showOfficialDocsPicker: false,
-      officialDocs: docsList,
+      officialDocs: normalizeDocs(docsList),
       notificationStore: useNotificationStore()
     }
   },
@@ -292,6 +295,7 @@ export default {
   },
   mounted() {
     warmupCodeHighlighter()
+    this.loadOfficialDocs()
     window.addEventListener('discussion-documents-sync', this.handleDocumentsSyncEvent)
     if (this.isActive && this.currentRoomKey) {
       this.ensureCurrentRoomDocuments({ force: true })
@@ -347,11 +351,22 @@ export default {
     async markdownToHtml(markdown = '', baseUrl = '') {
       return renderMarkdownToHtml(markdown, {
         baseUrl,
+        resolveAssetUrl: resolveDiscussionDocAssetUrl,
         renderCodeBlock: async ({ code, language }) => {
           const highlighted = await highlightCodeAsync(code, { language })
           return highlighted
         }
       })
+    },
+    async loadOfficialDocs() {
+      try {
+        const docs = normalizeDocs(await fetchPublicDocs())
+        if (docs.length) {
+          this.officialDocs = docs
+        }
+      } catch {
+        // Keep the bundled fallback docs when the content API is unavailable.
+      }
     },
     async loadCurrentDocumentContent(document) {
       if (!document) {

@@ -1,8 +1,10 @@
 import { apiCall } from './api'
+import { resolveDocAssetUrl } from './markdownRenderer.mjs'
 
 export const DISCUSSION_DOCUMENT_ACCEPT = '.pdf,.md,.txt,.doc,.docx'
 export const DISCUSSION_DOCUMENT_SOURCE_LOCAL = 'local'
 export const DISCUSSION_DOCUMENT_SOURCE_OFFICIAL = 'official'
+const LEGACY_DOC_ASSET_PREFIXES = ['/docsPhoto/', '/doc-covers/', '/Blog/']
 
 export const toDiscussionDocumentApiSource = (source = '') => (
   source === DISCUSSION_DOCUMENT_SOURCE_OFFICIAL ? 'official' : 'upload'
@@ -53,6 +55,14 @@ export const canRenderRoomDocumentAsMarkdown = (document = null) => {
     || mimeType.includes('markdown')
     || mimeType.startsWith('text/')
   )
+}
+
+export const resolveDiscussionDocAssetUrl = (url = '', baseUrl = '') => {
+  const value = String(url || '').trim()
+  if (LEGACY_DOC_ASSET_PREFIXES.some(prefix => value.startsWith(prefix))) {
+    return `/uploads/content/docs/assets${value}`
+  }
+  return resolveDocAssetUrl(value, baseUrl)
 }
 
 export const fetchRoomDocuments = async (roomId) => {

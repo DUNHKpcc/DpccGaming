@@ -566,6 +566,8 @@ import { useAccountFriends } from '../composables/useAccountFriends'
 import { useAccountProfile } from '../composables/useAccountProfile'
 import { categoryToZh } from '../utils/category'
 import { apiCall } from '../utils/api'
+import { fetchPublicDocs } from '../utils/contentApi'
+import { normalizeDocs } from '../utils/contentCatalog'
 import { getAvatarUrl, handleAvatarError } from '../utils/avatar'
 import { getGameCodeTypeIcon, getGameEngineIcon } from '../utils/gameMetadata.js'
 
@@ -580,14 +582,27 @@ const currentUser = computed(() => authStore.currentUser)
 const isLoggedIn = computed(() => authStore.isLoggedIn)
 const docStars = ref([])
 const docStarsLoading = ref(false)
-const docsById = new Map(docsList.map(doc => [doc.id, doc]))
+const accountDocs = ref(import.meta.env.DEV ? normalizeDocs(docsList) : [])
+const docsCatalogLoaded = ref(false)
+const docsById = computed(() => new Map(accountDocs.value.map(doc => [String(doc.id), doc])))
 
 const starredDocs = computed(() => docStars.value
   .map((star) => {
-    const doc = docsById.get(star.docId)
+    const doc = docsById.value.get(String(star.docId))
     return doc ? { ...doc, starredAt: star.starredAt } : null
   })
   .filter(Boolean))
+
+const loadAccountDocsCatalog = async () => {
+  if (docsCatalogLoaded.value) return
+
+  const apiDocs = await fetchPublicDocs()
+  const normalizedDocs = normalizeDocs(apiDocs)
+  if (normalizedDocs.length) {
+    accountDocs.value = normalizedDocs
+  }
+  docsCatalogLoaded.value = true
+}
 
 const openLoginModal = () => {
   modalStore.openModal('login')
@@ -606,7 +621,10 @@ const loadAccountDocStars = async () => {
   docStarsLoading.value = true
 
   try {
-    const data = await apiCall('/user/doc-stars')
+    const [data] = await Promise.all([
+      apiCall('/user/doc-stars'),
+      loadAccountDocsCatalog()
+    ])
     docStars.value = Array.isArray(data.stars) ? data.stars : []
   } catch (error) {
     docStars.value = []

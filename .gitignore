@@ -20,3 +20,4 @@ docs/
 backend/tests
 tests/
 .obsidian/
+outputs/

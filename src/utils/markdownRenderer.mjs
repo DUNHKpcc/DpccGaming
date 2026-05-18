@@ -21,19 +21,26 @@ export const resolveDocAssetUrl = (url = '', baseUrl = '') => {
   }
 }
 
+const resolveMarkdownAssetUrl = (url = '', baseUrl = '', options = {}) => {
+  if (typeof options.resolveAssetUrl === 'function') {
+    return options.resolveAssetUrl(url, baseUrl)
+  }
+  return resolveDocAssetUrl(url, baseUrl)
+}
+
 export const renderInlineMarkdown = (text = '', options = {}) => {
   const baseUrl = String(options.baseUrl || '')
   const escaped = escapeHtml(text)
 
   return escaped
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => (
-      `<img src="${resolveDocAssetUrl(src, baseUrl)}" alt="${alt}" loading="lazy" />`
+      `<img src="${resolveMarkdownAssetUrl(src, baseUrl, options)}" alt="${alt}" loading="lazy" />`
     ))
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => (
-      `<a href="${resolveDocAssetUrl(href, baseUrl)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+      `<a href="${resolveMarkdownAssetUrl(href, baseUrl, options)}" target="_blank" rel="noopener noreferrer">${label}</a>`
     ))
 }
 
@@ -97,7 +104,7 @@ export const renderMarkdownToHtml = async (markdown = '', options = {}) => {
 
   const flushParagraph = () => {
     if (!paragraph.length) return
-    html += `<p>${renderInlineMarkdown(paragraph.join(' '), { baseUrl })}</p>`
+    html += `<p>${renderInlineMarkdown(paragraph.join(' '), options)}</p>`
     paragraph = []
   }
 
@@ -175,7 +182,7 @@ export const renderMarkdownToHtml = async (markdown = '', options = {}) => {
       closeLists()
       const level = headingMatch[1].length
       const headingText = headingMatch[2].trim()
-      html += `<h${level} id="${escapeHtml(getHeadingId(headingText))}">${renderInlineMarkdown(headingText, { baseUrl })}</h${level}>`
+      html += `<h${level} id="${escapeHtml(getHeadingId(headingText))}">${renderInlineMarkdown(headingText, options)}</h${level}>`
       continue
     }
 
@@ -190,7 +197,7 @@ export const renderMarkdownToHtml = async (markdown = '', options = {}) => {
         html += '<ul>'
         inUnorderedList = true
       }
-      html += `<li>${renderInlineMarkdown(unorderedMatch[1], { baseUrl })}</li>`
+      html += `<li>${renderInlineMarkdown(unorderedMatch[1], options)}</li>`
       continue
     }
 
@@ -205,7 +212,7 @@ export const renderMarkdownToHtml = async (markdown = '', options = {}) => {
         html += '<ol>'
         inOrderedList = true
       }
-      html += `<li>${renderInlineMarkdown(orderedMatch[1], { baseUrl })}</li>`
+      html += `<li>${renderInlineMarkdown(orderedMatch[1], options)}</li>`
       continue
     }
 
@@ -213,7 +220,7 @@ export const renderMarkdownToHtml = async (markdown = '', options = {}) => {
     if (blockquoteMatch) {
       flushParagraph()
       closeLists()
-      html += `<blockquote>${renderInlineMarkdown(blockquoteMatch[1], { baseUrl })}</blockquote>`
+      html += `<blockquote>${renderInlineMarkdown(blockquoteMatch[1], options)}</blockquote>`
       continue
     }
 

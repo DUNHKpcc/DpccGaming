@@ -126,7 +126,16 @@
       </el-tabs>
     </el-card>
 
-    <el-dialog v-model="blogDialogVisible" :title="blogForm.id ? '编辑 Blog' : '新增 Blog'" width="620px">
+    <el-dialog
+      v-model="blogDialogVisible"
+      append-to-body
+      destroy-on-close
+      :lock-scroll="false"
+      :transition="contentDialogTransition"
+      :title="blogForm.id ? '编辑 Blog' : '新增 Blog'"
+      width="620px"
+      @closed="handleBlogDialogClosed"
+    >
       <el-form label-position="top" @submit.prevent>
         <el-form-item label="标题">
           <el-input v-model="blogForm.title" maxlength="180" />
@@ -167,12 +176,21 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="blogDialogVisible = false">取消</el-button>
+        <el-button @click="closeBlogDialog">取消</el-button>
         <el-button type="primary" :loading="isSavingBlog" @click="saveBlog">保存</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="docDialogVisible" :title="docForm.numericId ? '编辑文档' : '新增文档'" width="680px">
+    <el-dialog
+      v-model="docDialogVisible"
+      append-to-body
+      destroy-on-close
+      :lock-scroll="false"
+      :transition="contentDialogTransition"
+      :title="docForm.numericId ? '编辑文档' : '新增文档'"
+      width="680px"
+      @closed="handleDocDialogClosed"
+    >
       <el-form label-position="top" @submit.prevent>
         <el-row :gutter="12">
           <el-col :span="12">
@@ -229,7 +247,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="docDialogVisible = false">取消</el-button>
+        <el-button @click="closeDocDialog">取消</el-button>
         <el-button type="primary" :loading="isSavingDoc" @click="saveDoc">保存</el-button>
       </template>
     </el-dialog>
@@ -259,6 +277,10 @@ const docMarkdownFile = ref(null)
 const blogImageInputRef = ref(null)
 const docCoverInputRef = ref(null)
 const docFileInputRef = ref(null)
+const contentDialogTransition = {
+  name: 'content-dialog-static',
+  css: false
+}
 
 const defaultBlogForm = () => ({
   id: null,
@@ -379,6 +401,16 @@ const openBlogDialog = (post = null) => {
   })
 }
 
+const closeBlogDialog = () => {
+  blogDialogVisible.value = false
+}
+
+const handleBlogDialogClosed = () => {
+  if (blogDialogVisible.value) return
+  blogImageFile.value = null
+  blogForm.value = defaultBlogForm()
+}
+
 const openDocDialog = (doc = null) => {
   docCoverFile.value = null
   docMarkdownFile.value = null
@@ -397,6 +429,17 @@ const openDocDialog = (doc = null) => {
   })
 }
 
+const closeDocDialog = () => {
+  docDialogVisible.value = false
+}
+
+const handleDocDialogClosed = () => {
+  if (docDialogVisible.value) return
+  docCoverFile.value = null
+  docMarkdownFile.value = null
+  docForm.value = defaultDocForm()
+}
+
 const saveBlog = async () => {
   if (!blogForm.value.title.trim()) {
     notificationStore.warning('缺少标题', '请填写 Blog 标题')
@@ -413,7 +456,7 @@ const saveBlog = async () => {
     })
     await readJsonResponse(response)
     notificationStore.success('保存成功', 'Blog 已更新')
-    blogDialogVisible.value = false
+    closeBlogDialog()
     await fetchBlogPosts()
   } catch (error) {
     notificationStore.error('保存失败', error.message || 'Blog 保存失败')
@@ -438,7 +481,7 @@ const saveDoc = async () => {
     })
     await readJsonResponse(response)
     notificationStore.success('保存成功', '文档已更新')
-    docDialogVisible.value = false
+    closeDocDialog()
     await fetchDocs()
   } catch (error) {
     notificationStore.error('保存失败', error.message || '文档保存失败')

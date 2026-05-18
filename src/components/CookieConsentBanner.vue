@@ -2,10 +2,10 @@
   <transition name="cookie-slide">
     <section
       v-if="cookieStore.bannerVisible"
-      class="fixed inset-0 z-[99999] flex items-center justify-center px-4"
+      class="fixed inset-0 z-[99999] flex items-center justify-center px-4 pointer-events-none"
       aria-live="polite"
     >
-      <div class="max-w-4xl w-full rounded-2xl shadow-2xl p-6 cookie-surface">
+      <div class="max-w-4xl w-full rounded-2xl shadow-2xl p-6 cookie-surface pointer-events-auto">
         <div class="flex items-start gap-4">
           <div class="flex-1 space-y-2">
             <p class="text-sm uppercase tracking-wide font-semibold cookie-text-muted">Cookie 提示</p>
