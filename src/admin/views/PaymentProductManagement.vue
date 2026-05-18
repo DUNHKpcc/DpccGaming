@@ -34,66 +34,81 @@
         <el-button :loading="isLoading" @click="fetchProducts">查询</el-button>
       </div>
 
-      <el-table
-        :data="products"
-        class="product-table"
-        height="100%"
-        row-key="id"
-        empty-text="暂无支付档位"
-      >
-        <el-table-column label="档位" min-width="230">
-          <template #default="{ row }">
-            <strong>{{ row.name }}</strong>
-            <small>{{ row.skuId }} · {{ productTypeText(row.productType) }}</small>
-          </template>
-        </el-table-column>
-        <el-table-column label="金额" width="120">
-          <template #default="{ row }">
-            <strong>¥{{ row.basePrice }}</strong>
-            <small v-if="row.activePromotion">促销 ¥{{ row.activePromotion.promotionPrice || row.basePrice }}</small>
-          </template>
-        </el-table-column>
-        <el-table-column label="额度" min-width="190">
-          <template #default="{ row }">
-            <span v-if="row.productType === 'subscription'">每日 ${{ row.dailyQuotaUsd }}</span>
-            <span v-else>到账 ${{ row.baseQuotaUsd }}</span>
-            <small>赠送 ${{ row.bonusQuotaUsd || '0.00' }}</small>
-          </template>
-        </el-table-column>
-        <el-table-column label="促销" min-width="220">
-          <template #default="{ row }">
-            <div v-if="row.activePromotion" class="promotion-cell">
-              <el-tag type="warning" effect="light">{{ row.activePromotion.badgeText || row.activePromotion.title }}</el-tag>
-              <small>{{ promotionPeriod(row.activePromotion) }}</small>
+      <div class="product-section-list">
+        <section
+          v-for="section in visibleProductSections"
+          :key="section.type"
+          class="product-section"
+        >
+          <header class="product-section-header">
+            <div>
+              <strong>{{ section.title }}</strong>
+              <small>{{ section.description }}</small>
             </div>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="库存" width="150">
-          <template #default="{ row }">
-            <span v-if="row.productType === 'recharge'">主码 {{ row.availableRedeemCodes }}</span>
-            <span v-else>赠送码 {{ row.bonusRedeemCodesAvailable }}</span>
-            <small v-if="row.productType === 'recharge'">赠送码 {{ row.bonusRedeemCodesAvailable }}</small>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'active' ? 'success' : 'info'" effect="light">
-              {{ row.status === 'active' ? '上架' : '下架' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="320" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openProductDrawer(row)">编辑</el-button>
-            <el-button size="small" @click="copyProduct(row)">复制</el-button>
-            <el-button size="small" type="primary" @click="openPromotionDialog(row)">
-              {{ row.activePromotion ? '编辑促销' : '新增促销' }}
-            </el-button>
-            <el-button v-if="row.activePromotion" size="small" @click="openPromotionDialog(row, true)">新增促销</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+            <span>{{ section.items.length }} 个档位</span>
+          </header>
+
+          <el-table
+            :data="section.items"
+            class="product-table"
+            row-key="id"
+            :empty-text="`暂无${section.title}`"
+          >
+            <el-table-column label="档位" min-width="230">
+              <template #default="{ row }">
+                <strong>{{ row.name }}</strong>
+                <small>{{ row.skuId }}</small>
+              </template>
+            </el-table-column>
+            <el-table-column label="金额" width="120">
+              <template #default="{ row }">
+                <strong>¥{{ row.basePrice }}</strong>
+                <small v-if="row.activePromotion">促销 ¥{{ row.activePromotion.promotionPrice || row.basePrice }}</small>
+              </template>
+            </el-table-column>
+            <el-table-column label="额度" min-width="190">
+              <template #default="{ row }">
+                <span v-if="row.productType === 'subscription'">每日 ${{ row.dailyQuotaUsd }}</span>
+                <span v-else>到账 ${{ row.baseQuotaUsd }}</span>
+                <small>赠送 ${{ row.bonusQuotaUsd || '0.00' }}</small>
+              </template>
+            </el-table-column>
+            <el-table-column label="促销" min-width="220">
+              <template #default="{ row }">
+                <div v-if="row.activePromotion" class="promotion-cell">
+                  <el-tag type="warning" effect="light">{{ row.activePromotion.badgeText || row.activePromotion.title }}</el-tag>
+                  <small>{{ promotionPeriod(row.activePromotion) }}</small>
+                </div>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="库存" width="150">
+              <template #default="{ row }">
+                <span v-if="row.productType === 'recharge'">主码 {{ row.availableRedeemCodes }}</span>
+                <span v-else>赠送码 {{ row.bonusRedeemCodesAvailable }}</span>
+                <small v-if="row.productType === 'recharge'">赠送码 {{ row.bonusRedeemCodesAvailable }}</small>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'active' ? 'success' : 'info'" effect="light">
+                  {{ row.status === 'active' ? '上架' : '下架' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="320" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" @click="openProductDrawer(row)">编辑</el-button>
+                <el-button size="small" @click="copyProduct(row)">复制</el-button>
+                <el-button size="small" type="primary" @click="openPromotionDialog(row)">
+                  {{ row.activePromotion ? '编辑促销' : '新增促销' }}
+                </el-button>
+                <el-button v-if="row.activePromotion" size="small" @click="openPromotionDialog(row, true)">新增促销</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </section>
+      </div>
     </el-card>
 
     <Teleport to="body">
@@ -282,7 +297,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElCol, ElDatePicker, ElDialog, ElInputNumber, ElMessage, ElRadioButton, ElRadioGroup, ElRow, ElSwitch } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { apiCall } from '../../utils/api'
@@ -339,6 +354,27 @@ const filters = reactive({
   status: ''
 })
 
+const productSections = computed(() => ([
+  {
+    type: 'subscription',
+    title: '月卡档位',
+    description: '订阅月卡，按每日额度和赠送码库存管理',
+    items: products.value.filter((product) => product.productType === 'subscription')
+  },
+  {
+    type: 'recharge',
+    title: '额度档位',
+    description: '一次性充值额度，按主兑换码和赠送码库存管理',
+    items: products.value.filter((product) => product.productType === 'recharge')
+  }
+]))
+
+const visibleProductSections = computed(() => (
+  filters.productType
+    ? productSections.value.filter((section) => section.type === filters.productType)
+    : productSections.value
+))
+
 const resetReactive = (target, source) => {
   Object.keys(target).forEach((key) => delete target[key])
   Object.assign(target, source)
@@ -347,8 +383,6 @@ const resetReactive = (target, source) => {
 const toNumericPayload = (value, fallback = 0) => (
   value === '' || value === null || value === undefined ? String(fallback) : String(value)
 )
-
-const productTypeText = (value) => (value === 'recharge' ? '充值额度' : '订阅月卡')
 
 const promotionPeriod = (promotion = {}) => {
   if (!promotion.startsAt && !promotion.endsAt) return '长期有效'
@@ -521,7 +555,7 @@ onMounted(fetchProducts)
 <style scoped>
 .admin-panel-card {
   height: calc(100vh - 116px);
-  border: 1px solid #dddddd;
+  border: 1px solid var(--admin-border);
   border-radius: 0.5rem;
 }
 
@@ -545,8 +579,53 @@ onMounted(fetchProducts)
   width: 150px;
 }
 
-.product-table {
+.product-section-list {
   flex: 1;
+  display: grid;
+  gap: 1rem;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.product-section {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.product-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--admin-border);
+}
+
+.product-section:first-child .product-section-header {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.product-section-header strong,
+.product-section-header small {
+  display: block;
+}
+
+.product-section-header small {
+  margin-top: 0.2rem;
+  color: var(--admin-muted);
+}
+
+.product-section-header span {
+  flex: 0 0 auto;
+  color: var(--admin-muted);
+  font-size: 0.82rem;
+}
+
+.product-table {
+  width: 100%;
 }
 
 .product-table strong,
@@ -557,7 +636,7 @@ onMounted(fetchProducts)
 .product-table small,
 .promotion-cell small {
   margin-top: 0.25rem;
-  color: #666666;
+  color: var(--admin-muted);
 }
 
 .promotion-cell {
@@ -606,7 +685,7 @@ onMounted(fetchProducts)
   max-height: calc(100vh - 64px);
   overflow: hidden;
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: var(--admin-surface);
   box-shadow: 0 24px 72px rgba(0, 0, 0, 0.26);
 }
 
@@ -616,7 +695,7 @@ onMounted(fetchProducts)
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #dddddd;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .product-dialog-header h2 {
@@ -637,8 +716,8 @@ onMounted(fetchProducts)
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-top: 1px solid #dddddd;
-  background: #ffffff;
+  border-top: 1px solid var(--admin-border);
+  background: var(--admin-surface);
 }
 
 @media (max-width: 820px) {
