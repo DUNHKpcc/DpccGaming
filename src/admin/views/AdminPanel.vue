@@ -241,8 +241,8 @@ onMounted(async () => {
   width: 3rem;
   height: 3rem;
   border-radius: 0.6rem;
-  background: #f2f2f2;
-  color: #000000;
+  background: var(--admin-surface-soft);
+  color: var(--admin-text);
 }
 
 .admin-game-cell strong,
@@ -255,7 +255,7 @@ onMounted(async () => {
   max-width: 34rem;
   margin-top: 0.25rem;
   overflow: hidden;
-  color: #666666;
+  color: var(--admin-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
