@@ -104,9 +104,10 @@
       <div v-if="totalPages > 1" class="admin-pagination">
         <el-pagination
           v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
           background
-          layout="prev, pager, next"
-          :page-size="pageSize"
+          layout="total, sizes, prev, pager, next"
+          :page-sizes="adminPageSizeOptions"
           :total="totalUsers"
         />
       </div>
@@ -115,16 +116,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
+import { ADMIN_PAGE_SIZE_OPTIONS, DEFAULT_ADMIN_PAGE_SIZE, useAdminPagination } from '../utils/pagination'
 import { useNotificationStore } from '../../stores/notification'
 
 const notificationStore = useNotificationStore()
 const users = ref([])
 const searchQuery = ref('')
-const currentPage = ref(1)
-const pageSize = 10
+const adminPageSizeOptions = ADMIN_PAGE_SIZE_OPTIONS
 
 const filteredUsers = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase()
@@ -136,25 +137,19 @@ const filteredUsers = computed(() => {
   ))
 })
 
-const pagedUsers = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredUsers.value.slice(start, start + pageSize)
+const {
+  currentPage,
+  pageSize,
+  totalItems: totalUsers,
+  totalPages,
+  pagedItems: pagedUsers,
+  resetPage
+} = useAdminPagination(filteredUsers, {
+  pageSize: DEFAULT_ADMIN_PAGE_SIZE,
+  resetOn: searchQuery
 })
 
-const totalUsers = computed(() => filteredUsers.value.length)
-const totalPages = computed(() => Math.ceil(totalUsers.value / pageSize))
 const emptyDescription = computed(() => (users.value.length ? '暂无匹配用户' : '暂无用户数据'))
-
-watch(searchQuery, () => {
-  currentPage.value = 1
-})
-
-watch(totalPages, (pages) => {
-  const lastPage = Math.max(pages, 1)
-  if (currentPage.value > lastPage) {
-    currentPage.value = lastPage
-  }
-})
 
 const roleOptions = [
   { value: 'user', label: '普通用户' },
@@ -179,7 +174,7 @@ const fetchUsers = async () => {
     if (response.ok) {
       const data = await response.json()
       users.value = data.users || []
-      currentPage.value = 1
+      resetPage()
     } else {
       const error = await response.json()
       notificationStore.error('获取失败', error.error || '获取用户列表失败')
@@ -420,7 +415,7 @@ onMounted(() => {
   flex: 0 0 auto;
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .admin-search-input {
@@ -448,7 +443,7 @@ onMounted(() => {
 
 .admin-user-cell small {
   margin-top: 0.2rem;
-  color: #666666;
+  color: var(--admin-muted);
 }
 
 .el-button i {
@@ -460,7 +455,7 @@ onMounted(() => {
   flex: 0 0 auto;
   justify-content: flex-end;
   padding: 0.85rem 1rem;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--admin-border);
 }
 
 @media (max-width: 720px) {

@@ -17,19 +17,19 @@
           class="order-search-input"
           clearable
           placeholder="搜索订单号"
-          @keyup.enter="fetchOrders"
+          @keyup.enter="fetchOrdersFromFirstPage"
         />
-        <el-select v-model="selectedStatus" class="order-status-select" placeholder="全部状态" clearable @change="fetchOrders">
+        <el-select v-model="selectedStatus" class="order-status-select" placeholder="全部状态" clearable @change="fetchOrdersFromFirstPage">
           <el-option label="待支付" value="pending" />
           <el-option label="已支付" value="paid" />
           <el-option label="已关闭" value="closed" />
         </el-select>
-        <el-button :loading="isLoading" @click="fetchOrders">查询</el-button>
+        <el-button :loading="isLoading" @click="fetchOrdersFromFirstPage">查询</el-button>
       </div>
 
       <el-table
         v-if="orders.length"
-        :data="orders"
+        :data="pagedOrders"
         class="admin-order-table"
         height="100%"
         row-key="orderNo"
@@ -92,6 +92,17 @@
       <el-empty v-else description="暂无订单数据">
         <el-button @click="fetchOrders">刷新列表</el-button>
       </el-empty>
+
+      <div v-if="totalPages > 1" class="admin-order-pagination">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          background
+          layout="total, sizes, prev, pager, next"
+          :page-sizes="adminPageSizeOptions"
+          :total="totalOrders"
+        />
+      </div>
     </el-card>
 
     <el-drawer v-model="detailVisible" title="订单详情" size="520px">
@@ -182,6 +193,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElDrawer, ElMessage, ElMessageBox, ElSkeleton } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
+import { ADMIN_PAGE_SIZE_OPTIONS, DEFAULT_ADMIN_PAGE_SIZE, useAdminPagination } from '../utils/pagination'
 import { apiCall } from '../../utils/api'
 
 const route = useRoute()
@@ -193,11 +205,22 @@ const detailVisible = ref(false)
 const isDetailLoading = ref(false)
 const selectedOrder = ref({})
 const deletingOrderNo = ref('')
+const adminPageSizeOptions = ADMIN_PAGE_SIZE_OPTIONS
+
+const {
+  currentPage,
+  pageSize,
+  totalItems: totalOrders,
+  totalPages,
+  pagedItems: pagedOrders,
+  resetPage
+} = useAdminPagination(orders, { pageSize: DEFAULT_ADMIN_PAGE_SIZE })
 
 const fetchOrders = async () => {
   isLoading.value = true
   try {
     const params = new URLSearchParams()
+    params.set('limit', '100')
     if (searchOrderNo.value) params.set('orderNo', searchOrderNo.value.trim())
     if (selectedStatus.value) params.set('status', selectedStatus.value)
     const result = await apiCall(`/admin/payment-orders?${params.toString()}`, { method: 'GET' })
@@ -207,6 +230,11 @@ const fetchOrders = async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+const fetchOrdersFromFirstPage = async () => {
+  resetPage()
+  await fetchOrders()
 }
 
 const openDetail = async (orderNo) => {
@@ -386,7 +414,7 @@ onMounted(async () => {
   flex: 0 0 auto;
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid #dddddd;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .order-search-input {
@@ -402,6 +430,14 @@ onMounted(async () => {
   min-height: 0;
 }
 
+.admin-order-pagination {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--admin-border);
+}
+
 .admin-order-table strong,
 .admin-order-table small {
   display: block;
@@ -409,7 +445,7 @@ onMounted(async () => {
 
 .admin-order-table small {
   margin-top: 0.2rem;
-  color: #666666;
+  color: var(--admin-muted);
 }
 
 .order-link {
@@ -417,7 +453,7 @@ onMounted(async () => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #000;
+  color: var(--admin-text);
   font: inherit;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-decoration: underline;
@@ -430,16 +466,16 @@ onMounted(async () => {
   min-width: 3.9rem;
   justify-content: center;
   padding: 0.16rem 0.5rem;
-  border: 1px solid #000;
+  border: 1px solid var(--admin-primary);
   border-radius: 999px;
-  color: #000;
+  color: var(--admin-text);
   font-size: 0.78rem;
   font-weight: 700;
 }
 
 .status-pill.is-paid {
-  background: #000;
-  color: #fff;
+  background: var(--admin-primary);
+  color: var(--admin-primary-text);
 }
 
 .fulfillment-cell {
@@ -449,7 +485,7 @@ onMounted(async () => {
 
 .fulfillment-cell small,
 .fulfillment-detail {
-  color: #666666;
+  color: var(--admin-muted);
   font-size: 0.78rem;
   line-height: 1.35;
 }
@@ -460,34 +496,34 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 0.16rem 0.5rem;
-  border: 1px solid #000;
+  border: 1px solid var(--admin-primary);
   border-radius: 999px;
-  color: #000;
+  color: var(--admin-text);
   font-size: 0.78rem;
   font-weight: 700;
 }
 
 .fulfillment-pill.is-done {
-  background: #000;
-  color: #fff;
+  background: var(--admin-primary);
+  color: var(--admin-primary-text);
 }
 
 .fulfillment-pill.is-warning {
-  border-color: #a16207;
-  color: #854d0e;
-  background: #fef3c7;
+  border-color: var(--admin-warning-border);
+  color: var(--admin-warning-text);
+  background: var(--admin-warning-bg);
 }
 
 .fulfillment-pill.is-danger {
-  border-color: #b91c1c;
-  color: #991b1b;
-  background: #fee2e2;
+  border-color: var(--admin-danger-border);
+  color: var(--admin-danger-text);
+  background: var(--admin-danger-bg);
 }
 
 .fulfillment-pill.is-muted {
-  border-color: #cccccc;
-  color: #666666;
-  background: #f7f7f7;
+  border-color: var(--admin-border);
+  color: var(--admin-muted);
+  background: var(--admin-surface-soft);
 }
 
 .fulfillment-detail {
@@ -505,7 +541,7 @@ onMounted(async () => {
 }
 
 .redeem-code-list b {
-  color: #666666;
+  color: var(--admin-muted);
   font-size: 0.78rem;
 }
 
@@ -513,10 +549,10 @@ onMounted(async () => {
   width: fit-content;
   max-width: 100%;
   padding: 0.24rem 0.38rem;
-  border: 1px solid #dddddd;
+  border: 1px solid var(--admin-border);
   border-radius: 0.35rem;
-  background: #f7f7f7;
-  color: #111111;
+  background: var(--admin-surface-soft);
+  color: var(--admin-text);
   word-break: break-all;
 }
 
@@ -528,17 +564,17 @@ onMounted(async () => {
 
 .order-detail-list div {
   padding-bottom: 0.85rem;
-  border-bottom: 1px solid #dddddd;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .order-detail-list dt {
-  color: #666666;
+  color: var(--admin-muted);
   font-size: 0.78rem;
 }
 
 .order-detail-list dd {
   margin: 0.22rem 0 0;
-  color: #111111;
+  color: var(--admin-text);
   word-break: break-all;
 }
 
@@ -561,6 +597,11 @@ onMounted(async () => {
   .order-status-select {
     width: 100%;
     max-width: none;
+  }
+
+  .admin-order-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 }
 </style>

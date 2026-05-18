@@ -81,9 +81,10 @@
       <div v-if="totalPages > 1" class="admin-pagination">
         <el-pagination
           v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
           background
-          layout="prev, pager, next"
-          :page-size="pageSize"
+          layout="total, sizes, prev, pager, next"
+          :page-sizes="adminPageSizeOptions"
           :total="filteredTotal"
         />
       </div>
@@ -92,9 +93,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
+import { ADMIN_PAGE_SIZE_OPTIONS, DEFAULT_ADMIN_PAGE_SIZE, useAdminPagination } from '../utils/pagination'
 import { useNotificationStore } from '../../stores/notification'
 import { categoryToCode, categoryToZh } from '../../utils/category'
 
@@ -102,8 +104,7 @@ const notificationStore = useNotificationStore()
 const games = ref([])
 const searchQuery = ref('')
 const selectedCategory = ref('')
-const currentPage = ref(1)
-const pageSize = 10
+const adminPageSizeOptions = ADMIN_PAGE_SIZE_OPTIONS
 
 const filteredAllGames = computed(() => {
   let filtered = games.value
@@ -120,23 +121,15 @@ const filteredAllGames = computed(() => {
   return filtered
 })
 
-const filteredGames = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredAllGames.value.slice(start, start + pageSize)
-})
-
-const filteredTotal = computed(() => filteredAllGames.value.length)
-const totalPages = computed(() => Math.ceil(filteredTotal.value / pageSize))
-
-watch([searchQuery, selectedCategory], () => {
-  currentPage.value = 1
-})
-
-watch(totalPages, (pages) => {
-  const lastPage = Math.max(pages, 1)
-  if (currentPage.value > lastPage) {
-    currentPage.value = lastPage
-  }
+const {
+  currentPage,
+  pageSize,
+  totalItems: filteredTotal,
+  totalPages,
+  pagedItems: filteredGames
+} = useAdminPagination(filteredAllGames, {
+  pageSize: DEFAULT_ADMIN_PAGE_SIZE,
+  resetOn: [searchQuery, selectedCategory]
 })
 
 const fetchGames = async () => {
@@ -277,7 +270,7 @@ onMounted(async () => {
   flex: 0 0 auto;
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .admin-search-input {
@@ -307,9 +300,9 @@ onMounted(async () => {
   width: 3.5rem;
   height: 3.5rem;
   border-radius: 0.6rem;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border: 1px solid var(--admin-strong-border);
+  background: var(--admin-surface-soft);
+  color: var(--admin-text);
   font-size: 1.35rem;
 }
 
@@ -323,7 +316,7 @@ onMounted(async () => {
   max-width: 34rem;
   margin-top: 0.25rem;
   overflow: hidden;
-  color: #666666;
+  color: var(--admin-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -333,7 +326,7 @@ onMounted(async () => {
   flex: 0 0 auto;
   justify-content: flex-end;
   padding: 0.85rem 1rem;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--admin-border);
 }
 
 .el-button i {

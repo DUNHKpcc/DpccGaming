@@ -607,6 +607,7 @@ const getPaymentOrderDetailByNo = async (executor, orderNo = '') => {
 const listPaymentOrders = async (executor, filters = {}) => {
   const where = [];
   const params = [];
+  const limit = Math.max(1, Math.min(100, Number.parseInt(filters.limit, 10) || 100));
   if (filters.orderNo) {
     where.push('po.order_no LIKE ?');
     params.push(`%${filters.orderNo}%`);
@@ -623,9 +624,9 @@ const listPaymentOrders = async (executor, filters = {}) => {
       LEFT JOIN users u ON u.id = po.user_id
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY po.id DESC
-      LIMIT 100
+      LIMIT ?
     `,
-    params
+    [...params, limit]
   );
   return rows;
 };

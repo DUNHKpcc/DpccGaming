@@ -172,9 +172,10 @@
         <div v-if="totalPages > 1" class="redeem-pagination">
           <el-pagination
             v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
             background
-            layout="prev, pager, next"
-            :page-size="pageSize"
+            layout="total, sizes, prev, pager, next"
+            :page-sizes="adminPageSizeOptions"
             :total="codeTotal"
           />
         </div>
@@ -188,6 +189,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
+import { ADMIN_PAGE_SIZE_OPTIONS, DEFAULT_ADMIN_PAGE_SIZE, useAdminPagination } from '../utils/pagination'
 import { apiCall } from '../../utils/api'
 
 const catalogProducts = ref([])
@@ -203,8 +205,7 @@ const isDeleting = ref(false)
 const selectedCodes = ref([])
 const revealedCodes = ref({})
 const secretLoadingId = ref(null)
-const currentPage = ref(1)
-const pageSize = 10
+const adminPageSizeOptions = ADMIN_PAGE_SIZE_OPTIONS
 
 const splitProductKey = (key = '') => {
   const [productType = '', skuId = ''] = String(key || '').split(':')
@@ -226,19 +227,15 @@ const selectedAvailableIds = computed(() => selectedCodes.value
   .filter((item) => item.status === 'available')
   .map((item) => item.id))
 
-const pagedCodes = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return codes.value.slice(start, start + pageSize)
-})
-
-const codeTotal = computed(() => codes.value.length)
-const totalPages = computed(() => Math.ceil(codeTotal.value / pageSize))
-
-watch(totalPages, (pages) => {
-  const lastPage = Math.max(pages, 1)
-  if (currentPage.value > lastPage) {
-    currentPage.value = lastPage
-  }
+const {
+  currentPage,
+  pageSize,
+  totalItems: codeTotal,
+  totalPages,
+  pagedItems: pagedCodes,
+  resetPage
+} = useAdminPagination(codes, {
+  pageSize: DEFAULT_ADMIN_PAGE_SIZE
 })
 
 watch(currentPage, () => {
@@ -296,7 +293,7 @@ const fetchCodes = async () => {
   const result = await apiCall(`/admin/redeem-codes?${params.toString()}`, { method: 'GET' })
   codes.value = result.codes || []
   stats.value = result.stats || []
-  currentPage.value = 1
+  resetPage()
   selectedCodes.value = []
   revealedCodes.value = {}
 }
@@ -462,7 +459,7 @@ onMounted(async () => {
 .redeem-inventory-toolbar span,
 .redeem-stat-item span,
 .redeem-stat-item small {
-  color: #666666;
+  color: var(--admin-muted);
 }
 
 .redeem-card-header strong,
@@ -491,7 +488,7 @@ onMounted(async () => {
 .redeem-inventory-toolbar {
   flex: 0 0 auto;
   padding: 1rem;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .redeem-filters {
@@ -513,16 +510,16 @@ onMounted(async () => {
   gap: 0.75rem;
   padding: 0.85rem 1rem;
   overflow-x: auto;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .redeem-stat-item {
   flex: 0 0 10rem;
   cursor: pointer;
   padding: 0.7rem 0.8rem;
-  border: 1px solid #dddddd;
+  border: 1px solid var(--admin-border);
   border-radius: 0.45rem;
-  background: #f7f7f7;
+  background: var(--admin-surface-soft);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -530,9 +527,9 @@ onMounted(async () => {
 }
 
 .redeem-stat-item.active {
-  border-color: #000000;
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1px #000000;
+  border-color: var(--admin-primary);
+  background: var(--admin-surface);
+  box-shadow: inset 0 0 0 1px var(--admin-primary);
 }
 
 .redeem-stat-item strong {
@@ -553,17 +550,17 @@ onMounted(async () => {
   flex: 0 0 auto;
   justify-content: flex-end;
   padding: 0.85rem 1rem;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--admin-border);
 }
 
 .redeem-code-text {
-  color: #111111;
+  color: var(--admin-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   word-break: break-all;
 }
 
 .redeem-order-link {
-  color: #000;
+  color: var(--admin-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-decoration: underline;
   text-underline-offset: 0.18em;

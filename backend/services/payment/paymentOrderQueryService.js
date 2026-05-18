@@ -176,7 +176,8 @@ const listAdminPaymentOrders = async (filters = {}, pool = getPool()) => {
   await closeExpiredPaymentOrders(pool);
   const rows = await repository.listPaymentOrders(pool, {
     orderNo: String(filters.orderNo || '').trim(),
-    status: ['pending', 'paid', 'closed'].includes(filters.status) ? filters.status : ''
+    status: ['pending', 'paid', 'closed'].includes(filters.status) ? filters.status : '',
+    limit: normalizeOrderListLimit(filters.limit)
   });
   const rowsById = await getRedeemCodeRowsById(pool, rows);
 

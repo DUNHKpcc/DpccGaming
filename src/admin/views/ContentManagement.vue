@@ -62,10 +62,11 @@
           <div class="content-pagination">
             <el-pagination
               v-model:current-page="blogPage"
-              :page-size="pageSize"
-              :total="blogPosts.length"
+              v-model:page-size="pageSize"
+              :page-sizes="adminPageSizeOptions"
+              :total="blogTotal"
               background
-              layout="prev, pager, next"
+              layout="total, sizes, prev, pager, next"
             />
           </div>
         </el-tab-pane>
@@ -116,10 +117,11 @@
           <div class="content-pagination">
             <el-pagination
               v-model:current-page="docPage"
-              :page-size="pageSize"
-              :total="docs.length"
+              v-model:page-size="pageSize"
+              :page-sizes="adminPageSizeOptions"
+              :total="docTotal"
               background
-              layout="prev, pager, next"
+              layout="total, sizes, prev, pager, next"
             />
           </div>
         </el-tab-pane>
@@ -258,15 +260,17 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
+import { ADMIN_PAGE_SIZE_OPTIONS, DEFAULT_ADMIN_PAGE_SIZE, useAdminPagination } from '../utils/pagination'
 import { useNotificationStore } from '../../stores/notification'
 
 const notificationStore = useNotificationStore()
 const activeTab = ref('blog')
 const blogPosts = ref([])
 const docs = ref([])
-const pageSize = 10
+const pageSize = ref(DEFAULT_ADMIN_PAGE_SIZE)
 const blogPage = ref(1)
 const docPage = ref(1)
+const adminPageSizeOptions = ADMIN_PAGE_SIZE_OPTIONS
 const blogDialogVisible = ref(false)
 const docDialogVisible = ref(false)
 const isSavingBlog = ref(false)
@@ -310,18 +314,21 @@ const defaultDocForm = () => ({
 const blogForm = ref(defaultBlogForm())
 const docForm = ref(defaultDocForm())
 
-const getPageItems = (items = [], page = 1) => {
-  const start = (page - 1) * pageSize
-  return items.slice(start, start + pageSize)
-}
+const {
+  totalItems: blogTotal,
+  pagedItems: paginatedBlogPosts
+} = useAdminPagination(blogPosts, {
+  currentPage: blogPage,
+  pageSize
+})
 
-const paginatedBlogPosts = computed(() => getPageItems(blogPosts.value, blogPage.value))
-const paginatedDocs = computed(() => getPageItems(docs.value, docPage.value))
-
-const clampPage = (pageRef, itemCount) => {
-  const maxPage = Math.max(1, Math.ceil(itemCount / pageSize))
-  if (pageRef.value > maxPage) pageRef.value = maxPage
-}
+const {
+  totalItems: docTotal,
+  pagedItems: paginatedDocs
+} = useAdminPagination(docs, {
+  currentPage: docPage,
+  pageSize
+})
 
 const authHeaders = () => {
   const token = localStorage.getItem('token')
@@ -342,7 +349,6 @@ const fetchBlogPosts = async () => {
   })
   const data = await readJsonResponse(response)
   blogPosts.value = data.posts || []
-  clampPage(blogPage, blogPosts.value.length)
 }
 
 const fetchDocs = async () => {
@@ -351,7 +357,6 @@ const fetchDocs = async () => {
   })
   const data = await readJsonResponse(response)
   docs.value = data.docs || []
-  clampPage(docPage, docs.value.length)
 }
 
 const refreshContent = async () => {
@@ -577,8 +582,8 @@ onMounted(() => {
 .content-file-icon {
   display: grid;
   place-items: center;
-  background: #f2f2f2;
-  color: #111111;
+  background: var(--admin-surface-soft);
+  color: var(--admin-text);
 }
 
 .content-title-cell strong,
@@ -591,7 +596,7 @@ form small {
   max-width: 38rem;
   margin-top: 0.25rem;
   overflow: hidden;
-  color: #666666;
+  color: var(--admin-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -608,7 +613,7 @@ form small {
 
 form small {
   margin-top: 0.35rem;
-  color: #666666;
+  color: var(--admin-muted);
   word-break: break-all;
 }
 </style>

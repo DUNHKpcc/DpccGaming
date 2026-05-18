@@ -12,7 +12,8 @@ const listOrders = async (req, res) => {
   try {
     const result = await paymentService.listAdminPaymentOrders({
       orderNo: req.query.orderNo,
-      status: req.query.status
+      status: req.query.status,
+      limit: req.query.limit
     });
 
     await recordAdminAuditLog(getPool(), {
@@ -23,6 +24,7 @@ const listOrders = async (req, res) => {
       metadata: {
         orderNo: req.query.orderNo || '',
         status: req.query.status || '',
+        limit: req.query.limit || '',
         returnedOrders: Array.isArray(result.orders) ? result.orders.length : 0
       }
     });
