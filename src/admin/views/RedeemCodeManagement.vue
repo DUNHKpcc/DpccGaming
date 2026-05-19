@@ -590,5 +590,10 @@ onMounted(async () => {
   .redeem-filters .el-select {
     width: 100%;
   }
+
+  .redeem-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
 }
 </style>

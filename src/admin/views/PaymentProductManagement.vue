@@ -722,8 +722,8 @@ onMounted(fetchProducts)
 
 @media (max-width: 820px) {
   .admin-panel-card {
-    height: auto;
-    min-height: 640px;
+    height: calc(100svh - 84px - 1.5rem);
+    min-height: 30rem;
   }
 
   .product-toolbar {
@@ -734,6 +734,40 @@ onMounted(fetchProducts)
   .product-filter-select {
     width: 100%;
     max-width: none;
+  }
+
+  .product-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .product-dialog-mask {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .product-dialog-shell {
+    width: 100vw;
+    max-height: 100svh;
+    border-radius: 0;
+  }
+
+  .product-dialog-body {
+    padding: 1rem;
+  }
+
+  .product-form-switches,
+  .product-dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .product-dialog-actions .el-button {
+    width: 100%;
+    margin-left: 0;
   }
 }
 </style>

@@ -4,7 +4,7 @@
       <el-aside class="admin-sidebar" width="248px">
         <div class="admin-brand">
           <img class="admin-brand-mark" src="/favicon.png" alt="DPCC GAMING" />
-          <div>
+          <div class="admin-brand-copy">
             <strong>DPCC GAMING</strong>
             <small>运营管理后台</small>
           </div>
@@ -15,9 +15,15 @@
           :default-active="route.path"
           router
         >
-          <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
+          <el-menu-item
+            v-for="item in menuItems"
+            :key="item.path"
+            :index="item.path"
+            :title="item.label"
+            :aria-label="item.label"
+          >
             <i :class="item.icon"></i>
-            <span>{{ item.label }}</span>
+            <span class="admin-menu-label">{{ item.label }}</span>
           </el-menu-item>
         </el-menu>
       </el-aside>
@@ -104,6 +110,7 @@ const menuItems = [
 
 <style scoped>
 .admin-layout {
+  --admin-mobile-sidebar-width: 4.25rem;
   --admin-bg: var(--bg-secondary);
   --admin-surface: var(--bg-primary);
   --admin-surface-soft: var(--bg-tertiary);
@@ -410,38 +417,136 @@ const menuItems = [
 
 @media (max-width: 820px) {
   .admin-container {
-    display: block;
+    display: flex;
+    min-height: 100svh;
   }
 
   .admin-sidebar {
-    width: 100% !important;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: var(--admin-mobile-sidebar-width) !important;
+    flex: 0 0 var(--admin-mobile-sidebar-width);
+    height: 100svh;
+    overflow-y: auto;
+    border-right: 1px solid var(--admin-border);
   }
 
   .admin-brand {
+    justify-content: center;
     min-height: 64px;
+    padding: 0;
+  }
+
+  .admin-brand-mark {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.55rem;
+  }
+
+  .admin-brand-copy {
+    display: none;
   }
 
   .admin-menu {
-    display: flex;
-    overflow-x: auto;
+    display: block;
+    padding: 0.5rem 0;
+    overflow-x: hidden;
   }
 
   .admin-menu :deep(.el-menu-item) {
-    flex: 0 0 auto;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: 0.3rem auto;
+    padding: 0 !important;
+    border-radius: 0.75rem;
+  }
+
+  .admin-menu i {
+    width: auto;
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .admin-menu-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
 
   .admin-topbar {
-    min-height: 88px;
+    min-height: 84px;
     height: auto !important;
     align-items: flex-start;
     flex-direction: column;
-    padding: 0.9rem 1rem;
+    gap: 0.75rem;
+    padding: 0.85rem 0.9rem;
+  }
+
+  .admin-topbar h1 {
+    font-size: 1.1rem;
+  }
+
+  .admin-topbar small {
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  .admin-topbar-actions {
+    width: 100%;
+    align-items: center;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+  }
+
+  .admin-topbar-actions :deep(.el-button) {
+    flex: 0 0 auto;
+  }
+
+  .admin-workspace {
+    min-width: 0;
+    width: calc(100vw - var(--admin-mobile-sidebar-width));
   }
 
   .admin-main {
     height: auto;
-    min-height: calc(100vh - 152px);
-    padding: 1rem;
+    min-height: calc(100svh - 84px);
+    padding: 0.75rem;
+  }
+
+  .admin-layout :deep(.admin-panel-card),
+  .admin-layout :deep(.content-panel-card) {
+    height: calc(100svh - 84px - 1.5rem);
+    min-height: 30rem;
+  }
+
+  .admin-layout :deep(.el-card__body) {
+    overflow-x: auto;
+  }
+
+  .admin-layout :deep(.el-table) {
+    min-width: 44rem;
+  }
+
+  .admin-layout :deep(.el-pagination) {
+    width: max-content;
+  }
+
+  :global(.el-dialog),
+  :global(.el-message-box) {
+    width: calc(100vw - 1.5rem) !important;
+    max-width: calc(100vw - 1.5rem);
+    margin: 0.75rem auto !important;
+  }
+
+  :global(.el-drawer.rtl) {
+    width: min(100vw, 26rem) !important;
   }
 }
 </style>

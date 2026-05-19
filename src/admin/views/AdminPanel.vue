@@ -269,4 +269,11 @@ onMounted(async () => {
 .el-button i {
   margin-right: 0.35rem;
 }
+
+@media (max-width: 820px) {
+  .admin-panel-card {
+    height: calc(100svh - 84px - 1.5rem);
+    min-height: 30rem;
+  }
+}
 </style>

@@ -589,6 +589,11 @@ onMounted(async () => {
 }
 
 @media (max-width: 720px) {
+  .admin-panel-card {
+    height: calc(100svh - 84px - 1.5rem);
+    min-height: 30rem;
+  }
+
   .order-filter-bar {
     flex-direction: column;
   }

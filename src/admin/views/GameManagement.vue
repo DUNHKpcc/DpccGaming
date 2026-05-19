@@ -334,6 +334,11 @@ onMounted(async () => {
 }
 
 @media (max-width: 720px) {
+  .admin-panel-card {
+    height: calc(100svh - 84px - 1.5rem);
+    min-height: 30rem;
+  }
+
   .admin-filter-bar {
     flex-direction: column;
   }
@@ -342,6 +347,11 @@ onMounted(async () => {
   .admin-category-select {
     width: 100%;
     max-width: none;
+  }
+
+  .admin-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 }
 </style>
