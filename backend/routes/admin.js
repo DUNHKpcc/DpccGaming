@@ -60,13 +60,19 @@ const uploadDocAssets = multer({
     destination: (req, file, cb) => {
       const dir = file.fieldname === 'file'
         ? contentController.DOC_FILE_UPLOAD_DIR
+        : file.fieldname === 'contentImages'
+          ? contentController.DOC_ASSET_UPLOAD_DIR
         : contentController.DOC_COVER_UPLOAD_DIR;
       ensureDirSync(dir);
       cb(null, dir);
     },
     filename: (req, file, cb) => {
       const ext = path.extname(file.originalname || '').toLowerCase();
-      const prefix = file.fieldname === 'file' ? 'doc-file' : 'doc-cover';
+      const prefix = file.fieldname === 'file'
+        ? 'doc-file'
+        : file.fieldname === 'contentImages'
+          ? 'doc-asset'
+          : 'doc-cover';
       const suffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
       cb(null, `${prefix}-${suffix}${ext}`);
     }
@@ -81,6 +87,10 @@ const uploadDocAssets = multer({
       return cb(new Error('仅支持上传 Markdown 文档'));
     }
 
+    if (file.fieldname === 'contentImages' && mime.startsWith('image/') && ['.webp', '.png', '.jpg', '.jpeg', '.gif'].includes(ext)) {
+      return cb(null, true);
+    }
+
     if (file.fieldname === 'cover' && mime.startsWith('image/') && ['.webp', '.png', '.jpg', '.jpeg', '.gif'].includes(ext)) {
       return cb(null, true);
     }
@@ -88,7 +98,8 @@ const uploadDocAssets = multer({
   }
 }).fields([
   { name: 'cover', maxCount: 1 },
-  { name: 'file', maxCount: 1 }
+  { name: 'file', maxCount: 1 },
+  { name: 'contentImages', maxCount: 60 }
 ]);
 
 const handleMulter = (uploader, sizeMessage) => (req, res, next) => {

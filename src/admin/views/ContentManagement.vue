@@ -190,63 +190,82 @@
       :lock-scroll="false"
       :transition="contentDialogTransition"
       :title="docForm.numericId ? '编辑文档' : '新增文档'"
-      width="680px"
+      class="content-doc-dialog"
+      width="min(1360px, calc(100vw - 40px))"
       @closed="handleDocDialogClosed"
     >
-      <el-form label-position="top" @submit.prevent>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="文档 ID">
-              <el-input v-model="docForm.docKey" placeholder="example-doc-id" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="分类">
-              <el-input v-model="docForm.tag" placeholder="DPCC API" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="标题">
-          <el-input v-model="docForm.title" maxlength="220" />
-        </el-form-item>
-        <el-form-item label="摘要">
-          <el-input v-model="docForm.summary" type="textarea" :rows="3" maxlength="2000" />
-        </el-form-item>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="发布者">
-              <el-input v-model="docForm.publisherName" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="发布者头像 URL">
-              <el-input v-model="docForm.publisherAvatar" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="状态">
-              <el-select v-model="docForm.status" class="content-full-control">
-                <el-option label="发布" value="published" />
-                <el-option label="草稿" value="draft" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="排序">
-              <el-input-number v-model="docForm.sortOrder" class="content-full-control" :precision="0" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="封面图片">
-          <input ref="docCoverInputRef" type="file" accept="image/*" @change="docCoverFile = $event.target.files?.[0] || null" />
-          <small v-if="docForm.coverUrl">当前：{{ docForm.coverUrl }}</small>
-        </el-form-item>
-        <el-form-item label="Markdown 文档">
-          <input ref="docFileInputRef" type="file" accept=".md,text/markdown,text/plain" @change="docMarkdownFile = $event.target.files?.[0] || null" />
-          <small v-if="docForm.fileUrl">当前：{{ docForm.fileUrl }}</small>
-        </el-form-item>
+      <el-form class="doc-form-grid" label-position="top" @submit.prevent>
+        <div class="doc-form-main">
+          <el-row :gutter="12">
+            <el-col :span="12">
+              <el-form-item label="文档 ID">
+                <el-input v-model="docForm.docKey" placeholder="example-doc-id" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="分类">
+                <el-input v-model="docForm.tag" placeholder="DPCC API" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-form-item label="标题">
+            <el-input v-model="docForm.title" maxlength="220" />
+          </el-form-item>
+          <el-form-item label="摘要">
+            <el-input v-model="docForm.summary" type="textarea" :rows="3" maxlength="2000" />
+          </el-form-item>
+          <el-row :gutter="12">
+            <el-col :span="12">
+              <el-form-item label="发布者">
+                <el-input v-model="docForm.publisherName" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="发布者头像 URL">
+                <el-input v-model="docForm.publisherAvatar" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="12">
+              <el-form-item label="状态">
+                <el-select v-model="docForm.status" class="content-full-control">
+                  <el-option label="发布" value="published" />
+                  <el-option label="草稿" value="draft" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="排序">
+                <el-input-number v-model="docForm.sortOrder" class="content-full-control" :precision="0" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-form-item label="封面图片">
+            <input ref="docCoverInputRef" type="file" accept="image/*" @change="docCoverFile = $event.target.files?.[0] || null" />
+            <small v-if="docForm.coverUrl">当前：{{ docForm.coverUrl }}</small>
+          </el-form-item>
+          <el-form-item label="Markdown 文档">
+            <input ref="docFileInputRef" type="file" accept=".md,text/markdown,text/plain" @change="handleDocMarkdownFileChange" />
+            <small v-if="docForm.fileUrl">当前：{{ docForm.fileUrl }}</small>
+          </el-form-item>
+        </div>
+        <div class="doc-markdown-pane">
+          <el-form-item label="Markdown 内容">
+            <el-input
+              v-model="docMarkdownContent"
+              class="doc-markdown-editor"
+              type="textarea"
+              resize="none"
+              placeholder="在这里编辑 Markdown；可直接粘贴剪贴板图片"
+              @paste="handleDocMarkdownPaste"
+            />
+            <small>粘贴图片后会在保存时自动转为 WebP，并归档到当前文档 ID 的资源目录。</small>
+            <small v-if="docContentImageAssets.length">
+              已粘贴 {{ docContentImageAssets.length }} 张图片，保存后自动替换为线上路径。
+            </small>
+          </el-form-item>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="closeDocDialog">取消</el-button>
@@ -278,6 +297,8 @@ const isSavingDoc = ref(false)
 const blogImageFile = ref(null)
 const docCoverFile = ref(null)
 const docMarkdownFile = ref(null)
+const docMarkdownContent = ref('')
+const docContentImageAssets = ref([])
 const blogImageInputRef = ref(null)
 const docCoverInputRef = ref(null)
 const docFileInputRef = ref(null)
@@ -392,9 +413,86 @@ const appendDocFormData = () => {
   formData.append('fileUrl', docForm.value.fileUrl || '')
   formData.append('status', docForm.value.status)
   formData.append('sortOrder', String(docForm.value.sortOrder || 0))
+  formData.append('markdownContent', docMarkdownContent.value || '')
+  formData.append('contentImageTokens', JSON.stringify(docContentImageAssets.value.map(asset => asset.token)))
   if (docCoverFile.value) formData.append('cover', docCoverFile.value)
   if (docMarkdownFile.value) formData.append('file', docMarkdownFile.value)
+  docContentImageAssets.value.forEach(asset => {
+    formData.append('contentImages', asset.file)
+  })
   return formData
+}
+
+const getFileExtensionFromMime = (mime = '') => {
+  const normalized = String(mime || '').toLowerCase()
+  if (normalized.includes('png')) return 'png'
+  if (normalized.includes('jpeg') || normalized.includes('jpg')) return 'jpg'
+  if (normalized.includes('gif')) return 'gif'
+  if (normalized.includes('webp')) return 'webp'
+  return 'png'
+}
+
+const insertMarkdownSnippet = (textarea, snippet = '') => {
+  const current = docMarkdownContent.value || ''
+  const start = Number.isFinite(textarea?.selectionStart) ? textarea.selectionStart : current.length
+  const end = Number.isFinite(textarea?.selectionEnd) ? textarea.selectionEnd : start
+  docMarkdownContent.value = `${current.slice(0, start)}${snippet}${current.slice(end)}`
+  nextTick(() => {
+    if (!textarea) return
+    const cursor = start + snippet.length
+    textarea.focus()
+    textarea.setSelectionRange(cursor, cursor)
+  })
+}
+
+const handleDocMarkdownPaste = (event) => {
+  const items = Array.from(event.clipboardData?.items || [])
+  const imageItems = items.filter(item => item.kind === 'file' && String(item.type || '').startsWith('image/'))
+  if (!imageItems.length) return
+
+  event.preventDefault()
+  const pastedAt = Date.now()
+  const snippets = []
+
+  imageItems.forEach((item, index) => {
+    const file = item.getAsFile()
+    if (!file) return
+    const token = `pasted-image-${pastedAt}-${index}-${Math.round(Math.random() * 1e9)}`
+    const extension = getFileExtensionFromMime(file.type)
+    const namedFile = new File([file], `${token}.${extension}`, { type: file.type || 'image/png' })
+    docContentImageAssets.value.push({ token, file: namedFile })
+    snippets.push(`![图片](local://${token})`)
+  })
+
+  if (snippets.length) {
+    insertMarkdownSnippet(event.target, snippets.join('\n\n'))
+  }
+}
+
+const handleDocMarkdownFileChange = async (event) => {
+  const file = event.target.files?.[0] || null
+  docMarkdownFile.value = file
+  if (!file) return
+
+  try {
+    docMarkdownContent.value = await file.text()
+  } catch (error) {
+    notificationStore.warning('读取失败', error.message || 'Markdown 文件读取失败')
+  }
+}
+
+const loadDocMarkdownContent = async (doc = null) => {
+  const fileUrl = doc?.fileUrl || doc?.file || ''
+  docMarkdownContent.value = ''
+  if (!fileUrl) return
+
+  try {
+    const response = await fetch(fileUrl)
+    if (!response.ok) throw new Error('文档内容加载失败')
+    docMarkdownContent.value = await response.text()
+  } catch (error) {
+    notificationStore.warning('内容未载入', error.message || '无法读取当前 Markdown 内容')
+  }
 }
 
 const openBlogDialog = (post = null) => {
@@ -419,6 +517,8 @@ const handleBlogDialogClosed = () => {
 const openDocDialog = (doc = null) => {
   docCoverFile.value = null
   docMarkdownFile.value = null
+  docMarkdownContent.value = ''
+  docContentImageAssets.value = []
   docForm.value = doc
     ? {
       ...defaultDocForm(),
@@ -432,6 +532,7 @@ const openDocDialog = (doc = null) => {
     if (docCoverInputRef.value) docCoverInputRef.value.value = ''
     if (docFileInputRef.value) docFileInputRef.value.value = ''
   })
+  if (doc) loadDocMarkdownContent(doc)
 }
 
 const closeDocDialog = () => {
@@ -442,6 +543,8 @@ const handleDocDialogClosed = () => {
   if (docDialogVisible.value) return
   docCoverFile.value = null
   docMarkdownFile.value = null
+  docMarkdownContent.value = ''
+  docContentImageAssets.value = []
   docForm.value = defaultDocForm()
 }
 
@@ -615,5 +718,115 @@ form small {
   margin-top: 0.35rem;
   color: var(--admin-muted);
   word-break: break-all;
+}
+
+:global(.content-doc-dialog) {
+  max-height: calc(100svh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+
+:global(.content-doc-dialog .el-dialog__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+:global(.content-doc-dialog .el-dialog__footer) {
+  flex: 0 0 auto;
+  padding-top: 0.75rem;
+}
+
+.doc-form-grid {
+  display: grid;
+  grid-template-columns: minmax(20rem, 0.7fr) minmax(34rem, 1.3fr);
+  gap: 1rem;
+  height: min(50rem, calc(100svh - 10rem));
+  min-height: 36rem;
+  overflow: hidden;
+}
+
+.doc-form-main,
+.doc-markdown-pane {
+  min-height: 0;
+}
+
+.doc-form-main {
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.doc-form-main :deep(.el-form-item) {
+  margin-bottom: 0.9rem;
+}
+
+.doc-markdown-pane {
+  display: flex;
+}
+
+.doc-markdown-pane :deep(.el-form-item) {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+.doc-markdown-pane :deep(.el-form-item__content) {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-height: 0;
+  align-items: stretch;
+  flex: 1 1 auto;
+}
+
+.doc-markdown-editor {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.doc-markdown-editor :deep(.el-textarea__inner) {
+  height: 100% !important;
+  min-height: 31rem !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .content-panel-card {
+    height: calc(100svh - 84px - 1.5rem);
+    min-height: 30rem;
+  }
+
+  .content-panel-card :deep(.el-card__body) {
+    padding: 0 0.75rem 0.75rem;
+  }
+
+  .content-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .doc-form-grid {
+    display: block;
+    height: auto;
+    max-height: calc(100svh - 11rem);
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .doc-form-main {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .doc-markdown-editor :deep(.el-textarea__inner) {
+    height: 24rem !important;
+    min-height: 24rem !important;
+  }
 }
 </style>

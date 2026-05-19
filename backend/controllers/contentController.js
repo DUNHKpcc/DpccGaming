@@ -2,6 +2,11 @@ const path = require('path');
 const fs = require('fs').promises;
 const sharp = require('sharp');
 const { getPool } = require('../config/database');
+const {
+  normalizeSegment,
+  processMarkdownContentAssets,
+  removeUploadedFiles
+} = require('../utils/contentMarkdownAssets');
 
 const UPLOADS_ROOT = process.env.UPLOADS_PATH || path.join(process.cwd(), 'uploads');
 const CONTENT_UPLOAD_ROOT = path.join(UPLOADS_ROOT, 'content');
@@ -145,6 +150,59 @@ const normalizeMarkdownAssetUrls = async (filePath = '') => {
   }
 
   await fs.writeFile(filePath, markdown);
+};
+
+const parseJsonArray = (value = '') => {
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const getDocUploadFiles = (req) => ([
+  req.files?.cover?.[0],
+  req.files?.file?.[0],
+  ...(req.files?.contentImages || [])
+]).filter(Boolean);
+
+const cleanupDocUploads = async (req) => {
+  await removeUploadedFiles([
+    ...getDocUploadFiles(req),
+    req.generatedMarkdownPath ? { path: req.generatedMarkdownPath } : null
+  ].filter(Boolean));
+};
+
+const removeDocAssetDir = async (docKey = '') => {
+  const docSegment = normalizeSegment(docKey, 'doc');
+  await fs.rm(path.join(DOC_ASSET_UPLOAD_DIR, docSegment), { recursive: true, force: true }).catch(() => {});
+};
+
+const writeMarkdownContentFile = async (req, docKey = '') => {
+  const markdownContent = String(req.body.markdownContent || '');
+  const contentImages = req.files?.contentImages || [];
+  const contentImageTokens = parseJsonArray(req.body.contentImageTokens);
+
+  const processed = await processMarkdownContentAssets({
+    markdown: markdownContent,
+    files: contentImages,
+    tokens: contentImageTokens,
+    docKey,
+    assetsDir: DOC_ASSET_UPLOAD_DIR,
+    publicAssetPrefix: '/uploads/content/docs/assets'
+  });
+
+  await ensureDir(DOC_FILE_UPLOAD_DIR);
+  const suffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+  const filePath = path.join(DOC_FILE_UPLOAD_DIR, `doc-file-${suffix}.md`);
+  await fs.writeFile(filePath, processed.markdown, 'utf8');
+  req.generatedMarkdownPath = filePath;
+  return {
+    path: filePath,
+    filename: path.basename(filePath),
+    mimetype: 'text/markdown'
+  };
 };
 
 const ensureContentTables = async (pool) => {
@@ -464,24 +522,26 @@ const createAdminDoc = async (req, res) => {
     const docKey = cleanText(req.body.docKey, 120);
     const title = cleanText(req.body.title, 220);
     if (!isValidDocKey(docKey)) {
-      await Promise.all([
-        req.files?.cover?.[0]?.path ? fs.rm(req.files.cover[0].path, { force: true }).catch(() => {}) : null,
-        req.files?.file?.[0]?.path ? fs.rm(req.files.file[0].path, { force: true }).catch(() => {}) : null
-      ]);
+      await cleanupDocUploads(req);
       return res.status(400).json({ error: '文档ID仅支持字母、数字、下划线和中划线，长度 2-120' });
     }
     if (!title) {
-      await Promise.all([
-        req.files?.cover?.[0]?.path ? fs.rm(req.files.cover[0].path, { force: true }).catch(() => {}) : null,
-        req.files?.file?.[0]?.path ? fs.rm(req.files.file[0].path, { force: true }).catch(() => {}) : null
-      ]);
+      await cleanupDocUploads(req);
       return res.status(400).json({ error: '请填写文档标题' });
     }
 
     const coverFile = req.files?.cover?.[0] || null;
-    const docFile = req.files?.file?.[0] || null;
+    let docFile = req.files?.file?.[0] || null;
+    const hasMarkdownContent = Object.prototype.hasOwnProperty.call(req.body, 'markdownContent')
+      && String(req.body.markdownContent || '').length > 0;
     if (coverFile) await optimizeUploadedImage(coverFile, { maxSize: 1400 });
-    if (docFile) await normalizeMarkdownAssetUrls(docFile.path);
+    if (hasMarkdownContent) {
+      if (docFile?.path) await fs.rm(docFile.path, { force: true }).catch(() => {});
+      docFile = await writeMarkdownContentFile(req, docKey);
+    } else {
+      if (req.files?.contentImages?.length) await removeUploadedFiles(req.files.contentImages);
+      if (docFile) await normalizeMarkdownAssetUrls(docFile.path);
+    }
     const coverUrl = coverFile ? buildUploadedFileUrl(coverFile.path) : cleanText(req.body.coverUrl, 500);
     const fileUrl = docFile ? buildUploadedFileUrl(docFile.path) : cleanText(req.body.fileUrl, 500);
 
@@ -508,10 +568,7 @@ const createAdminDoc = async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM content_docs WHERE id = ? LIMIT 1', [result.insertId]);
     res.status(201).json({ doc: mapDocRow(rows[0] || {}) });
   } catch (error) {
-    await Promise.all([
-      req.files?.cover?.[0]?.path ? fs.rm(req.files.cover[0].path, { force: true }).catch(() => {}) : null,
-      req.files?.file?.[0]?.path ? fs.rm(req.files.file[0].path, { force: true }).catch(() => {}) : null
-    ]);
+    await cleanupDocUploads(req);
     const isDuplicate = error?.code === 'ER_DUP_ENTRY';
     console.error('创建文档失败:', error);
     res.status(isDuplicate ? 409 : 500).json({ error: isDuplicate ? '文档ID已存在' : '服务器内部错误' });
@@ -529,34 +586,33 @@ const updateAdminDoc = async (req, res) => {
     const docKey = cleanText(req.body.docKey, 120);
     const title = cleanText(req.body.title, 220);
     if (!isValidDocKey(docKey)) {
-      await Promise.all([
-        req.files?.cover?.[0]?.path ? fs.rm(req.files.cover[0].path, { force: true }).catch(() => {}) : null,
-        req.files?.file?.[0]?.path ? fs.rm(req.files.file[0].path, { force: true }).catch(() => {}) : null
-      ]);
+      await cleanupDocUploads(req);
       return res.status(400).json({ error: '文档ID仅支持字母、数字、下划线和中划线，长度 2-120' });
     }
     if (!title) {
-      await Promise.all([
-        req.files?.cover?.[0]?.path ? fs.rm(req.files.cover[0].path, { force: true }).catch(() => {}) : null,
-        req.files?.file?.[0]?.path ? fs.rm(req.files.file[0].path, { force: true }).catch(() => {}) : null
-      ]);
+      await cleanupDocUploads(req);
       return res.status(400).json({ error: '请填写文档标题' });
     }
 
     const [existingRows] = await pool.execute('SELECT * FROM content_docs WHERE id = ? LIMIT 1', [docId]);
     if (!existingRows.length) {
-      await Promise.all([
-        req.files?.cover?.[0]?.path ? fs.rm(req.files.cover[0].path, { force: true }).catch(() => {}) : null,
-        req.files?.file?.[0]?.path ? fs.rm(req.files.file[0].path, { force: true }).catch(() => {}) : null
-      ]);
+      await cleanupDocUploads(req);
       return res.status(404).json({ error: '文档不存在' });
     }
 
     const existing = existingRows[0];
     const coverFile = req.files?.cover?.[0] || null;
-    const docFile = req.files?.file?.[0] || null;
+    let docFile = req.files?.file?.[0] || null;
+    const hasMarkdownContent = Object.prototype.hasOwnProperty.call(req.body, 'markdownContent')
+      && String(req.body.markdownContent || '').length > 0;
     if (coverFile) await optimizeUploadedImage(coverFile, { maxSize: 1400 });
-    if (docFile) await normalizeMarkdownAssetUrls(docFile.path);
+    if (hasMarkdownContent) {
+      if (docFile?.path) await fs.rm(docFile.path, { force: true }).catch(() => {});
+      docFile = await writeMarkdownContentFile(req, docKey);
+    } else {
+      if (req.files?.contentImages?.length) await removeUploadedFiles(req.files.contentImages);
+      if (docFile) await normalizeMarkdownAssetUrls(docFile.path);
+    }
     const coverUrl = coverFile ? buildUploadedFileUrl(coverFile.path) : cleanText(req.body.coverUrl || existing.cover_url, 500);
     const fileUrl = docFile ? buildUploadedFileUrl(docFile.path) : cleanText(req.body.fileUrl || existing.file_url, 500);
 
@@ -587,10 +643,7 @@ const updateAdminDoc = async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM content_docs WHERE id = ? LIMIT 1', [docId]);
     res.json({ doc: mapDocRow(rows[0] || {}) });
   } catch (error) {
-    await Promise.all([
-      req.files?.cover?.[0]?.path ? fs.rm(req.files.cover[0].path, { force: true }).catch(() => {}) : null,
-      req.files?.file?.[0]?.path ? fs.rm(req.files.file[0].path, { force: true }).catch(() => {}) : null
-    ]);
+    await cleanupDocUploads(req);
     const isDuplicate = error?.code === 'ER_DUP_ENTRY';
     console.error('更新文档失败:', error);
     res.status(isDuplicate ? 409 : 500).json({ error: isDuplicate ? '文档ID已存在' : '服务器内部错误' });
@@ -611,7 +664,8 @@ const deleteAdminDoc = async (req, res) => {
     await pool.execute('DELETE FROM content_docs WHERE id = ?', [docId]);
     await Promise.all([
       removeManagedUpload(rows[0].cover_url),
-      removeManagedUpload(rows[0].file_url)
+      removeManagedUpload(rows[0].file_url),
+      removeDocAssetDir(rows[0].doc_key)
     ]);
     res.json({ removed: true, id: docId });
   } catch (error) {
