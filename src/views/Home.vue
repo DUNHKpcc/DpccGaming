@@ -30,7 +30,7 @@ const BrandRevealSection = defineAsyncComponent(() => import('../components/Bran
 
 const gameShowcaseHost = ref(null)
 const brandRevealHost = ref(null)
-const showGameShowcase = ref(false)
+const showGameShowcase = ref(true)
 const showBrandReveal = ref(false)
 
 const observers = []

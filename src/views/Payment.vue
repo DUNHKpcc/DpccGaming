@@ -315,6 +315,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { apiCall } from '../utils/api'
 
 const ORDER_LOCK_SECONDS = 5 * 60
+const DEFAULT_DURATIONS = [
+  { id: '1m', label: '1个月', months: 1 },
+  { id: '3m', label: '3个月', months: 3 },
+  { id: '12m', label: '12个月', months: 12 }
+]
 
 const formatMoney = (amount) => `¥${Number(amount || 0).toFixed(2)}`
 const formatUsdAmount = (value) => {
@@ -367,10 +372,15 @@ const buildPromotionBadgeText = (product = {}) => {
   }
   return promotion.badgeText || promotion.title || '限时促销'
 }
+const normalizeDurations = (items = []) => (
+  Array.isArray(items) && items.length
+    ? items
+    : DEFAULT_DURATIONS.map((duration) => ({ ...duration }))
+)
 
 const productMode = ref('subscription')
 const plans = ref([])
-const durations = ref([])
+const durations = ref(DEFAULT_DURATIONS.map((duration) => ({ ...duration })))
 const rechargePackages = ref([])
 const paymentError = ref('')
 const isCreatingOrder = ref(false)
@@ -598,7 +608,7 @@ const loadPaymentCatalog = async () => {
         features
       }
     })
-    durations.value = catalog.durations || []
+    durations.value = normalizeDurations(catalog.durations)
     const rechargeProducts = catalog.rechargeProducts || catalog.rechargePackages || []
     rechargePackages.value = rechargeProducts.map((pack) => {
       const originalQuotaUsd = pack.originalQuotaUsd || pack.baseQuotaUsd

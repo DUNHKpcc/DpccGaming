@@ -213,7 +213,7 @@ onUnmounted(() => {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 20000;
+  z-index: var(--site-topbar-z-index);
   background: rgb(29, 29, 31);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
@@ -238,6 +238,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
 }
 
 .main-nav-links {
@@ -355,6 +356,7 @@ onUnmounted(() => {
 
 .navbar-right {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 1rem;
 }
@@ -457,6 +459,7 @@ onUnmounted(() => {
 
 .user-menu {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 0.5rem;
   position: relative;
@@ -469,6 +472,7 @@ onUnmounted(() => {
 }
 
 .user-avatar {
+  flex: 0 0 auto;
   width: 2rem;
   height: 2rem;
   background: #ffffff;
@@ -510,6 +514,7 @@ onUnmounted(() => {
 
 .dropdown-toggle {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   width: 2rem;
@@ -665,6 +670,13 @@ onUnmounted(() => {
   }
 
   .username-row {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav-link--api,
+  .nav-link--payment {
     display: none;
   }
 }

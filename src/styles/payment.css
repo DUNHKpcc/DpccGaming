@@ -899,6 +899,12 @@
     grid-template-columns: 1fr;
   }
 
+  .duration-panel:not(.is-hidden) {
+    flex: 0 0 auto;
+    max-height: none;
+    overflow: visible;
+  }
+
   .plan-card {
     min-height: 0;
     height: auto;

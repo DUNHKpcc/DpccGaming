@@ -919,8 +919,26 @@ onUnmounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .game-showcase-section {
+    min-height: auto;
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+
   .cards-container {
-    height: 500px;
+    height: 34rem;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .main-game-card {
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) rotateY(0deg) scale(1) !important;
+  }
+
+  .glass-card {
+    display: none;
   }
   
   .card-wrapper {
@@ -944,12 +962,13 @@ onUnmounted(() => {
   
   .section-subtitle {
     font-size: 1.125rem;
+    padding: 0 1rem;
   }
 }
 
 @media (max-width: 480px) {
   .cards-container {
-    height: 450px;
+    height: 31rem;
   }
   
   .card-wrapper {
@@ -958,8 +977,8 @@ onUnmounted(() => {
   }
   
   .main-game-card .card-wrapper {
-    width: 280px;
-    height: 400px;
+    width: min(19rem, calc(100vw - 2rem));
+    height: 27rem;
   }
   
   .glass-card .card-wrapper {
@@ -1009,6 +1028,98 @@ onUnmounted(() => {
   .glass-card .card-wrapper {
     width: 250px;
     height: 350px;
+  }
+}
+
+@media (max-width: 768px) {
+  .cards-container {
+    height: 38rem;
+  }
+
+  .main-game-card .card-wrapper {
+    width: min(21rem, calc(100vw - 2rem));
+    height: 34rem;
+  }
+
+  .main-game-card .card-content {
+    border-radius: 1.35rem;
+  }
+
+  .card-image {
+    height: 52%;
+  }
+
+  .card-image img {
+    border-top-left-radius: 1.35rem;
+    border-top-right-radius: 1.35rem;
+  }
+
+  .card-info {
+    height: 48%;
+    padding: 1.25rem;
+    border-bottom-left-radius: 1.35rem;
+    border-bottom-right-radius: 1.35rem;
+  }
+
+  .main-card-title {
+    font-size: 1.55rem;
+    line-height: 1.15;
+  }
+
+  .rating-text {
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .main-card-description {
+    font-size: 1rem;
+    line-height: 1.55;
+    margin-bottom: 0.75rem;
+  }
+
+  .main-card-meta {
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .primary-play-btn {
+    padding: 0.45rem 1rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .cards-container {
+    height: 38rem;
+  }
+
+  .main-game-card .card-wrapper {
+    width: min(20.5rem, calc(100vw - 2rem));
+    height: 34rem;
+  }
+
+  .card-image {
+    height: 52%;
+  }
+
+  .card-info {
+    height: 48%;
+    padding: 1.25rem;
+  }
+
+  .main-card-title {
+    font-size: 1.45rem;
+  }
+
+  .main-card-description {
+    font-size: 0.96rem;
+  }
+
+  .main-card-meta {
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    gap: 0.6rem;
   }
 }
 </style>

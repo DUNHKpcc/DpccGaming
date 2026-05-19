@@ -64,7 +64,7 @@
       <div class="sidebar-header">
         <div class="flex items-center justify-between">
           <div class="flex items-center">
-            <img src="/logo.png" alt="DpccGaming Logo" class="w-8 h-8 mr-3">
+            <img :src="currentLogo" alt="DpccGaming Logo" class="mobile-sidebar-logo w-8 h-8 mr-3">
             <span class="text-lg font-bold text-white">DpccGaming</span>
           </div>
           <button 
@@ -78,8 +78,17 @@
       <!-- 导航菜单 -->
       <nav class="sidebar-nav">
         <ul class="space-y-2">
-          <li v-for="item in navItems" :key="item.name">
+          <li v-for="item in mobileNavItems" :key="item.name">
+            <a
+              v-if="item.external"
+              :href="item.href"
+              class="nav-item"
+              @click="closeSidebar">
+              <i :class="item.icon"></i>
+              <span>{{ item.name }}</span>
+            </a>
             <router-link 
+              v-else
               :to="item.path"
               :class="[
                 'nav-item',
@@ -101,8 +110,8 @@
       <!-- 用户信息/登录区域 -->
       <div class="sidebar-footer">
         <div v-if="isLoggedIn" class="user-info">
-          <div class="flex items-center">
-            <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center mr-3 overflow-hidden">
+          <div class="mobile-user-profile">
+            <div class="mobile-user-avatar-shell">
               <img
                 v-if="currentUser?.avatar_url"
                 :src="getAvatarUrl(currentUser.avatar_url)"
@@ -112,12 +121,14 @@
               />
               <i v-else class="fa fa-user text-[#1d1d1f] text-sm"></i>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="mobile-username-row">
-                <span class="mobile-username-text">{{ currentUser.username }}</span>
+            <div class="mobile-user-main">
+              <div class="mobile-user-badge-row">
                 <UserLevelBadge :user-id="currentUser?.id" />
               </div>
-              <div class="text-xs text-white">已登录</div>
+              <div class="mobile-user-meta">
+                <span class="mobile-username-text">{{ currentUser.username }}</span>
+                <span class="mobile-login-state">已登录</span>
+              </div>
             </div>
           </div>
         </div>
@@ -137,6 +148,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useModalStore } from '../stores/modal'
+import { useThemeStore } from '../stores/theme'
 import { gsap } from 'gsap'
 import { getAvatarUrl, handleAvatarError } from '../utils/avatar'
 import { prefetchBlueprintMode } from '../utils/blueprintAsync'
@@ -144,6 +156,7 @@ import UserLevelBadge from './UserLevelBadge.vue'
 
 const authStore = useAuthStore()
 const modalStore = useModalStore()
+const themeStore = useThemeStore()
 
 const isOpen = ref(false) // 移动端侧边栏状态
 const isMobile = ref(false)
@@ -190,6 +203,35 @@ const navItems = ref([
   }
 ])
 
+const mobileNavItems = computed(() => [
+  ...navItems.value,
+  {
+    name: 'Blog',
+    path: '/blog',
+    icon: 'fa fa-newspaper',
+    description: '查看平台更新和文章'
+  },
+  {
+    name: 'AiDocs',
+    path: '/aidocs',
+    icon: 'fa fa-book',
+    description: '阅读平台文档和教程'
+  },
+  {
+    name: 'CDK',
+    path: '/payment',
+    icon: 'fa fa-ticket',
+    description: '购买和查看兑换码相关服务'
+  },
+  {
+    name: 'DPCC API',
+    href: 'https://api.dpccgaming.xyz',
+    icon: 'fa fa-plug',
+    external: true,
+    description: '打开 DPCC API 控制台'
+  }
+])
+
 // 详细信息相关
 const currentDetails = ref({
   name: '',
@@ -199,6 +241,7 @@ const currentDetails = ref({
 
 const currentUser = computed(() => authStore.currentUser)
 const isLoggedIn = computed(() => authStore.isLoggedIn)
+const currentLogo = computed(() => (themeStore.isDark ? '/logo.png' : '/logo_light.png'))
 
 const isAccountItem = (item) => item?.path === '/account'
 
@@ -726,10 +769,12 @@ defineExpose({
   position: fixed;
   top: 0;
   left: 0;
-  height: 100vh;
+  --site-topbar-z-index: 20000;
+  --site-mobile-sidebar-z-index: 20010;
+  height: 100svh;
   background: rgb(29, 29, 31);
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
+  z-index: var(--site-mobile-sidebar-z-index);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -743,7 +788,7 @@ defineExpose({
 }
 
 .sidebar-mobile {
-  width: 280px;
+  width: min(82vw, 20rem);
   transform: translateX(-100%);
 }
 
@@ -778,6 +823,9 @@ defineExpose({
   border-bottom: 1px solid #e5e7eb;
 }
 
+.mobile-sidebar-logo {
+  object-fit: contain;
+}
 
 .sidebar-nav {
   flex: 1;
@@ -851,7 +899,36 @@ defineExpose({
   border-radius: 9999px;
 }
 
-.mobile-username-row {
+.mobile-user-profile {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.mobile-user-avatar-shell {
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: #ffffff;
+}
+
+.mobile-user-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-user-badge-row {
+  display: flex;
+  align-items: center;
+  min-height: 2rem;
+}
+
+.mobile-user-meta {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -865,6 +942,12 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mobile-login-state {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: #ffffff;
 }
 
 .login-prompt {

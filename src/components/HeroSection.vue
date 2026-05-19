@@ -780,8 +780,8 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .hero-section {
     padding: 0;
-    height: auto;
-    min-height: 100vh;
+    height: calc(100svh - var(--site-mobile-topbar-height, 3.25rem));
+    min-height: 34rem;
   }
 
   .hero-content {
@@ -796,19 +796,44 @@ onUnmounted(() => {
 
 @media (max-width: 640px) {
   .hero-title {
+    flex-direction: column;
+    align-items: center;
     letter-spacing: 0.08em;
+    gap: 0.35rem;
+    width: min(100%, 22rem);
+    margin: 0 auto 0.75rem;
+  }
+
+  :deep(.hero-title-line--small),
+  :deep(.hero-title-line--large) {
+    font-size: clamp(3rem, 18vw, 4.8rem);
+    letter-spacing: 0.04em;
+    transform: scaleY(1.18);
   }
 
   .hero-subtitle {
-    letter-spacing: 0.3em;
+    max-width: min(19rem, 84vw);
+    font-size: 0.95rem;
+    letter-spacing: 0.22em;
+    line-height: 1.45;
   }
 
   .hero-actions {
-    width: 100%;
+    width: min(18rem, 76vw);
+    gap: 0.75rem;
   }
 
   .hero-button {
     width: 100%;
+  }
+
+  .btn-23 {
+    min-width: 0;
+    min-height: 2.5rem;
+    padding: 0.62rem 1.35rem;
+    border-width: 1px;
+    font-size: 0.82rem;
+    line-height: 1.25;
   }
 }
 
@@ -872,8 +897,10 @@ onUnmounted(() => {
 
 @media (max-width: 480px) {
   .new-year-widget {
-    top: 12px;
-    right: 8px;
+    top: 0.75rem;
+    right: 50%;
+    max-width: calc(100vw - 1.5rem);
+    transform: translateX(50%);
   }
   
   .widget-content {

@@ -69,6 +69,21 @@
                   </span>
                   <span class="download-inline-arrow">↗</span>
                 </a>
+
+                <a
+                  :href="downloadTargets.official"
+                  class="download-inline-item"
+                  @click="closeDownloadPicker"
+                >
+                  <span class="download-inline-icon">
+                    <i class="fa-brands fa-github" />
+                  </span>
+                  <span class="download-inline-meta">
+                    <span class="download-inline-system">官方版本</span>
+                    <span class="download-inline-caption">GitHub Releases</span>
+                  </span>
+                  <span class="download-inline-arrow">↗</span>
+                </a>
               </div>
             </div>
           </transition>
@@ -217,7 +232,8 @@ const isDownloadPickerOpen = ref(false)
 const downloadBasePath = import.meta.env.VITE_DOWNLOAD_BASE_URL || 'https://dpccgaming.xyz/downloads/dpcc-switch'
 const downloadTargets = {
   windows: `${downloadBasePath}/DPCC-SWITCH-3.13.0-release-setup.exe`,
-  macos: `${downloadBasePath}/DPCC-SWITCH_3.13.0_aarch64.dmg`
+  macos: `${downloadBasePath}/DPCC-SWITCH_3.13.0_aarch64.dmg`,
+  official: 'https://github.com/farion1231/cc-switch/releases'
 }
 
 const closeDownloadPicker = () => {
@@ -486,8 +502,42 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 767px) {
+  .footer-text-offset {
+    transform: none;
+    text-align: center;
+  }
+
+  .footer-cta-copy {
+    align-items: center;
+    text-align: center;
+  }
+
+  .footer-text-offset > .flex {
+    justify-content: center;
+  }
+
+  .footer-brand-description {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .footer-text-offset ul {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .footer-link.flex {
+    justify-content: center;
+  }
+
   .download-picker-wrap {
     width: 100%;
+    align-items: center;
+  }
+
+  .cta-button {
+    width: min(100%, 18rem);
   }
 
   .download-inline-panel {

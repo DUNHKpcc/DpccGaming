@@ -87,6 +87,8 @@ watch(showSidebar, (visible) => {
 
 <style scoped>
 .app-layout {
+  --site-topbar-z-index: 20000;
+  --site-mobile-topbar-height: 3.25rem;
   display: flex;
   min-height: 100vh;
   background: var(--bg-primary);
@@ -126,7 +128,7 @@ watch(showSidebar, (visible) => {
 /* 小屏幕下的导航栏调整 */
 @media (max-width: 768px) {
   .main-content {
-    margin-top: 3.5rem; /* 移动端稍小的高度 */
+    margin-top: var(--site-mobile-topbar-height); /* 移动端稍小的高度 */
   }
   .main-content--no-topbar {
     margin-top: 0;
@@ -134,9 +136,6 @@ watch(showSidebar, (visible) => {
 }
 
 @media (max-width: 480px) {
-  .main-content {
-    margin-top: 3rem; /* 更小屏幕下的高度 */
-  }
   .main-content--no-topbar {
     margin-top: 0;
   }
