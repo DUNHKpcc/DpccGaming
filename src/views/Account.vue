@@ -109,45 +109,6 @@
                 </div>
               </section>
 
-              <section class="glass-card widget widget-doc-stars p-6">
-                <div class="widget-title-row">
-                  <h3 class="text-xl font-bold text-white">Star 文档</h3>
-                  <span class="text-xs text-white/80">{{ starredDocs.length }} 个</span>
-                </div>
-
-                <div class="doc-stars-scroll">
-                  <div v-if="docStarsLoading" class="text-sm text-white/80 py-3">加载中...</div>
-                  <div v-else-if="!starredDocs.length" class="text-sm text-white/80 py-3">还没有 Star 文档</div>
-                  <div v-else class="space-y-2">
-                    <div
-                      v-for="doc in starredDocs"
-                      :key="`doc-star-${doc.id}`"
-                      class="doc-star-row"
-                      role="button"
-                      tabindex="0"
-                      @click="openStarDoc(doc)"
-                      @keyup.enter="openStarDoc(doc)"
-                      @keyup.space.prevent="openStarDoc(doc)"
-                    >
-                      <img
-                        v-if="doc.cover"
-                        :src="doc.cover"
-                        :alt="doc.title"
-                        class="doc-star-cover"
-                        loading="lazy"
-                      />
-                      <div v-else class="doc-star-cover doc-star-cover-fallback">
-                        <i class="fa fa-file-lines account-icon-glyph"></i>
-                      </div>
-                      <div class="doc-star-meta">
-                        <strong>{{ doc.title }}</strong>
-                        <small>{{ doc.tag }} · {{ doc.summary }}</small>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
               <section class="glass-card widget widget-library p-6">
                 <div class="widget-title-row">
                   <h3 class="text-xl font-bold text-white">游戏库</h3>
@@ -210,6 +171,45 @@
                           alt="游戏引擎"
                           class="library-meta-icon"
                         />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="glass-card widget widget-doc-stars p-6">
+                <div class="widget-title-row">
+                  <h3 class="text-xl font-bold text-white">Star 文档</h3>
+                  <span class="text-xs text-white/80">{{ starredDocs.length }} 个</span>
+                </div>
+
+                <div class="doc-stars-scroll">
+                  <div v-if="docStarsLoading" class="text-sm text-white/80 py-3">加载中...</div>
+                  <div v-else-if="!starredDocs.length" class="text-sm text-white/80 py-3">还没有 Star 文档</div>
+                  <div v-else class="space-y-2">
+                    <div
+                      v-for="doc in starredDocs"
+                      :key="`doc-star-${doc.id}`"
+                      class="doc-star-row"
+                      role="button"
+                      tabindex="0"
+                      @click="openStarDoc(doc)"
+                      @keyup.enter="openStarDoc(doc)"
+                      @keyup.space.prevent="openStarDoc(doc)"
+                    >
+                      <img
+                        v-if="doc.cover"
+                        :src="doc.cover"
+                        :alt="doc.title"
+                        class="doc-star-cover"
+                        loading="lazy"
+                      />
+                      <div v-else class="doc-star-cover doc-star-cover-fallback">
+                        <i class="fa fa-file-lines account-icon-glyph"></i>
+                      </div>
+                      <div class="doc-star-meta">
+                        <strong>{{ doc.title }}</strong>
+                        <small>{{ doc.tag }} · {{ doc.summary }}</small>
                       </div>
                     </div>
                   </div>
