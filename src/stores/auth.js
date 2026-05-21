@@ -19,21 +19,18 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 从localStorage恢复用户状态
   const currentUser = ref(normalizeUser(JSON.parse(localStorage.getItem('currentUser') || 'null')))
-  const authToken = ref(localStorage.getItem('authToken') || localStorage.getItem('token'))
+  localStorage.removeItem('authToken')
+  localStorage.removeItem('token')
+  const authToken = ref(null)
 
-  const isLoggedIn = computed(() => !!authToken.value && !!currentUser.value)
+  const isLoggedIn = computed(() => !!currentUser.value)
 
   const persistAuth = (token, user) => {
     authToken.value = token || null
     currentUser.value = normalizeUser(user)
 
-    if (authToken.value) {
-      localStorage.setItem('authToken', authToken.value)
-      localStorage.setItem('token', authToken.value)
-    } else {
-      localStorage.removeItem('authToken')
-      localStorage.removeItem('token')
-    }
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('token')
 
     if (currentUser.value) {
       localStorage.setItem('currentUser', JSON.stringify(currentUser.value))
@@ -96,18 +93,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const checkAuthStatus = async () => {
-    const token = localStorage.getItem('token') || authToken.value
-
     try {
-      const headers = {}
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
-
       const response = await fetch('/api/verify-token', {
         method: 'GET',
-        credentials: 'include',
-        headers
+        credentials: 'include'
       })
 
       if (!response.ok) {
@@ -115,8 +104,8 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       const data = await response.json()
-      persistAuth(data.token || token || null, data.user || null)
-      return !!authToken.value && !!currentUser.value
+      persistAuth(null, data.user || null)
+      return !!currentUser.value
     } catch (error) {
       console.error('验证令牌失败:', error)
       persistAuth(null, null)
@@ -140,16 +129,9 @@ export const useAuthStore = defineStore('auth', () => {
       const formData = new FormData()
       formData.append('avatar', blob, 'avatar.webp')
 
-      const token = localStorage.getItem('token') || authToken.value
-      const headers = {}
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
-
       const response = await fetch('/api/user/avatar', {
         method: 'POST',
         credentials: 'include',
-        headers,
         body: formData
       })
 
@@ -185,16 +167,9 @@ export const useAuthStore = defineStore('auth', () => {
       const formData = new FormData()
       formData.append('cover', blob, 'cover.webp')
 
-      const token = localStorage.getItem('token') || authToken.value
-      const headers = {}
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
-
       const response = await fetch('/api/user/cover', {
         method: 'POST',
         credentials: 'include',
-        headers,
         body: formData
       })
 
@@ -215,12 +190,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const updateProfile = async (payload = {}) => {
-    const token = localStorage.getItem('token') || authToken.value
     const headers = {
       'Content-Type': 'application/json'
-    }
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
     }
 
     try {

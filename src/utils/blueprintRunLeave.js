@@ -18,7 +18,6 @@ export const buildBlueprintRunCancelUrl = (runId = '', apiBaseUrl = DEFAULT_BLUE
 export const requestBlueprintRunCancelOnLeave = ({
   runId = '',
   apiBaseUrl = DEFAULT_BLUEPRINT_API_BASE_URL,
-  authToken = '',
   sendBeaconImpl = typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function'
     ? navigator.sendBeacon.bind(navigator)
     : null,
@@ -46,9 +45,6 @@ export const requestBlueprintRunCancelOnLeave = ({
   if (typeof fetchImpl === 'function') {
     const headers = {
       'Content-Type': 'application/json'
-    }
-    if (String(authToken || '').trim()) {
-      headers.Authorization = `Bearer ${String(authToken || '').trim()}`
     }
 
     void fetchImpl(url, {

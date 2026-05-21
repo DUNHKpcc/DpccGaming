@@ -102,17 +102,10 @@ export const useCookieStore = defineStore('cookie', {
           cookieId: this.cookieId
         };
 
-        const headers = { 'Content-Type': 'application/json' };
-        if (typeof window !== 'undefined') {
-          const token = localStorage.getItem('token');
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-          }
-        }
-
         const response = await fetch('/api/cookies/consent', {
           method: 'POST',
-          headers,
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 

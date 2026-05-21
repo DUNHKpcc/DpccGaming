@@ -858,14 +858,12 @@ function renderWechatCallbackPage({
   title,
   message,
   returnTo = '/',
-  token = '',
   user = null
 }) {
   const safeTitle = escapeHtml(title || (success ? '微信登录成功' : '微信登录失败'));
   const safeMessage = escapeHtml(message || '');
   const safeReturnTo = sanitizeReturnTo(returnTo);
   const payload = JSON.stringify({
-    token: token || '',
     user: user || null,
     returnTo: safeReturnTo
   });
@@ -875,10 +873,6 @@ function renderWechatCallbackPage({
       (function () {
         var payload = ${payload};
         try {
-          if (payload.token) {
-            localStorage.setItem('authToken', payload.token);
-            localStorage.setItem('token', payload.token);
-          }
           if (payload.user) {
             localStorage.setItem('currentUser', JSON.stringify(payload.user));
           }

@@ -405,14 +405,9 @@ export const useBlueprintExecution = ({
   }
 
   const buildBlueprintExecutionHeaders = () => {
-    const headers = {
+    return {
       'Content-Type': 'application/json'
     }
-    const token = localStorage.getItem('token') || authStore.authToken
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-    return headers
   }
 
   const handleBlueprintExecutionEvent = (event = {}) => {

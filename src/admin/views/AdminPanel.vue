@@ -76,16 +76,8 @@ const pendingGames = ref([])
 
 const fetchPendingGames = async () => {
   try {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      notificationStore.error('未登录', '请先登录管理员账户')
-      return
-    }
-
     const response = await fetch('/api/admin/games/pending', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (response.ok) {
@@ -103,12 +95,11 @@ const fetchPendingGames = async () => {
 
 const reviewGame = async (gameId, status, reviewNotes = '') => {
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/admin/games/${gameId}/review`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ status, reviewNotes })
     })
@@ -172,18 +163,9 @@ const formatDate = (dateString) => {
 }
 
 onMounted(async () => {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    notificationStore.error('未登录', '请先登录管理员账户')
-    window.location.href = '/'
-    return
-  }
-
   try {
     const response = await fetch('/api/admin/check-permission', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (!response.ok) {

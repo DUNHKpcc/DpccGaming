@@ -48,12 +48,6 @@ export async function apiCall(endpoint, options = {}) {
     defaultOptions.headers['Content-Type'] = 'application/json'
   }
 
-  // 优先使用localStorage中的token，然后使用store中的token
-  const token = localStorage.getItem('token') || authStore.authToken
-  if (token) {
-    defaultOptions.headers['Authorization'] = `Bearer ${token}`
-  }
-
   const finalOptions = {
     ...defaultOptions,
     ...options,

@@ -135,17 +135,9 @@ const themeToggleIcon = computed(() => {
 })
 
 const checkAdminPermission = async () => {
-  const token = localStorage.getItem('token')
-
   try {
-    const headers = {}
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-
     const response = await fetch('/api/admin/check-permission', {
-      credentials: 'include',
-      headers
+      credentials: 'include'
     })
 
     if (response.ok) {

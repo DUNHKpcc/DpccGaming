@@ -556,11 +556,9 @@ const autoCancelBlueprintRunOnLeave = async ({ fireAndForget = false } = {}) => 
   hasTriggeredLeaveAutoCancel = true
 
   if (fireAndForget) {
-    const authToken = localStorage.getItem('token') || authStore.authToken || ''
     return requestBlueprintRunCancelOnLeave({
       runId: latestRunId.value,
-      apiBaseUrl: API_BASE_URL,
-      authToken
+      apiBaseUrl: API_BASE_URL
     })
   }
 

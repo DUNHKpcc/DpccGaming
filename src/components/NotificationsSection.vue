@@ -173,10 +173,6 @@ const getSocketBaseUrl = () => {
   return window.location.origin
 }
 
-const getAuthToken = () => {
-  return localStorage.getItem('token') || localStorage.getItem('authToken') || ''
-}
-
 const mergeNotification = (incoming) => {
   if (!incoming?.id) return
   const index = notifications.value.findIndex((item) => Number(item.id) === Number(incoming.id))
@@ -252,15 +248,10 @@ const stabilizeNotificationsScroll = async ({ rebuild = false } = {}) => {
 
 const setupNotificationSocket = () => {
   if (socket.value || !authStore.isLoggedIn) return
-  const token = getAuthToken()
-  if (!token) return
 
   socket.value = io(getSocketBaseUrl(), {
     withCredentials: true,
-    transports: ['websocket', 'polling'],
-    auth: {
-      token: `Bearer ${token}`
-    }
+    transports: ['websocket', 'polling']
   })
 
   socket.value.on('notification:new', (payload) => {
@@ -300,11 +291,8 @@ const fetchNotifications = async (page = 1, reset = false) => {
 
   try {
     loading.value = true
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/notifications?page=${page}&limit=${pageSize.value}`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (response.ok) {
@@ -335,12 +323,9 @@ const markAsRead = async (notification) => {
   if (notification.is_read) return
 
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/notifications/${notification.id}/read`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (response.ok) {
@@ -354,12 +339,9 @@ const markAsRead = async (notification) => {
 
 const markAllAsRead = async () => {
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch('/api/notifications/mark-all-read', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (response.ok) {

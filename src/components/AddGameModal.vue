@@ -131,13 +131,6 @@ const handleSubmit = async () => {
       return
     }
 
-    // 检查用户是否已登录
-    const token = localStorage.getItem('token')
-    if (!token) {
-      notificationStore.error('未登录', '请先登录后再上传游戏')
-      return
-    }
-
     // 创建FormData
     const formData = new FormData()
     formData.append('title', form.value.title)
@@ -182,9 +175,7 @@ const handleSubmit = async () => {
     
     const response = await fetch('/api/games', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
+      credentials: 'include',
       body: formData
     })
 
@@ -197,8 +188,6 @@ const handleSubmit = async () => {
       // 处理认证错误
       if (response.status === 401 || response.status === 403) {
         notificationStore.error('认证失败', '登录已过期，请重新登录')
-        // 清除无效token
-        localStorage.removeItem('token')
         // 可以触发重新登录
         setTimeout(() => {
           window.location.reload()

@@ -256,16 +256,8 @@ const fetchUnreadStatus = async () => {
   }
 
   try {
-    const token = localStorage.getItem('token') || authStore.authToken
-    if (!token) {
-      hasUnreadNotifications.value = false
-      return
-    }
-
     const response = await fetch('/api/notifications/unread-status', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (!response.ok) return

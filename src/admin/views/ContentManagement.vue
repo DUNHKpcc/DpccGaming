@@ -351,11 +351,6 @@ const {
   pageSize
 })
 
-const authHeaders = () => {
-  const token = localStorage.getItem('token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 const readJsonResponse = async (response) => {
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -366,7 +361,7 @@ const readJsonResponse = async (response) => {
 
 const fetchBlogPosts = async () => {
   const response = await fetch('/api/admin/content/blog-posts', {
-    headers: authHeaders()
+    credentials: 'include'
   })
   const data = await readJsonResponse(response)
   blogPosts.value = data.posts || []
@@ -374,7 +369,7 @@ const fetchBlogPosts = async () => {
 
 const fetchDocs = async () => {
   const response = await fetch('/api/admin/content/docs', {
-    headers: authHeaders()
+    credentials: 'include'
   })
   const data = await readJsonResponse(response)
   docs.value = data.docs || []
@@ -559,7 +554,7 @@ const saveBlog = async () => {
     const isEdit = Boolean(blogForm.value.id)
     const response = await fetch(`/api/admin/content/blog-posts${isEdit ? `/${blogForm.value.id}` : ''}`, {
       method: isEdit ? 'PUT' : 'POST',
-      headers: authHeaders(),
+      credentials: 'include',
       body: appendBlogFormData()
     })
     await readJsonResponse(response)
@@ -584,7 +579,7 @@ const saveDoc = async () => {
     const isEdit = Boolean(docForm.value.numericId)
     const response = await fetch(`/api/admin/content/docs${isEdit ? `/${docForm.value.numericId}` : ''}`, {
       method: isEdit ? 'PUT' : 'POST',
-      headers: authHeaders(),
+      credentials: 'include',
       body: appendDocFormData()
     })
     await readJsonResponse(response)
@@ -607,7 +602,7 @@ const confirmDeleteBlog = async (post) => {
     })
     const response = await fetch(`/api/admin/content/blog-posts/${post.id}`, {
       method: 'DELETE',
-      headers: authHeaders()
+      credentials: 'include'
     })
     await readJsonResponse(response)
     notificationStore.success('删除成功', 'Blog 已删除')
@@ -626,7 +621,7 @@ const confirmDeleteDoc = async (doc) => {
     })
     const response = await fetch(`/api/admin/content/docs/${doc.numericId}`, {
       method: 'DELETE',
-      headers: authHeaders()
+      credentials: 'include'
     })
     await readJsonResponse(response)
     notificationStore.success('删除成功', '文档已删除')

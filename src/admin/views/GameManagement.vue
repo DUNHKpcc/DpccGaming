@@ -134,16 +134,8 @@ const {
 
 const fetchGames = async () => {
   try {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      notificationStore.error('未登录', '请先登录管理员账户')
-      return
-    }
-
     const response = await fetch('/api/admin/games/all', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (response.ok) {
@@ -161,12 +153,9 @@ const fetchGames = async () => {
 
 const deleteGame = async (game) => {
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/admin/games/${game.game_id}/delete`, {
       method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     const result = await response.json()
@@ -216,18 +205,9 @@ const formatDate = (dateString) => {
 }
 
 onMounted(async () => {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    notificationStore.error('未登录', '请先登录管理员账户')
-    window.location.href = '/'
-    return
-  }
-
   try {
     const response = await fetch('/api/admin/check-permission', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (!response.ok) {

@@ -548,11 +548,8 @@ const fetchCodeBundle = async () => {
   if (!gameId.value) return
   codeLoading.value = true
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/games/${gameId.value}/code`, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : undefined
-      }
+      credentials: 'include'
     })
     const data = await response.json()
     if (!response.ok) {

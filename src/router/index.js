@@ -166,14 +166,10 @@ const restoreSessionFromCookie = async () => {
     if (!response.ok) return false
 
     const data = await response.json()
-    if (data?.token) {
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('authToken', data.token)
-    }
     if (data?.user) {
       localStorage.setItem('currentUser', JSON.stringify(data.user))
     }
-    return !!data?.token
+    return !!data?.user
   } catch (error) {
     console.error('恢复登录会话失败:', error)
     return false
@@ -201,30 +197,22 @@ router.onError((error) => {
 
 // 路由守卫
 router.beforeEach(async (to, from, next) => {
-  let token = localStorage.getItem('token')
-
   // 检查是否需要认证
-  if (to.meta.requiresAuth && !token) {
+  if (to.meta.requiresAuth && !localStorage.getItem('currentUser')) {
     const restored = await restoreSessionFromCookie()
     if (!restored) {
       clearLocalAuth()
       next('/')
       return
     }
-    token = localStorage.getItem('token')
   }
 
   // 检查管理员权限
   if (to.meta.requiresAdmin) {
     try {
       // 调用API检查管理员权限
-      const headers = {}
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
       const response = await fetch('/api/admin/check-permission', {
-        credentials: 'include',
-        headers
+        credentials: 'include'
       })
 
       if (!response.ok) {

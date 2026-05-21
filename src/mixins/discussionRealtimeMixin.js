@@ -143,20 +143,12 @@ export default {
       if (/^https?:\/\//.test(API_BASE_URL)) return API_BASE_URL.replace(/\/api\/?$/, '')
       return window.location.origin
     },
-    getAuthToken() {
-      return localStorage.getItem('token') || localStorage.getItem('authToken') || ''
-    },
     setupSocket() {
       if (this.socket) return
-      const token = this.getAuthToken()
-      if (!token) return
 
       this.socket = io(this.getSocketBaseUrl(), {
         withCredentials: true,
-        transports: ['websocket', 'polling'],
-        auth: {
-          token: `Bearer ${token}`
-        }
+        transports: ['websocket', 'polling']
       })
 
       this.socket.on('connect', () => {

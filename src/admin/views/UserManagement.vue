@@ -159,16 +159,8 @@ const roleOptions = [
 
 const fetchUsers = async () => {
   try {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      notificationStore.error('未登录', '请先登录管理员账户')
-      return
-    }
-
     const response = await fetch('/api/admin/users', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (response.ok) {
@@ -203,12 +195,11 @@ const changeUserRole = async (user, newRole) => {
   }
 
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/admin/users/${user.id}/role`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ role: newRole })
     })
@@ -283,12 +274,11 @@ const banUser = async (user) => {
   }
 
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/admin/users/${user.id}/ban`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ action: 'ban' })
     })
@@ -320,12 +310,11 @@ const unbanUser = async (user) => {
   }
 
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/admin/users/${user.id}/ban`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ action: 'unban' })
     })
@@ -347,12 +336,9 @@ const unbanUser = async (user) => {
 
 const deleteUser = async (user) => {
   try {
-    const token = localStorage.getItem('token')
     const response = await fetch(`/api/admin/users/${user.id}/delete`, {
       method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     const result = await response.json()
