@@ -1,4 +1,11 @@
 const { toMysqlDateTime } = require('../services/payment/paymentUtils');
+const { parseSnapshotJson } = require('../services/payment/paymentProductUtils');
+const { getRechargeBonusPackage } = require('../services/payment/plans');
+const {
+  encryptRedeemCode,
+  getRedeemCodeLookupHash,
+  normalizeCode
+} = require('../services/payment/redeemCodeCrypto');
 
 let paymentTablesInitPromise = null;
 
@@ -13,6 +20,204 @@ const normalizeOptionalDateTime = (value) => {
   }
   const date = value instanceof Date ? value : new Date(String(value));
   return Number.isFinite(date.getTime()) ? toMysqlDateTime(date) : null;
+};
+
+const hasEncryptedRedeemCodeColumns = (row = {}) => Boolean(
+  row.code_ciphertext
+  && row.code_iv
+  && row.code_auth_tag
+);
+
+const parseOrderProductSnapshot = (order = {}) => parseSnapshotJson(order.product_snapshot_json) || {};
+
+const resolveOrderRedeemSku = (order = {}, kind = 'main') => {
+  const snapshot = parseOrderProductSnapshot(order);
+  if (kind === 'bonus') {
+    return snapshot.bonusRedeemSkuId || getRechargeBonusPackage().id;
+  }
+  if (order.product_type === 'recharge') {
+    return snapshot.mainRedeemSkuId || order.plan_id;
+  }
+  return order.plan_id;
+};
+
+const findRedeemCodeBySecretForUpdate = async (executor, code = '') => {
+  const normalizedCode = normalizeCode(code);
+  if (!normalizedCode) return null;
+  const lookupHash = getRedeemCodeLookupHash(normalizedCode);
+  const [rows] = await executor.execute(
+    `
+      SELECT *
+      FROM redeem_codes
+      WHERE code_lookup_hash = ? OR code = ?
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [lookupHash, normalizedCode]
+  );
+  return rows[0] || null;
+};
+
+const createAssignedRedeemCodeFromSecret = async (executor, payload = {}) => {
+  const encrypted = encryptRedeemCode(payload.code);
+  await executor.execute(
+    `
+      INSERT IGNORE INTO redeem_codes
+        (
+          product_type, sku_id, code, code_ciphertext, code_iv, code_auth_tag,
+          code_lookup_hash, status, assigned_order_no, assigned_user_id, assigned_at
+        )
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?, ?)
+    `,
+    [
+      payload.productType,
+      payload.skuId,
+      encrypted.codeStorageValue,
+      encrypted.codeCiphertext,
+      encrypted.codeIv,
+      encrypted.codeAuthTag,
+      encrypted.codeLookupHash,
+      payload.orderNo,
+      payload.userId,
+      payload.assignedAt
+    ]
+  );
+  return findRedeemCodeBySecretForUpdate(executor, payload.code);
+};
+
+const assignRedeemCodeRowToLegacyOrder = async (executor, row = {}, order = {}) => {
+  if (!row?.id || row.status !== 'available') return;
+  await executor.execute(
+    `
+      UPDATE redeem_codes
+      SET status = 'assigned',
+          assigned_order_no = ?,
+          assigned_user_id = ?,
+          assigned_at = COALESCE(?, NOW())
+      WHERE id = ? AND status = 'available'
+    `,
+    [order.order_no, order.user_id, order.paid_at || order.updated_at || null, row.id]
+  );
+};
+
+const ensureLegacyOrderRedeemCodeReference = async (executor, order = {}, kind = 'main') => {
+  const codeField = kind === 'bonus' ? 'bonus_redeem_code' : 'redeem_code';
+  const idField = kind === 'bonus' ? 'bonus_redeem_code_id' : 'redeem_code_id';
+  const plainCode = normalizeCode(order[codeField]);
+  if (!plainCode) return order[idField] || null;
+  if (order[idField]) return order[idField];
+
+  let codeRow = await findRedeemCodeBySecretForUpdate(executor, plainCode);
+  if (!codeRow) {
+    codeRow = await createAssignedRedeemCodeFromSecret(executor, {
+      productType: kind === 'bonus' ? 'recharge' : (order.product_type || 'subscription'),
+      skuId: resolveOrderRedeemSku(order, kind),
+      code: plainCode,
+      orderNo: order.order_no,
+      userId: order.user_id,
+      assignedAt: order.paid_at || order.updated_at || null
+    });
+  } else {
+    await assignRedeemCodeRowToLegacyOrder(executor, codeRow, order);
+  }
+
+  return codeRow?.id || null;
+};
+
+const migrateLegacyPaymentOrderRedeemCodes = async (connection) => {
+  const [orders] = await connection.execute(
+    `
+      SELECT *
+      FROM payment_orders
+      WHERE (redeem_code IS NOT NULL AND redeem_code <> '')
+         OR (bonus_redeem_code IS NOT NULL AND bonus_redeem_code <> '')
+      LIMIT 1000
+      FOR UPDATE
+    `
+  );
+
+  for (const order of orders) {
+    const redeemCodeId = await ensureLegacyOrderRedeemCodeReference(connection, order, 'main');
+    const bonusRedeemCodeId = await ensureLegacyOrderRedeemCodeReference(connection, order, 'bonus');
+    await connection.execute(
+      `
+        UPDATE payment_orders
+        SET redeem_code_id = COALESCE(?, redeem_code_id),
+            bonus_redeem_code_id = COALESCE(?, bonus_redeem_code_id),
+            redeem_code = NULL,
+            bonus_redeem_code = NULL
+        WHERE id = ?
+      `,
+      [redeemCodeId, bonusRedeemCodeId, order.id]
+    );
+  }
+
+  return orders.length;
+};
+
+const migrateLegacyRedeemCodeRows = async (connection) => {
+  const [rows] = await connection.execute(
+    `
+      SELECT *
+      FROM redeem_codes
+      WHERE (
+          code_ciphertext IS NULL
+          OR code_ciphertext = ''
+          OR code_iv IS NULL
+          OR code_auth_tag IS NULL
+        )
+        AND code NOT LIKE 'enc:v1:%'
+      LIMIT 1000
+      FOR UPDATE
+    `
+  );
+
+  for (const row of rows) {
+    if (hasEncryptedRedeemCodeColumns(row) || String(row.code || '').startsWith('enc:v1:')) continue;
+    const encrypted = encryptRedeemCode(row.code);
+    await connection.execute(
+      `
+        UPDATE redeem_codes
+        SET code = ?,
+            code_ciphertext = ?,
+            code_iv = ?,
+            code_auth_tag = ?,
+            code_lookup_hash = ?
+        WHERE id = ?
+      `,
+      [
+        encrypted.codeStorageValue,
+        encrypted.codeCiphertext,
+        encrypted.codeIv,
+        encrypted.codeAuthTag,
+        encrypted.codeLookupHash,
+        row.id
+      ]
+    );
+  }
+
+  return rows.length;
+};
+
+const migrateLegacyRedeemCodeStorage = async (pool) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    let migratedOrders = 0;
+    let migratedCodes = 0;
+    do {
+      migratedOrders = await migrateLegacyPaymentOrderRedeemCodes(connection);
+    } while (migratedOrders === 1000);
+    do {
+      migratedCodes = await migrateLegacyRedeemCodeRows(connection);
+    } while (migratedCodes === 1000);
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const ensurePaymentTables = async (pool) => {
@@ -322,6 +527,7 @@ const ensurePaymentTables = async (pool) => {
           if (error?.code === 'ER_BAD_FIELD_ERROR') return null;
           throw error;
         });
+      await migrateLegacyRedeemCodeStorage(pool);
     })().catch((error) => {
       paymentTablesInitPromise = null;
       throw error;
@@ -1074,10 +1280,10 @@ const getRedeemCodeById = async (executor, id) => {
   return rows[0] || null;
 };
 
-const getRedeemCodeByPlainCode = async (executor, code = '') => {
+const getRedeemCodeByLookupHash = async (executor, lookupHash = '') => {
   const [rows] = await executor.execute(
-    'SELECT id FROM redeem_codes WHERE code = ? LIMIT 1',
-    [code]
+    'SELECT id FROM redeem_codes WHERE code_lookup_hash = ? LIMIT 1',
+    [lookupHash]
   );
   return rows[0] || null;
 };
@@ -1158,7 +1364,7 @@ module.exports = {
   listRedeemCodes,
   getRedeemCodeStats,
   getRedeemCodeById,
-  getRedeemCodeByPlainCode,
+  getRedeemCodeByLookupHash,
   getRedeemCodesByIds,
   deleteAvailableRedeemCodes
 };

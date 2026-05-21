@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const router = express.Router();
@@ -10,7 +11,21 @@ const adminRedeemCodeController = require('../controllers/adminRedeemCodeControl
 const adminPaymentOrderController = require('../controllers/adminPaymentOrderController');
 const adminPaymentProductController = require('../controllers/adminPaymentProductController');
 const contentController = require('../controllers/contentController');
-const { authenticateToken, checkAdminPermission, requireSuperAdminPermission } = require('../middleware/auth');
+const {
+  authenticateToken,
+  checkAdminPermission,
+  requireSuperAdminPermission,
+  requireCookieAuthForSensitiveAdminAction
+} = require('../middleware/auth');
+
+const secretReadLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  message: '读取兑换码过于频繁，请稍后再试',
+  keyGenerator: (req) => (
+    req.user?.userId ? `admin:${req.user.userId}` : req.ip || req.connection.remoteAddress
+  )
+});
 
 const ensureDirSync = (dirPath) => {
   if (!fs.existsSync(dirPath)) {
@@ -129,7 +144,7 @@ router.get('/redeem-codes/catalog', authenticateToken, checkAdminPermission, req
 router.get('/redeem-codes', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.listRedeemCodes);
 router.post('/redeem-codes/import', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.importRedeemCodes);
 router.post('/redeem-codes/batch-delete', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.batchDeleteRedeemCodes);
-router.get('/redeem-codes/:id/secret', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.getRedeemCodeSecret);
+router.get('/redeem-codes/:id/secret', authenticateToken, checkAdminPermission, requireSuperAdminPermission, requireCookieAuthForSensitiveAdminAction, secretReadLimiter, adminRedeemCodeController.getRedeemCodeSecret);
 router.delete('/redeem-codes/:id', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.deleteRedeemCode);
 
 router.get('/payment-products', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentProductController.listProducts);

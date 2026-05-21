@@ -141,6 +141,45 @@ function requireSuperAdminPermission(req, res, next) {
   next();
 }
 
+function requireCookieAuthForSensitiveAdminAction(req, res, next) {
+  const cookies = parseCookies(req.headers.cookie || '');
+  const cookieToken = cookies[AUTH_COOKIE_NAME] || null;
+  if (!cookieToken) {
+    return res.status(401).json({
+      error: '需要安全登录凭证',
+      message: '请刷新页面并重新登录后再读取敏感信息'
+    });
+  }
+
+  const actionHeader = String(req.headers['x-dpcc-admin-action'] || '').trim();
+  if (actionHeader !== 'redeem-code-secret') {
+    return res.status(403).json({
+      error: '缺少敏感操作确认',
+      message: '读取兑换码需要有效的敏感操作请求头'
+    });
+  }
+
+  try {
+    const cookieUser = jwt.verify(cookieToken, JWT_SECRET);
+    if (req.user?.userId && Number(cookieUser.userId) !== Number(req.user.userId)) {
+      return res.status(403).json({
+        error: '登录凭证不一致',
+        message: '请重新登录后再读取敏感信息'
+      });
+    }
+    req.user = {
+      ...req.user,
+      ...cookieUser
+    };
+    next();
+  } catch (error) {
+    return res.status(403).json({
+      error: '无效的安全登录凭证',
+      message: '登录已过期，请重新登录'
+    });
+  }
+}
+
 function generateToken(user) {
   return jwt.sign(
     { userId: user.id, username: user.username },
@@ -190,6 +229,7 @@ module.exports = {
   optionalAuthenticateToken,
   checkAdminPermission,
   requireSuperAdminPermission,
+  requireCookieAuthForSensitiveAdminAction,
   generateToken,
   verifyToken,
   extractToken,

@@ -50,7 +50,7 @@ const isEncryptedRedeemCodeRow = (row = {}) => Boolean(
 
 const decryptRedeemCode = (row = {}) => {
   if (!isEncryptedRedeemCodeRow(row)) {
-    return normalizeCode(row.code);
+    throw new Error('Encrypted redeem code data is missing');
   }
 
   const decipher = crypto.createDecipheriv(
@@ -69,5 +69,6 @@ module.exports = {
   encryptRedeemCode,
   decryptRedeemCode,
   getRedeemCodeLookupHash,
-  isEncryptedRedeemCodeRow
+  isEncryptedRedeemCodeRow,
+  normalizeCode
 };

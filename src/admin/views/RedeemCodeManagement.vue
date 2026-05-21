@@ -337,7 +337,10 @@ const fetchSecret = async (row, purpose) => {
   try {
     const params = new URLSearchParams({ purpose })
     const result = await apiCall(`/admin/redeem-codes/${row.id}/secret?${params.toString()}`, {
-      method: 'GET'
+      method: 'GET',
+      headers: {
+        'X-DPCC-Admin-Action': 'redeem-code-secret'
+      }
     })
     return result.code || ''
   } finally {

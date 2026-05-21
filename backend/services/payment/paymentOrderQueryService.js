@@ -50,7 +50,7 @@ const getRedeemCodeRowsById = async (executor, orders = []) => {
 
 const buildOrderRedeemCodes = (order = {}, rowsById = new Map(), options = {}) => {
   const hasAssignedIds = Boolean(order.redeem_code_id || order.bonus_redeem_code_id);
-  if (!hasAssignedIds) return buildRedeemCodes(order, options);
+  if (!hasAssignedIds) return [];
 
   const redeemCodeRow = rowsById.get(Number(order.redeem_code_id));
   const bonusRedeemCodeRow = rowsById.get(Number(order.bonus_redeem_code_id));
@@ -58,7 +58,7 @@ const buildOrderRedeemCodes = (order = {}, rowsById = new Map(), options = {}) =
     redeem_code: redeemCodeRow ? decryptRedeemCode(redeemCodeRow) : '',
     bonus_redeem_code: bonusRedeemCodeRow ? decryptRedeemCode(bonusRedeemCodeRow) : ''
   }, options);
-  return assignedCodes.length > 0 ? assignedCodes : buildRedeemCodes(order, options);
+  return assignedCodes;
 };
 
 const getPromotionPayerRejectReason = (supportNote = '') => {

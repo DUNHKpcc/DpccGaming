@@ -38,10 +38,10 @@ const importRedeemCodes = async ({ productType, skuId, codes } = {}, pool = getP
   await repository.ensurePaymentTables(pool);
   let inserted = 0;
   for (const code of normalizedCodes) {
-    const legacyCode = await repository.getRedeemCodeByPlainCode(pool, code);
-    if (legacyCode) continue;
-
     const encryptedCode = encryptRedeemCode(code);
+    const existingCode = await repository.getRedeemCodeByLookupHash(pool, encryptedCode.codeLookupHash);
+    if (existingCode) continue;
+
     const [result] = await repository.createRedeemCode(pool, {
       productType: normalizedProduct.productType,
       skuId: normalizedProduct.skuId,
