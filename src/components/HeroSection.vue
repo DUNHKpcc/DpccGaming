@@ -41,14 +41,6 @@
         </div>
       </div>
     </div>
-    <!-- 悬浮小组件 -->
-    <div class="new-year-widget">
-      <div class="widget-content">
-        <div class="widget-text">
-          <span class="greeting">DPCC-API稳定的中转体验</span>
-        </div>
-      </div>
-    </div>
   </section>
 </template>
 
@@ -843,73 +835,4 @@ onUnmounted(() => {
 }
 
 
-.new-year-widget {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 12;
-}
-
-.widget-content {
-  background: black;
-  border-radius: 50px;
-  padding: 12px 30px;
-  box-shadow: 
-    0 4px 15px rgba(0, 0, 0, 0.3),
-    0 0 0 2px rgba(109, 108, 108, 0.2);
-  position: relative;
-  overflow: hidden;
-}
-
-.widget-text {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 1;
-}
-
-.greeting {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .new-year-widget {
-    top: 14px;
-    right: 12px;
-  }
-  
-  .widget-content {
-    padding: 10px 25px;
-  }
-  
-  .greeting {
-    font-size: 0.9rem;
-    letter-spacing: 1.5px;
-  }
-}
-
-@media (max-width: 480px) {
-  .new-year-widget {
-    top: 0.75rem;
-    right: 50%;
-    max-width: calc(100vw - 1.5rem);
-    transform: translateX(50%);
-  }
-  
-  .widget-content {
-    padding: 8px 20px;
-  }
-  
-  .greeting {
-    font-size: 0.8rem;
-    letter-spacing: 1px;
-  }
-}
 </style>
