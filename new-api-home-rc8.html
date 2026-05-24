@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New API Home rc8 Replica</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230064fa'/%3E%3Cpath d='M9 19c5-10 9-10 14 0' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        --semi-color-bg-0: #fff;
+        --semi-color-bg-1: #fbfbfc;
+        --semi-color-border: rgba(28, 31, 35, 0.08);
+        --semi-color-fill-0: rgba(46, 50, 56, 0.05);
+        --semi-color-fill-1: rgba(46, 50, 56, 0.09);
+        --semi-color-primary: #0064fa;
+        --semi-color-primary-hover: #0052d9;
+        --semi-color-text-0: #1f2329;
+        --semi-color-text-1: #4e5969;
+        --semi-color-text-2: #86909c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        overflow-x: hidden;
+        background: var(--semi-color-bg-0);
+        color: var(--semi-color-text-0);
+        font-family:
+          Lato, "Helvetica Neue", Arial, Helvetica, "Microsoft YaHei",
+          sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .page {
+        width: 100%;
+        overflow-x: hidden;
+      }
+
+      .banner {
+        position: relative;
+        z-index: 0;
+        width: 100%;
+        min-height: 700px;
+        overflow: hidden;
+        border-bottom: 1px solid var(--semi-color-border);
+      }
+
+      .blur-ball {
+        position: absolute;
+        z-index: -1;
+        width: 360px;
+        height: 360px;
+        border-radius: 999px;
+        filter: blur(120px);
+        pointer-events: none;
+      }
+
+      .blur-ball-indigo {
+        top: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #6366f1;
+        opacity: 0.25;
+      }
+
+      .blur-ball-teal {
+        top: 200px;
+        left: 30%;
+        background: #14b8a6;
+        opacity: 0.2;
+      }
+
+      .hero-shell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 700px;
+        margin-top: 40px;
+        padding: 128px 16px;
+      }
+
+      .hero {
+        width: 100%;
+        max-width: 896px;
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      .hero-copy {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 32px;
+      }
+
+      h1 {
+        margin: 0;
+        color: var(--semi-color-text-0);
+        font-size: clamp(40px, 6.2vw, 72px);
+        font-weight: 700;
+        line-height: 1.12;
+        letter-spacing: 0.04em;
+      }
+
+      @keyframes sweep-shine {
+        0% {
+          background-position: 200% 0;
+        }
+
+        100% {
+          background-position: -200% 0;
+        }
+      }
+
+      .shine-text {
+        background: linear-gradient(
+          90deg,
+          currentColor 0%,
+          currentColor 40%,
+          rgba(255, 255, 255, 0.9) 50%,
+          currentColor 60%,
+          currentColor 100%
+        );
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: sweep-shine 4s linear infinite;
+      }
+
+      .subtitle {
+        max-width: 576px;
+        margin: 24px 0 0;
+        color: var(--semi-color-text-1);
+        font-size: 20px;
+        line-height: 1.55;
+      }
+
+      .base-url-row {
+        display: flex;
+        width: 100%;
+        max-width: 448px;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 24px;
+      }
+
+      .input-wrap {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        align-items: center;
+        height: 40px;
+        padding: 0 4px 0 16px;
+        border: 1px solid var(--semi-color-border);
+        border-radius: 999px;
+        background: var(--semi-color-bg-0);
+        box-shadow: 0 4px 18px rgba(31, 35, 41, 0.05);
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+
+      .input-wrap:focus-within {
+        border-color: rgba(0, 100, 250, 0.35);
+        box-shadow: 0 0 0 3px rgba(0, 100, 250, 0.1);
+      }
+
+      .base-url {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--semi-color-text-0);
+        font-size: 14px;
+      }
+
+      .input-suffix {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .endpoint-window {
+        position: relative;
+        width: 150px;
+        height: 32px;
+        overflow: hidden;
+        color: var(--semi-color-text-1);
+        font-size: 13px;
+        line-height: 32px;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .endpoint-item {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+          opacity 0.32s ease,
+          transform 0.32s ease;
+      }
+
+      .endpoint-item.active {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .icon-button,
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        cursor: pointer;
+        text-decoration: none;
+        transition:
+          transform 0.15s ease,
+          background 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+
+      .icon-button {
+        width: 32px;
+        height: 32px;
+        flex: 0 0 auto;
+        border-radius: 999px;
+        background: var(--semi-color-primary);
+        color: #fff;
+      }
+
+      .icon-button:hover,
+      .button.primary:hover {
+        background: var(--semi-color-primary-hover);
+        transform: translateY(-1px);
+      }
+
+      .actions {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+      }
+
+      .button {
+        min-height: 40px;
+        gap: 8px;
+        border-radius: 24px;
+        padding: 8px 28px;
+        font-size: 16px;
+        line-height: 1.2;
+      }
+
+      .button.primary {
+        background: var(--semi-color-primary);
+        color: #fff;
+        box-shadow: 0 8px 22px rgba(0, 100, 250, 0.2);
+      }
+
+      .button.secondary {
+        border: 1px solid var(--semi-color-border);
+        background: var(--semi-color-bg-0);
+        color: var(--semi-color-text-0);
+      }
+
+      .button.secondary:hover {
+        background: var(--semi-color-fill-0);
+        transform: translateY(-1px);
+      }
+
+      .providers {
+        width: 100%;
+        margin-top: 80px;
+      }
+
+      .providers-title {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 32px;
+        color: var(--semi-color-text-2);
+        font-size: 24px;
+        font-weight: 300;
+      }
+
+      .provider-grid {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        max-width: 1024px;
+        margin: 0 auto;
+        gap: 32px;
+        padding: 0 16px;
+      }
+
+      .provider {
+        display: flex;
+        width: 48px;
+        height: 48px;
+        align-items: center;
+        justify-content: center;
+        color: var(--brand, var(--semi-color-text-0));
+      }
+
+      .provider svg {
+        width: 40px;
+        height: 40px;
+        display: block;
+      }
+
+      .provider-mark {
+        display: flex;
+        width: 40px;
+        height: 40px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        background: var(--brand-bg, var(--semi-color-fill-0));
+        color: var(--brand, var(--semi-color-text-0));
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .provider-text {
+        width: auto;
+        min-width: 40px;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .provider-more {
+        color: var(--semi-color-text-0);
+        font-size: 30px;
+        font-weight: 700;
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 28px;
+        z-index: 10;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(31, 35, 41, 0.92);
+        color: #fff;
+        font-size: 14px;
+        opacity: 0;
+        transform: translate(-50%, 12px);
+        transition:
+          opacity 0.2s ease,
+          transform 0.2s ease;
+        pointer-events: none;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      @media (max-width: 1023px) {
+        .banner,
+        .hero-shell {
+          min-height: 600px;
+        }
+
+        .hero-shell {
+          padding-top: 96px;
+          padding-bottom: 96px;
+        }
+
+        .providers {
+          margin-top: 64px;
+        }
+
+        .provider-grid {
+          gap: 24px;
+        }
+      }
+
+      @media (max-width: 767px) {
+        .banner,
+        .hero-shell {
+          min-height: 500px;
+        }
+
+        .hero-shell {
+          padding-top: 80px;
+          padding-bottom: 80px;
+        }
+
+        h1 {
+          font-size: 40px;
+        }
+
+        .subtitle {
+          margin-top: 16px;
+          font-size: 16px;
+        }
+
+        .base-url-row {
+          flex-direction: column;
+          margin-top: 16px;
+        }
+
+        .input-wrap {
+          width: min(100%, 448px);
+          height: 36px;
+        }
+
+        .endpoint-window {
+          width: 112px;
+          font-size: 12px;
+        }
+
+        .button {
+          min-height: 36px;
+          padding: 7px 22px;
+          font-size: 14px;
+        }
+
+        .providers {
+          margin-top: 48px;
+        }
+
+        .providers-title {
+          margin-bottom: 24px;
+          font-size: 18px;
+        }
+
+        .provider-grid {
+          gap: 16px;
+        }
+
+        .provider {
+          width: 40px;
+          height: 40px;
+        }
+
+        .provider svg,
+        .provider-mark {
+          width: 34px;
+          height: 34px;
+        }
+
+        .provider-more {
+          font-size: 24px;
+        }
+      }
+
+      @media (max-width: 420px) {
+        .actions {
+          gap: 12px;
+        }
+
+        .button {
+          padding-inline: 18px;
+        }
+
+        .base-url {
+          font-size: 13px;
+        }
+
+        .endpoint-window {
+          width: 92px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="banner" aria-label="New API home">
+        <div class="blur-ball blur-ball-indigo"></div>
+        <div class="blur-ball blur-ball-teal"></div>
+
+        <div class="hero-shell">
+          <div class="hero">
+            <div class="hero-copy">
+              <h1>
+                统一的<br />
+                <span class="shine-text">大模型接口网关</span>
+              </h1>
+              <p class="subtitle">多模型统一接入，只需将基址替换为：</p>
+
+              <div class="base-url-row">
+                <label class="input-wrap" aria-label="Base URL">
+                  <input class="base-url" readonly />
+                  <span class="input-suffix">
+                    <span class="endpoint-window" aria-live="polite"></span>
+                    <button class="icon-button" type="button" aria-label="复制 Base URL">
+                      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none">
+                        <rect
+                          x="9"
+                          y="9"
+                          width="10"
+                          height="10"
+                          rx="2"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        ></rect>
+                        <path
+                          d="M5 15V7a2 2 0 0 1 2-2h8"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        ></path>
+                      </svg>
+                    </button>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="actions">
+              <a class="button primary" href="/console">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                  <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l10.78-6.86a1 1 0 0 0 0-1.72L9.5 4.28A1 1 0 0 0 8 5.14Z"></path>
+                </svg>
+                获取密钥
+              </a>
+              <a
+                class="button secondary"
+                href="https://github.com/QuantumNous/new-api"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                  <path
+                    fill-rule="evenodd"
+                    d="M12 .8a11.2 11.2 0 0 0-3.54 21.83c.56.1.77-.24.77-.54v-1.9c-3.12.68-3.78-1.34-3.78-1.34-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.72 1.16 1.72 1.16 1 .1.47 2.05 3.23 1.46.1-.73.39-1.22.71-1.5-2.49-.28-5.1-1.24-5.1-5.54 0-1.22.44-2.22 1.16-3-.12-.28-.5-1.42.11-2.96 0 0 .95-.3 3.08 1.15a10.6 10.6 0 0 1 5.62 0c2.13-1.45 3.08-1.15 3.08-1.15.61 1.54.23 2.68.11 2.96.72.78 1.16 1.78 1.16 3 0 4.31-2.62 5.26-5.12 5.54.4.34.76 1.02.76 2.06v3.05c0 .3.2.65.78.54A11.2 11.2 0 0 0 12 .8Z"
+                    clip-rule="evenodd"
+                  ></path>
+                </svg>
+                v1.0.0-rc.8
+              </a>
+            </div>
+
+            <div class="providers">
+              <div class="providers-title">支持众多的大模型供应商</div>
+              <div class="provider-grid" aria-label="Model providers">
+                <div class="provider" title="Moonshot">
+                  <svg viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                    <circle cx="20" cy="20" r="18" fill="#111827"></circle>
+                    <path d="M26.8 8.8A12.6 12.6 0 1 0 31.2 28 10.4 10.4 0 1 1 26.8 8.8Z" fill="#fff"></path>
+                  </svg>
+                </div>
+                <div class="provider" title="OpenAI">
+                  <svg viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                    <circle cx="20" cy="20" r="16" stroke="#111827" stroke-width="3"></circle>
+                    <path d="M20 6v28M8 14l24 12M8 26l24-12" stroke="#111827" stroke-width="2.4" stroke-linecap="round"></path>
+                  </svg>
+                </div>
+                <div class="provider" title="xAI">
+                  <span class="provider-mark" style="--brand-bg: #111; --brand: #fff">xAI</span>
+                </div>
+                <div class="provider" title="Zhipu">
+                  <span class="provider-mark" style="--brand-bg: #2157ff; --brand: #fff">Z</span>
+                </div>
+                <div class="provider" title="Volcengine">
+                  <span class="provider-mark" style="--brand-bg: #eef3ff; --brand: #245bdb">火</span>
+                </div>
+                <div class="provider" title="Cohere">
+                  <span class="provider-mark" style="--brand-bg: #eaf9ef; --brand: #1a7f4e">co</span>
+                </div>
+                <div class="provider" title="Claude">
+                  <span class="provider-mark" style="--brand-bg: #f7efe4; --brand: #d97706">C</span>
+                </div>
+                <div class="provider" title="Gemini">
+                  <span class="provider-mark" style="--brand-bg: #eef2ff; --brand: #5b5ce2">G</span>
+                </div>
+                <div class="provider" title="Suno">
+                  <span class="provider-mark" style="--brand-bg: #111; --brand: #fff">S</span>
+                </div>
+                <div class="provider" title="Minimax">
+                  <span class="provider-mark" style="--brand-bg: #eef7ff; --brand: #1677ff">M</span>
+                </div>
+                <div class="provider" title="Wenxin">
+                  <span class="provider-mark" style="--brand-bg: #edf5ff; --brand: #2563eb">文</span>
+                </div>
+                <div class="provider" title="Spark">
+                  <span class="provider-mark" style="--brand-bg: #fff1f2; --brand: #e11d48">星</span>
+                </div>
+                <div class="provider" title="Qingyan">
+                  <span class="provider-mark" style="--brand-bg: #ecfeff; --brand: #0891b2">清</span>
+                </div>
+                <div class="provider" title="DeepSeek">
+                  <span class="provider-mark" style="--brand-bg: #edf2ff; --brand: #2563eb">DS</span>
+                </div>
+                <div class="provider" title="Qwen">
+                  <span class="provider-mark" style="--brand-bg: #f5f3ff; --brand: #7c3aed">Q</span>
+                </div>
+                <div class="provider" title="Midjourney">
+                  <span class="provider-mark" style="--brand-bg: #111; --brand: #fff">MJ</span>
+                </div>
+                <div class="provider" title="Grok">
+                  <span class="provider-mark" style="--brand-bg: #111; --brand: #fff">Gk</span>
+                </div>
+                <div class="provider" title="Azure AI">
+                  <span class="provider-mark" style="--brand-bg: #e7f2ff; --brand: #0078d4">Az</span>
+                </div>
+                <div class="provider" title="Hunyuan">
+                  <span class="provider-mark" style="--brand-bg: #fff7ed; --brand: #ea580c">混</span>
+                </div>
+                <div class="provider" title="Xinference">
+                  <span class="provider-mark provider-text" style="--brand-bg: transparent; --brand: #111827">Xin</span>
+                </div>
+                <div class="provider provider-more" title="More providers">30+</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" role="status" aria-live="polite">已复制到剪切板</div>
+
+    <script>
+      const endpoints = [
+        "/v1/chat/completions",
+        "/v1/responses",
+        "/v1/responses/compact",
+        "/v1/messages",
+        "/v1beta/models",
+        "/v1/embeddings",
+        "/v1/rerank",
+        "/v1/images/generations",
+        "/v1/images/edits",
+        "/v1/images/variations",
+        "/v1/audio/speech",
+        "/v1/audio/transcriptions",
+        "/v1/audio/translations",
+      ];
+
+      const origin =
+        window.location.origin && window.location.origin !== "null"
+          ? window.location.origin
+          : "https://new-api.example.com";
+      const input = document.querySelector(".base-url");
+      const endpointWindow = document.querySelector(".endpoint-window");
+      const copyButton = document.querySelector(".icon-button");
+      const toast = document.querySelector(".toast");
+      let endpointIndex = 0;
+      let toastTimer;
+
+      input.value = origin;
+
+      function renderEndpoint() {
+        endpointWindow.innerHTML = "";
+        const item = document.createElement("span");
+        item.className = "endpoint-item active";
+        item.textContent = endpoints[endpointIndex];
+        endpointWindow.appendChild(item);
+      }
+
+      function nextEndpoint(step = 1) {
+        endpointIndex = (endpointIndex + step + endpoints.length) % endpoints.length;
+        renderEndpoint();
+      }
+
+      endpointWindow.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        nextEndpoint(event.deltaY > 0 ? 1 : -1);
+      });
+
+      endpointWindow.addEventListener("click", () => nextEndpoint());
+
+      copyButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(origin);
+        } catch {
+          input.select();
+          document.execCommand("copy");
+          input.blur();
+        }
+
+        toast.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove("show"), 1600);
+      });
+
+      renderEndpoint();
+      setInterval(() => nextEndpoint(), 3000);
+    </script>
+  </body>
+</html>
