@@ -26,7 +26,7 @@
             Blog
           </router-link>
           <router-link to="/aidocs" class="nav-link nav-link--optional" active-class="nav-link-active">
-            AiDocs
+            Ai Docs
           </router-link>
           <a href="https://api.dpccgaming.xyz" class="nav-link nav-link--api">
             DPCC API
@@ -34,6 +34,9 @@
           <router-link to="/payment" class="nav-link nav-link--payment" active-class="nav-link-active">
             CDK
           </router-link>
+          <a href="https://api.dpccgaming.xyz/playground/" class="nav-link nav-link--api">
+            IMAGE
+          </a>
         </nav>
       </div>
 

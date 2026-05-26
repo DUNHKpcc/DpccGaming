@@ -218,6 +218,13 @@ const mobileNavItems = computed(() => [
     description: '阅读平台文档和教程'
   },
   {
+    name: 'Image',
+    href: 'https://api.dpccgaming.xyz/playground/',
+    icon: 'fa fa-image',
+    external: true,
+    description: '打开 Image Playground'
+  },
+  {
     name: 'CDK',
     path: '/payment',
     icon: 'fa fa-ticket',
