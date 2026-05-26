@@ -30,7 +30,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Sidebar from './components/Sidebar.vue'
 import TopNavbar from './components/TopNavbar.vue'
@@ -50,13 +50,26 @@ const sidebarRef = ref(null)
 const mainContent = ref(null)
 const route = useRoute()
 const isFullscreen = computed(() => modalStore.isFullscreen)
+const isDesktop = ref(true)
 
 const showSidebar = computed(() => !route.meta?.hideSidebar)
-const showTopbar = computed(() => !route.meta?.hideTopbar && !isFullscreen.value)
+const showTopbar = computed(() => {
+  if (isDesktop.value) {
+    return !route.meta?.hideTopbar
+  }
+
+  return !route.meta?.hideTopbar && !isFullscreen.value
+})
 const showOverlays = computed(() => !route.meta?.hideOverlays)
+
+const updateDesktopFlag = () => {
+  isDesktop.value = window.innerWidth >= 1024
+}
 
 onMounted(async () => {
   await authStore.checkAuthStatus()
+  updateDesktopFlag()
+  window.addEventListener('resize', updateDesktopFlag)
   
   // 监听侧边栏切换事件
   window.addEventListener('toggle-sidebar', () => {
@@ -76,6 +89,10 @@ onMounted(async () => {
       }
     }
   })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateDesktopFlag)
 })
 
 watch(showSidebar, (visible) => {

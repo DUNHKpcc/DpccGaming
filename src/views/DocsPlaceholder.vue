@@ -2,11 +2,38 @@
   <div class="docs-page">
     <div class="content-wrapper">
       <div class="docs-shell">
-        <aside class="docs-sidebar">
+        <button
+          type="button"
+          class="docs-mobile-menu-button"
+          aria-label="打开文档目录"
+          @click="openMobileDocMenu"
+        >
+          文档
+        </button>
+
+        <button
+          v-if="mobileDocMenuOpen"
+          type="button"
+          class="docs-mobile-backdrop"
+          aria-label="关闭文档目录"
+          @click="closeMobileDocMenu"
+        ></button>
+
+        <aside class="docs-sidebar" :class="{ 'mobile-open': mobileDocMenuOpen }">
           <div class="docs-sidebar-scroll">
             <div class="docs-sidebar-brand">
-              <span class="docs-sidebar-kicker">AiDocs</span>
-              <h1 class="docs-sidebar-title">阅读文档</h1>
+              <div>
+                <span class="docs-sidebar-kicker">AiDocs</span>
+                <h1 class="docs-sidebar-title">阅读文档</h1>
+              </div>
+              <button
+                type="button"
+                class="docs-mobile-menu-close"
+                aria-label="关闭文档目录"
+                @click="closeMobileDocMenu"
+              >
+                关闭
+              </button>
             </div>
 
             <label class="docs-search" for="docs-search-input">
@@ -196,6 +223,7 @@ const markdownContentRef = ref(null)
 const headings = ref([])
 const activeHeadingId = ref('')
 const docSearchQuery = ref('')
+const mobileDocMenuOpen = ref(false)
 let headingElements = []
 let scrollRaf = 0
 
@@ -377,9 +405,22 @@ const loadDocContent = async (doc) => {
   }
 }
 
+const openMobileDocMenu = () => {
+  mobileDocMenuOpen.value = true
+}
+
+const closeMobileDocMenu = () => {
+  mobileDocMenuOpen.value = false
+}
+
 const selectDoc = async (doc) => {
-  if (!doc || doc.id === selectedDoc.value?.id) return
+  if (!doc) return
+  if (doc.id === selectedDoc.value?.id) {
+    closeMobileDocMenu()
+    return
+  }
   selectedDoc.value = doc
+  closeMobileDocMenu()
   docStarred.value = false
   docStarCount.value = 0
   if (!(doc.id in imagesLoaded)) {
