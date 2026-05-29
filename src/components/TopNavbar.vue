@@ -23,10 +23,10 @@
 
         <nav class="main-nav-links">
           <router-link to="/blog" class="nav-link nav-link--optional" active-class="nav-link-active">
-            Blog
+            BLOG
           </router-link>
           <router-link to="/aidocs" class="nav-link nav-link--optional" active-class="nav-link-active">
-            Ai Docs
+            AI DOCS
           </router-link>
           <a href="https://api.dpccgaming.xyz" class="nav-link nav-link--api">
             DPCC API
