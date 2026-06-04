@@ -675,6 +675,15 @@ onMounted(fetchProducts)
   display: grid;
   place-items: center;
   padding: 1rem;
+  /* Teleport 到 body 后脱离 .admin-layout，需在此重建 admin 主题变量，
+     否则面板内的 var(--admin-*) 解析为空导致背景透明 */
+  --admin-bg: var(--bg-secondary);
+  --admin-surface: var(--bg-primary);
+  --admin-surface-soft: var(--bg-tertiary);
+  --admin-text: var(--text-primary);
+  --admin-muted: var(--text-tertiary);
+  --admin-border: var(--border-primary);
+  color: var(--admin-text);
   background: rgba(0, 0, 0, 0.42);
 }
 
