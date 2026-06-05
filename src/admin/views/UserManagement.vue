@@ -64,7 +64,7 @@
                 :key="role.value"
                 size="small"
                 :type="row.role === role.value ? 'primary' : 'default'"
-                :disabled="row.role === role.value"
+                :disabled="row.role === role.value || isUserPending(row.id)"
                 @click="changeUserRole(row, role.value)"
               >
                 {{ role.label }}
@@ -79,6 +79,7 @@
               size="small"
               type="warning"
               plain
+              :disabled="isUserPending(row.id)"
               @click="banUser(row)"
             >
               禁言
@@ -88,11 +89,19 @@
               size="small"
               type="success"
               plain
+              :disabled="isUserPending(row.id)"
               @click="unbanUser(row)"
             >
               解禁
             </el-button>
-            <el-button size="small" type="danger" @click="confirmDeleteUser(row)">删除</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              :disabled="isUserPending(row.id)"
+              @click="confirmDeleteUser(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -126,6 +135,16 @@ const notificationStore = useNotificationStore()
 const users = ref([])
 const searchQuery = ref('')
 const adminPageSizeOptions = ADMIN_PAGE_SIZE_OPTIONS
+
+// 跟踪每个用户正在进行中的写操作，避免快速连点重复提交
+const pendingUserIds = ref(new Set())
+const isUserPending = (id) => pendingUserIds.value.has(id)
+const setUserPending = (id, pending) => {
+  const next = new Set(pendingUserIds.value)
+  if (pending) next.add(id)
+  else next.delete(id)
+  pendingUserIds.value = next
+}
 
 const filteredUsers = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase()
@@ -179,6 +198,7 @@ const fetchUsers = async () => {
 
 const changeUserRole = async (user, newRole) => {
   if (user.role === newRole) return
+  if (isUserPending(user.id)) return
 
   try {
     await ElMessageBox.confirm(
@@ -194,6 +214,7 @@ const changeUserRole = async (user, newRole) => {
     return
   }
 
+  setUserPending(user.id, true)
   try {
     const response = await fetch(`/api/admin/users/${user.id}/role`, {
       method: 'POST',
@@ -216,6 +237,8 @@ const changeUserRole = async (user, newRole) => {
   } catch (error) {
     console.error('更新用户角色错误:', error)
     notificationStore.error('网络错误', '请检查网络连接')
+  } finally {
+    setUserPending(user.id, false)
   }
 }
 
@@ -259,6 +282,8 @@ const formatDate = (dateString) => {
 }
 
 const banUser = async (user) => {
+  if (isUserPending(user.id)) return
+
   try {
     await ElMessageBox.confirm(
       `确定要禁言用户“${user.username}”吗？禁言后用户将无法发表评论或上传游戏。`,
@@ -273,6 +298,7 @@ const banUser = async (user) => {
     return
   }
 
+  setUserPending(user.id, true)
   try {
     const response = await fetch(`/api/admin/users/${user.id}/ban`, {
       method: 'POST',
@@ -295,10 +321,14 @@ const banUser = async (user) => {
   } catch (error) {
     console.error('禁言用户错误:', error)
     notificationStore.error('网络错误', '请检查网络连接')
+  } finally {
+    setUserPending(user.id, false)
   }
 }
 
 const unbanUser = async (user) => {
+  if (isUserPending(user.id)) return
+
   try {
     await ElMessageBox.confirm(`确定要解禁用户“${user.username}”吗？`, '解禁确认', {
       confirmButtonText: '解禁',
@@ -309,6 +339,7 @@ const unbanUser = async (user) => {
     return
   }
 
+  setUserPending(user.id, true)
   try {
     const response = await fetch(`/api/admin/users/${user.id}/ban`, {
       method: 'POST',
@@ -331,10 +362,15 @@ const unbanUser = async (user) => {
   } catch (error) {
     console.error('解禁用户错误:', error)
     notificationStore.error('网络错误', '请检查网络连接')
+  } finally {
+    setUserPending(user.id, false)
   }
 }
 
 const deleteUser = async (user) => {
+  if (isUserPending(user.id)) return
+
+  setUserPending(user.id, true)
   try {
     const response = await fetch(`/api/admin/users/${user.id}/delete`, {
       method: 'DELETE',
@@ -352,6 +388,8 @@ const deleteUser = async (user) => {
   } catch (error) {
     console.error('删除用户错误:', error)
     notificationStore.error('网络错误', '请检查网络连接')
+  } finally {
+    setUserPending(user.id, false)
   }
 }
 

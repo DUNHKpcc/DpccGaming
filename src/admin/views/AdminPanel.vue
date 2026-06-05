@@ -50,8 +50,23 @@
               <i class="fa fa-external-link"></i>
               预览
             </el-button>
-            <el-button size="small" type="danger" plain @click="rejectGame(row)">拒绝</el-button>
-            <el-button size="small" type="success" @click="approveGame(row)">通过</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              :disabled="isGamePending(row.game_id)"
+              @click="rejectGame(row)"
+            >
+              拒绝
+            </el-button>
+            <el-button
+              size="small"
+              type="success"
+              :disabled="isGamePending(row.game_id)"
+              @click="approveGame(row)"
+            >
+              通过
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -74,6 +89,16 @@ import UserLevelBadge from '../../components/UserLevelBadge.vue'
 const notificationStore = useNotificationStore()
 const pendingGames = ref([])
 
+// 跟踪正在审核中的游戏，避免快速连点重复提交
+const pendingReviewIds = ref(new Set())
+const isGamePending = (id) => pendingReviewIds.value.has(id)
+const setGamePending = (id, pending) => {
+  const next = new Set(pendingReviewIds.value)
+  if (pending) next.add(id)
+  else next.delete(id)
+  pendingReviewIds.value = next
+}
+
 const fetchPendingGames = async () => {
   try {
     const response = await fetch('/api/admin/games/pending', {
@@ -94,6 +119,9 @@ const fetchPendingGames = async () => {
 }
 
 const reviewGame = async (gameId, status, reviewNotes = '') => {
+  if (isGamePending(gameId)) return
+
+  setGamePending(gameId, true)
   try {
     const response = await fetch(`/api/admin/games/${gameId}/review`, {
       method: 'POST',
@@ -118,6 +146,8 @@ const reviewGame = async (gameId, status, reviewNotes = '') => {
   } catch (error) {
     console.error('审核游戏错误:', error)
     notificationStore.error('网络错误', '请检查网络连接')
+  } finally {
+    setGamePending(gameId, false)
   }
 }
 

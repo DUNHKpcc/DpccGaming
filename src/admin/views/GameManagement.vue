@@ -69,7 +69,14 @@
               <i class="fa fa-external-link"></i>
               预览
             </el-button>
-            <el-button size="small" type="danger" @click="confirmDeleteGame(row)">删除</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              :disabled="isGamePending(row.game_id)"
+              @click="confirmDeleteGame(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -105,6 +112,16 @@ const games = ref([])
 const searchQuery = ref('')
 const selectedCategory = ref('')
 const adminPageSizeOptions = ADMIN_PAGE_SIZE_OPTIONS
+
+// 跟踪正在删除中的游戏，避免快速连点重复提交
+const pendingGameIds = ref(new Set())
+const isGamePending = (id) => pendingGameIds.value.has(id)
+const setGamePending = (id, pending) => {
+  const next = new Set(pendingGameIds.value)
+  if (pending) next.add(id)
+  else next.delete(id)
+  pendingGameIds.value = next
+}
 
 const filteredAllGames = computed(() => {
   let filtered = games.value
@@ -152,6 +169,9 @@ const fetchGames = async () => {
 }
 
 const deleteGame = async (game) => {
+  if (isGamePending(game.game_id)) return
+
+  setGamePending(game.game_id, true)
   try {
     const response = await fetch(`/api/admin/games/${game.game_id}/delete`, {
       method: 'DELETE',
@@ -169,6 +189,8 @@ const deleteGame = async (game) => {
   } catch (error) {
     console.error('删除游戏错误:', error)
     notificationStore.error('网络错误', '请检查网络连接')
+  } finally {
+    setGamePending(game.game_id, false)
   }
 }
 
