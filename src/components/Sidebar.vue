@@ -219,7 +219,7 @@ const mobileNavItems = computed(() => [
   },
   {
     name: 'Image',
-    href: 'https://api.dpccgaming.xyz/playground/',
+    href: 'https://image.dpccgaming.xyz/',
     icon: 'fa fa-image',
     external: true,
     description: '打开 Image Playground'

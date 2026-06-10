@@ -34,7 +34,7 @@
           <router-link to="/payment" class="nav-link nav-link--payment" active-class="nav-link-active">
             CDK
           </router-link>
-          <a href="https://api.dpccgaming.xyz/playground/" class="nav-link nav-link--api">
+          <a href="https://image.dpccgaming.xyz/" class="nav-link nav-link--api">
             IMAGE
           </a>
         </nav>
