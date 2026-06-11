@@ -9,7 +9,11 @@ public/docsPhoto
 dist/
 output/
 .playwright-cli/
-.env.example
+# 环境变量与密钥（.env.example 模板保留在仓库中）
+.env
+.env.local
+.env.*.local
+key/
 nginx.conf
 test/
 temp-test/
