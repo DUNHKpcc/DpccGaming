@@ -1,6 +1,10 @@
-# 🎮 DpccGaming
+<p align="center">
+  <img src="public/logo.png" width="96" alt="DpccGaming Logo">
+</p>
 
-> 个人开发者游戏平台 —— 使用现代化前端技术栈重构的 Vue 3 版本。
+<h1 align="center">🎮 DpccGaming</h1>
+
+<p align="center">个人开发者游戏平台 —— 使用现代化前端技术栈重构的 Vue 3 版本。</p>
 
 <p align="center">
   <a href="https://dpccgaming.xyz/"><img alt="Live Demo" src="https://img.shields.io/badge/Live%20Demo-dpccgaming.xyz-2ea44f?style=flat-square&logo=vercel&logoColor=white"></a>
