@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/favicon.png" width="96" alt="DpccGaming Logo">
+  <img src="public/logo.png" width="96" alt="DpccGaming Logo">
 </p>
 
 <h1 align="center">🎮 DpccGaming</h1>
