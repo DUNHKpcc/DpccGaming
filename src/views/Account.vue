@@ -54,7 +54,6 @@
                   </div>
                   <h3 class="text-xl font-bold text-white mb-2 profile-name-row">
                     <span>{{ currentUser.username }}</span>
-                    <UserLevelBadge :user-id="currentUser?.id" />
                   </h3>
                   <p class="text-white/80 text-sm mb-4">{{ currentUser.email || '未设置邮箱' }}</p>
                   <input
@@ -274,7 +273,6 @@
                         :avatar-alt="friend.username"
                         :name="friend.username"
                         :subtitle="friend.email || '未设置邮箱'"
-                        :user-id="friend.id"
                         @avatar-error="handleAvatarError"
                       />
                       <div class="friend-chat-indicator" :title="isOpeningFriendChat(friend.id) ? '正在打开协作聊天' : '进入协作聊天'">
@@ -328,7 +326,6 @@
                           :avatar-alt="user.username"
                           :name="user.username"
                           :subtitle="user.email || '未设置邮箱'"
-                          :user-id="user.id"
                           @avatar-error="handleAvatarError"
                         />
                         <div class="friend-result-actions">
@@ -419,7 +416,6 @@
                           :avatar-alt="request.requester_name"
                           :name="request.requester_name"
                           :subtitle="formatSavedDate(request.created_at)"
-                          :user-id="request.requester_id"
                           @avatar-error="handleAvatarError"
                         />
                         <div class="friend-request-actions">
@@ -528,7 +524,6 @@
                             :avatar-alt="friend.username"
                             :name="friend.username"
                             :subtitle="friend.email || '未设置邮箱'"
-                            :user-id="friend.id"
                             @avatar-error="handleAvatarError"
                           />
                         </div>
@@ -558,7 +553,6 @@ import { useModalStore } from '../stores/modal'
 import { useNotificationStore } from '../stores/notification'
 import { docsList } from '../data/docsList'
 import NotificationsSection from '../components/NotificationsSection.vue'
-import UserLevelBadge from '../components/UserLevelBadge.vue'
 import AccountModalShell from '../components/account/AccountModalShell.vue'
 import AccountHistoryPanel from '../components/account/AccountHistoryPanel.vue'
 import AccountUserIdentity from '../components/account/AccountUserIdentity.vue'

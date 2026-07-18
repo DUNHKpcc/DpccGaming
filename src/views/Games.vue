@@ -212,7 +212,6 @@
                     <span class="card-author-text">
                       By {{ game.uploaded_by_username || '匿名开发者' }}
                     </span>
-                    <UserLevelBadge :user-id="game.uploaded_by_id" />
                   </div>
                 </div>
                 <div class="flex items-center text-sm text-white/80 mb-4">
@@ -283,7 +282,6 @@ import {
   normalizeGameEngine
 } from '../utils/gameMetadata.js'
 import AvatarFriendAction from '../components/AvatarFriendAction.vue'
-import UserLevelBadge from '../components/UserLevelBadge.vue'
 
 const gameStore = useGameStore()
 const modalStore = useModalStore()

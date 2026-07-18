@@ -65,8 +65,6 @@ const uploadCover = multer({
 router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.post('/logout', authController.logout);
-router.get('/user-levels', authController.getUserLevels);
-router.get('/user-verifications', authController.getUserVerifications);
 router.get('/auth/wechat/start', authController.startWechatLogin);
 router.get('/auth/wechat/bind/start', authenticateToken, authController.startWechatBind);
 router.get('/auth/wechat/bind-status', authenticateToken, authController.getWechatBindStatus);

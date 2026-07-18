@@ -6,7 +6,6 @@ const sharp = require('sharp');
 const { executeQuery } = require('../config/database');
 const { generateToken } = require('../middleware/auth');
 const appConfig = require('../config/app');
-const { computeUserLevel } = require('../utils/userLevel');
 
 const AUTH_COOKIE_NAME = appConfig.jwt.cookieName || 'dpcc_auth_token';
 const AUTH_COOKIE_MAX_AGE = Number(appConfig.jwt.cookieDays || 30) * 24 * 60 * 60 * 1000;
@@ -313,61 +312,6 @@ function decodeCookieValue(value) {
     return decodeURIComponent(String(value || ''));
   } catch {
     return '';
-  }
-}
-
-function parseUserIds(rawValue) {
-  if (!rawValue) return [];
-
-  return [...new Set(
-    String(rawValue)
-      .split(',')
-      .map((item) => Number.parseInt(String(item).trim(), 10))
-      .filter((item) => Number.isInteger(item) && item > 0)
-  )].slice(0, 200);
-}
-
-const VERIFICATION_TYPES = ['enterprise', 'creator', 'beginner', 'developer'];
-
-function normalizeVerificationType(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  return VERIFICATION_TYPES.includes(normalized) ? normalized : '';
-}
-
-function resolveVerificationType(payload = {}) {
-  const explicit = normalizeVerificationType(payload.verificationType);
-  if (explicit) return explicit;
-
-  const role = String(payload.role || '').trim().toLowerCase();
-  const preferredEngine = String(payload.preferredEngine || '').trim();
-  const publishedGames = Number.parseInt(payload.publishedGames, 10) || 0;
-
-  if (['super_admin', 'admin'].includes(role)) {
-    return 'enterprise';
-  }
-
-  if (publishedGames > 0) {
-    return 'creator';
-  }
-
-  if (preferredEngine) {
-    return 'developer';
-  }
-
-  return 'beginner';
-}
-
-function resolveVerificationLabel(type) {
-  switch (type) {
-    case 'enterprise':
-      return '企业认证';
-    case 'creator':
-      return '创作者认证';
-    case 'developer':
-      return '开发者认证';
-    case 'beginner':
-    default:
-      return '初学者认证';
   }
 }
 
@@ -1768,97 +1712,6 @@ async function login(req, res) {
   }
 }
 
-async function getUserLevels(req, res) {
-  try {
-    const ids = parseUserIds(req.query.ids || req.query.userIds || '');
-
-    if (!ids.length) {
-      return res.json({ levels: [] });
-    }
-
-    const placeholders = ids.map(() => '?').join(', ');
-    const rows = await executeQuery(
-      `SELECT u.id AS user_id,
-              GREATEST(TIMESTAMPDIFF(DAY, u.created_at, NOW()), 0) AS registration_days,
-              COALESCE(SUM(CASE WHEN g.status = 'approved' THEN 1 ELSE 0 END), 0) AS published_games
-       FROM users u
-       LEFT JOIN games g ON g.uploaded_by = u.id
-       WHERE u.id IN (${placeholders})
-       GROUP BY u.id, u.created_at`,
-      ids
-    );
-
-    const levels = rows.map((row) => {
-      const registrationDays = Number(row.registration_days || 0);
-      const publishedGames = Number(row.published_games || 0);
-      const levelResult = computeUserLevel({
-        registrationDays,
-        publishedGames
-      });
-
-      return {
-        user_id: Number(row.user_id),
-        registration_days: registrationDays,
-        published_games: publishedGames,
-        ...levelResult
-      };
-    });
-
-    return res.json({ levels });
-  } catch (error) {
-    console.error('获取用户等级失败:', error);
-    return res.status(500).json({ error: '服务器内部错误' });
-  }
-}
-
-async function getUserVerifications(req, res) {
-  try {
-    const ids = parseUserIds(req.query.ids || req.query.userIds || '');
-
-    if (!ids.length) {
-      return res.json({ verifications: [] });
-    }
-
-    const profileColumns = await ensureUserProfileColumns();
-    const placeholders = ids.map(() => '?').join(', ');
-    const preferredEngineSelect = profileColumns.preferred_engine
-      ? 'COALESCE(u.preferred_engine, \'\') AS preferred_engine,'
-      : '\'\' AS preferred_engine,';
-    const preferredEngineGroupBy = profileColumns.preferred_engine ? ', u.preferred_engine' : '';
-
-    const rows = await executeQuery(
-      `SELECT u.id AS user_id,
-              u.role,
-              ${preferredEngineSelect}
-              COALESCE(SUM(CASE WHEN g.status = 'approved' THEN 1 ELSE 0 END), 0) AS published_games
-       FROM users u
-       LEFT JOIN games g ON g.uploaded_by = u.id
-       WHERE u.id IN (${placeholders})
-       GROUP BY u.id, u.role${preferredEngineGroupBy}`,
-      ids
-    );
-
-    const verifications = rows.map((row) => {
-      const type = resolveVerificationType({
-        role: row.role,
-        preferredEngine: row.preferred_engine,
-        publishedGames: row.published_games
-      });
-
-      return {
-        user_id: Number(row.user_id),
-        verification_type: type,
-        verification_label: resolveVerificationLabel(type)
-      };
-    });
-
-    return res.json({ verifications });
-  } catch (error) {
-    console.error('获取用户认证标识失败:', error);
-    return res.status(500).json({ error: '服务器内部错误' });
-  }
-}
-
 async function getCurrentUser(req, res) {
   try {
     if (!req.user) {
@@ -2123,8 +1976,6 @@ module.exports = {
   getGoogleBindStatus,
   register,
   login,
-  getUserLevels,
-  getUserVerifications,
   getCurrentUser,
   getUserProfile,
   verifyTokenEndpoint,

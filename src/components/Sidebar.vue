@@ -122,9 +122,6 @@
               <i v-else class="fa fa-user text-[#1d1d1f] text-sm"></i>
             </div>
             <div class="mobile-user-main">
-              <div class="mobile-user-badge-row">
-                <UserLevelBadge :user-id="currentUser?.id" />
-              </div>
               <div class="mobile-user-meta">
                 <span class="mobile-username-text">{{ currentUser.username }}</span>
                 <span class="mobile-login-state">已登录</span>
@@ -152,7 +149,6 @@ import { useThemeStore } from '../stores/theme'
 import { gsap } from 'gsap'
 import { getAvatarUrl, handleAvatarError } from '../utils/avatar'
 import { prefetchBlueprintMode } from '../utils/blueprintAsync'
-import UserLevelBadge from './UserLevelBadge.vue'
 
 const authStore = useAuthStore()
 const modalStore = useModalStore()
@@ -919,12 +915,6 @@ defineExpose({
 .mobile-user-main {
   flex: 1;
   min-width: 0;
-}
-
-.mobile-user-badge-row {
-  display: flex;
-  align-items: center;
-  min-height: 2rem;
 }
 
 .mobile-user-meta {

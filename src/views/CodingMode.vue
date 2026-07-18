@@ -17,7 +17,6 @@
           />
           <span class="creator-name">
             <span class="creator-name-text">制作人：{{ creatorName }}</span>
-            <UserLevelBadge :user-id="creatorUserId" />
           </span>
         </div>
         <div class="meta-chip">
@@ -180,7 +179,6 @@
             <div class="chat-message-thread" :class="message.role === 'user' ? 'mine' : 'theirs'">
               <span class="chat-sender-name">
                 <span class="chat-sender-text">{{ message.senderName || (message.role === 'user' ? currentUserName : assistantName) }}</span>
-                <UserLevelBadge v-if="message.senderUserId" :user-id="message.senderUserId" />
               </span>
               <div class="chat-message-main">
                 <img
@@ -291,7 +289,6 @@ import {
   CHAT_MORE_BUILTIN_MODELS,
   CHAT_MORE_BUILTIN_MODEL_META
 } from '../utils/discussionChatMore.js'
-import UserLevelBadge from '../components/UserLevelBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -342,11 +339,6 @@ const creatorName = computed(() =>
     .toString()
     .trim()
 )
-const creatorUserId = computed(() => {
-  const value = codingGame.value?.uploaded_by_id ?? codingGame.value?.uploadedById
-  const parsed = Number.parseInt(value, 10)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-})
 const creatorAvatarUrl = computed(() =>
   getAvatarUrl(
     codingGame.value?.uploaded_by_avatar_url

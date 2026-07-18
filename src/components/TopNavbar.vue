@@ -73,7 +73,6 @@
             </div>
             <div class="username-row">
               <span class="username">{{ currentUser.username }}</span>
-              <UserLevelBadge :user-id="currentUser?.id" />
             </div>
           </div>
           <div class="dropdown">
@@ -111,7 +110,6 @@ import { useAuthStore } from '../stores/auth'
 import { useModalStore } from '../stores/modal'
 import { useThemeStore } from '../stores/theme'
 import { getAvatarUrl, handleAvatarError } from '../utils/avatar'
-import UserLevelBadge from './UserLevelBadge.vue'
 
 const authStore = useAuthStore()
 const modalStore = useModalStore()

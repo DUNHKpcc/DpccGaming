@@ -54,7 +54,6 @@
             </AvatarFriendAction>
             <div class="comment-name-row">
               <div class="comment-username">{{ comment.username }}</div>
-              <UserLevelBadge :user-id="comment.user_id" />
             </div>
           </div>
 
@@ -113,7 +112,6 @@
                 </AvatarFriendAction>
                 <div class="comment-name-row">
                   <div class="comment-username small">{{ reply.username }}</div>
-                  <UserLevelBadge :user-id="reply.user_id" />
                 </div>
               </div>
               <button type="button" class="comment-small-button" @click="showReplyForm(comment.id, reply.user_id, reply.id)">
@@ -182,7 +180,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AvatarFriendAction from './AvatarFriendAction.vue'
-import UserLevelBadge from './UserLevelBadge.vue'
 import { useAuthStore } from '../stores/auth'
 import { useModalStore } from '../stores/modal'
 import { useNotificationStore } from '../stores/notification'

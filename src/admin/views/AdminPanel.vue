@@ -37,7 +37,6 @@
           <template #default="{ row }">
             <span class="admin-username-row">
               <span>{{ row.uploaded_by_username || '-' }}</span>
-              <UserLevelBadge :user-id="row.uploaded_by" />
             </span>
           </template>
         </el-table-column>
@@ -84,7 +83,6 @@ import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { useNotificationStore } from '../../stores/notification'
 import { categoryToZh } from '../../utils/category'
-import UserLevelBadge from '../../components/UserLevelBadge.vue'
 
 const notificationStore = useNotificationStore()
 const pendingGames = ref([])

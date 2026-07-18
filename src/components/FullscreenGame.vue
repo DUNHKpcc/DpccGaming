@@ -88,7 +88,6 @@
                 </AvatarFriendAction>
                 <div class="comment-name-row">
                   <div class="comment-username font-medium text-white">{{ comment.username }}</div>
-                  <UserLevelBadge :user-id="comment.user_id" />
                 </div>
               </div>
               <div class="comment-rating text-yellow-400 text-sm">
@@ -147,7 +146,6 @@
                     </AvatarFriendAction>
                     <div class="comment-name-row">
                       <div class="comment-username font-medium text-sm text-white">{{ reply.username }}</div>
-                      <UserLevelBadge :user-id="reply.user_id" />
                     </div>
                   </div>
                   <button @click="showReplyForm(comment.id, reply.user_id, reply.id)" class="text-xs text-white/80 hover:text-white transition-colors duration-300">
@@ -228,7 +226,6 @@ import { setupGameEventHandling, focusGameIframe } from '../utils/gameEvents'
 import { resolveMediaUrl } from '../utils/media'
 import { getAvatarUrl, handleAvatarError } from '../utils/avatar'
 import AvatarFriendAction from './AvatarFriendAction.vue'
-import UserLevelBadge from './UserLevelBadge.vue'
 
 const modalStore = useModalStore()
 const authStore = useAuthStore()

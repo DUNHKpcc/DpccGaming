@@ -14,7 +14,6 @@
     <div class="account-user-identity-meta">
       <div class="account-user-identity-summary">
         <strong :title="nameText">{{ nameText }}</strong>
-        <UserLevelBadge v-if="normalizedUserId" :user-id="normalizedUserId" />
       </div>
       <small :title="subtitleText">{{ subtitleText }}</small>
     </div>
@@ -25,7 +24,6 @@
 
 <script setup>
 import { computed } from 'vue'
-import UserLevelBadge from '../UserLevelBadge.vue'
 
 const props = defineProps({
   avatarUrl: {
@@ -44,10 +42,6 @@ const props = defineProps({
     type: String,
     default: ''
   },
-  userId: {
-    type: [Number, String],
-    default: null
-  },
   size: {
     type: String,
     default: 'md'
@@ -59,10 +53,6 @@ defineEmits(['avatar-error'])
 const nameText = computed(() => String(props.name || '?').trim() || '?')
 const subtitleText = computed(() => String(props.subtitle || '未设置邮箱').trim() || '未设置邮箱')
 const initial = computed(() => nameText.value.charAt(0).toUpperCase() || '?')
-const normalizedUserId = computed(() => {
-  const parsed = Number.parseInt(props.userId, 10)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-})
 </script>
 
 <style scoped>

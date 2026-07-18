@@ -31,7 +31,6 @@
                   <div class="chat-user-name-row">
                     <span class="chat-user-name">{{ currentChat.name }}</span>
                     <span v-if="currentChat.displayRolePreset" class="chat-user-role">{{ currentChat.displayRolePreset }}</span>
-                    <UserLevelBadge v-if="currentChat.displayUserId" :user-id="currentChat.displayUserId" />
                   </div>
                   <div class="chat-user-status-row">
                     <span class="chat-user-status">{{ currentChat.baseStatus }}</span>
@@ -82,10 +81,8 @@
                   <span class="message-sender-name" :class="message.from === 'me' ? 'mine' : 'theirs'">
                     <template v-if="message.from === 'me'">
                       <span class="message-sender-text">{{ resolveDisplayedMessageSenderName(message) }}</span>
-                      <UserLevelBadge v-if="message.senderUserId" :user-id="message.senderUserId" />
                     </template>
                     <template v-else>
-                      <UserLevelBadge v-if="message.senderUserId" :user-id="message.senderUserId" />
                       <span class="message-sender-text">{{ resolveDisplayedMessageSenderName(message) }}</span>
                     </template>
                   </span>
@@ -463,7 +460,6 @@ import { h, defineAsyncComponent } from 'vue'
 import { apiCall } from '../utils/api'
 import { getAvatarUrl, handleAvatarError as fallbackAvatar } from '../utils/avatar'
 import AvatarFriendAction from '../components/AvatarFriendAction.vue'
-import UserLevelBadge from '../components/UserLevelBadge.vue'
 import DiscussionChatSidebar from '../components/discussion/DiscussionChatSidebar.vue'
 import {
   escapeCodeHtml,
@@ -534,7 +530,6 @@ export default {
   mixins: [discussionChatMoreMixin, discussionMessagesMixin, discussionRealtimeMixin],
   components: {
     AvatarFriendAction,
-    UserLevelBadge,
     DiscussionChatSidebar,
     DiscussionDocsPanel: AsyncDiscussionDocsPanel,
     DiscussionCodePanel: AsyncDiscussionCodePanel,
