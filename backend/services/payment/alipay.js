@@ -4,6 +4,7 @@ const ALIPAY_CHARSET = 'utf-8';
 const ALIPAY_SIGN_TYPE = 'RSA2';
 const ALIPAY_PAGE_PAY_METHOD = 'alipay.trade.page.pay';
 const ALIPAY_TRADE_QUERY_METHOD = 'alipay.trade.query';
+const ALIPAY_REQUEST_TIMEOUT_MS = 10_000;
 
 const appendQueryParams = (url = '', params = {}) => {
   const query = new URLSearchParams(params).toString();
@@ -210,13 +211,21 @@ const buildAlipayTradeQueryPayload = ({ config = {}, outTradeNo = '', tradeNo = 
 
 const requestAlipayTradeQuery = async ({ config = {}, outTradeNo = '', tradeNo = '' } = {}) => {
   const payload = buildAlipayTradeQueryPayload({ config, outTradeNo, tradeNo });
-  const response = await fetch(payload.action, {
-    method: payload.method.toUpperCase(),
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded;charset=utf-8'
-    },
-    body: new URLSearchParams(payload.params).toString()
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ALIPAY_REQUEST_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(payload.action, {
+      method: payload.method.toUpperCase(),
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded;charset=utf-8'
+      },
+      body: new URLSearchParams(payload.params).toString(),
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const bodyText = await response.text();
   if (!response.ok) {
     throw new Error(`支付宝交易查询请求失败：HTTP ${response.status}`);

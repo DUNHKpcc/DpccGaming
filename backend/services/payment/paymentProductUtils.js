@@ -9,7 +9,12 @@ const toCents = (value) => Math.round(Number(value || 0) * 100);
 
 const fromCents = (value) => (Number(value || 0) / 100).toFixed(2);
 
-const normalizeProductType = (value = '') => (value === 'recharge' ? 'recharge' : 'subscription');
+const PAYMENT_PRODUCT_TYPES = Object.freeze(['subscription', 'recharge', 'account']);
+
+const normalizeProductType = (value = '', fallback = '') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return PAYMENT_PRODUCT_TYPES.includes(normalized) ? normalized : fallback;
+};
 
 const parseJsonArray = (value, fallback = []) => {
   if (Array.isArray(value)) {
@@ -82,6 +87,7 @@ module.exports = {
   normalizeQuota,
   toCents,
   fromCents,
+  PAYMENT_PRODUCT_TYPES,
   normalizeProductType,
   parseJsonArray,
   stringifyJsonArray,

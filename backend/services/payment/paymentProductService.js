@@ -24,32 +24,40 @@ const {
 } = require('./paymentClaimService');
 const { toMysqlDateTime } = require('./paymentUtils');
 
-const toDbProduct = (product = {}) => ({
-  productType: normalizeProductType(product.productType),
-  skuId: String(product.skuId || '').trim(),
-  name: String(product.name || '').trim(),
-  subject: String(product.subject || product.name || '').trim(),
-  description: String(product.description || '').trim(),
-  basePrice: normalizeMoney(product.basePrice),
-  currency: String(product.currency || 'CNY').trim(),
-  baseQuotaUsd: product.baseQuotaUsd === null || product.baseQuotaUsd === undefined
-    ? null
-    : normalizeQuota(product.baseQuotaUsd),
-  dailyQuotaUsd: product.dailyQuotaUsd === null || product.dailyQuotaUsd === undefined
-    ? null
-    : normalizeQuota(product.dailyQuotaUsd),
-  mainRedeemSkuId: String(product.mainRedeemSkuId || '').trim(),
-  bonusRedeemSkuId: String(product.bonusRedeemSkuId || '').trim(),
-  bonusQuotaUsd: normalizeQuota(product.bonusQuotaUsd),
-  recommended: product.recommended ? 1 : 0,
-  cardBadge: String(product.cardBadge || '').trim(),
-  cardFeaturesJson: stringifyJsonArray(product.cardFeatures),
-  orderNote: String(product.orderNote || '').trim(),
-  sortOrder: Number.isInteger(Number(product.sortOrder)) ? Number(product.sortOrder) : 0,
-  status: product.status === 'inactive' ? 'inactive' : 'active'
-});
+const toDbProduct = (product = {}) => {
+  const productType = normalizeProductType(product.productType);
+  return {
+    productType,
+    skuId: String(product.skuId || '').trim(),
+    name: String(product.name || '').trim(),
+    subject: String(product.subject || product.name || '').trim(),
+    description: String(product.description || '').trim(),
+    basePrice: normalizeMoney(product.basePrice),
+    currency: 'CNY',
+    baseQuotaUsd: productType === 'account' || product.baseQuotaUsd === null || product.baseQuotaUsd === undefined
+      ? null
+      : normalizeQuota(product.baseQuotaUsd),
+    dailyQuotaUsd: productType !== 'subscription' || product.dailyQuotaUsd === null || product.dailyQuotaUsd === undefined
+      ? null
+      : normalizeQuota(product.dailyQuotaUsd),
+    mainRedeemSkuId: productType === 'recharge' ? String(product.mainRedeemSkuId || '').trim() : '',
+    bonusRedeemSkuId: productType === 'account' ? '' : String(product.bonusRedeemSkuId || '').trim(),
+    bonusQuotaUsd: productType === 'account' ? '0.00' : normalizeQuota(product.bonusQuotaUsd),
+    recommended: product.recommended ? 1 : 0,
+    cardBadge: String(product.cardBadge || '').trim(),
+    cardFeaturesJson: stringifyJsonArray(product.cardFeatures),
+    orderNote: String(product.orderNote || '').trim(),
+    sortOrder: Number.isInteger(Number(product.sortOrder)) ? Number(product.sortOrder) : 0,
+    status: product.status === 'inactive' ? 'inactive' : 'active'
+  };
+};
 
 const validateProductInput = (product = {}, options = {}) => {
+  if (!normalizeProductType(product.productType)) {
+    const error = new Error('商品类型无效');
+    error.statusCode = 400;
+    throw error;
+  }
   if (!product.skuId && options.requireSku !== false) {
     const error = new Error('商品 SKU 不能为空');
     error.statusCode = 400;
@@ -65,8 +73,23 @@ const validateProductInput = (product = {}, options = {}) => {
     error.statusCode = 400;
     throw error;
   }
-  if (Number(product.basePrice) < 0) {
-    const error = new Error('商品金额不能小于 0');
+  if (Number(product.basePrice) <= 0) {
+    const error = new Error('商品金额必须大于 0');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (Number(product.basePrice) > 99999999.99) {
+    const error = new Error('商品金额超出允许范围');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (product.skuId.length > 64 || product.name.length > 96 || product.subject.length > 128) {
+    const error = new Error('商品 SKU、名称或支付宝标题过长');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (product.description.length > 255 || product.orderNote.length > 255) {
+    const error = new Error('商品服务说明或交付说明过长');
     error.statusCode = 400;
     throw error;
   }
@@ -77,6 +100,11 @@ const validateProductInput = (product = {}, options = {}) => {
   }
   if (product.productType === 'recharge' && Number(product.baseQuotaUsd || 0) <= 0) {
     const error = new Error('充值到账额度必须大于 0');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (product.productType === 'account' && (!product.description || !product.orderNote)) {
+    const error = new Error('账号/代充档位必须填写服务说明和交付说明');
     error.statusCode = 400;
     throw error;
   }
@@ -166,15 +194,22 @@ const mapProductRow = (row = {}, options = {}) => {
   const promotionRow = options.promotion || null;
   const effective = resolveEffectiveProduct(row, promotionRow, options.now || new Date());
   const activePromotion = effective.activePromotion ? mapPromotion(effective.activePromotion) : null;
-  const productType = row.product_type === 'recharge' ? 'recharge' : 'subscription';
+  const productType = normalizeProductType(row.product_type);
+  if (!productType) {
+    const error = new Error('支付档位类型配置无效');
+    error.statusCode = 500;
+    throw error;
+  }
   const baseQuotaUsd = normalizeQuota(row.base_quota_usd);
   const baseBonusQuotaUsd = normalizeQuota(row.bonus_quota_usd);
   const bonusQuotaUsd = effective.bonusQuotaUsd;
   const quotaUsd = productType === 'recharge'
     ? (Number(baseQuotaUsd) + Number(bonusQuotaUsd)).toFixed(2)
-    : baseQuotaUsd;
+    : productType === 'subscription' ? baseQuotaUsd : '0.00';
   const mainRedeemSkuId = row.main_redeem_sku_id || (productType === 'recharge' ? row.sku_id : '');
-  const bonusRedeemSkuId = row.bonus_redeem_sku_id || getRechargeBonusPackage().id;
+  const bonusRedeemSkuId = productType === 'account'
+    ? ''
+    : row.bonus_redeem_sku_id || getRechargeBonusPackage().id;
   const availableFor = options.availableFor || (() => 0);
   const redeemedSkuSet = options.redeemedSkuSet || new Set();
 
@@ -201,6 +236,9 @@ const mapProductRow = (row = {}, options = {}) => {
     cardBadge: row.card_badge || '',
     features: parseJsonArray(row.card_features_json),
     orderNote: row.order_note || '',
+    serviceText: productType === 'account' ? row.description || '账号与代充服务' : '',
+    availabilityText: productType === 'account' ? row.order_note || '支付后提交目标账号，由售后人工交付' : '',
+    available: row.status === 'active',
     sortOrder: Number(row.sort_order || 0),
     status: row.status,
     availableRedeemCodes: productType === 'recharge' ? availableFor('recharge', mainRedeemSkuId) : 0,
@@ -256,11 +294,13 @@ const getCatalog = async (options = {}, pool = getPool()) => {
 
   const subscriptionProducts = mappedProducts.filter((product) => product.productType === 'subscription');
   const rechargeProducts = mappedProducts.filter((product) => product.productType === 'recharge');
+  const accountProducts = mappedProducts.filter((product) => product.productType === 'account');
   const bonusPackage = getRechargeBonusPackage();
 
   return {
     subscriptionProducts,
     rechargeProducts,
+    accountProducts,
     plans: subscriptionProducts,
     rechargePackages: rechargeProducts,
     durations: listPaymentDurations(),
@@ -274,7 +314,7 @@ const getCatalog = async (options = {}, pool = getPool()) => {
 const listAdminPaymentProducts = async (filters = {}, pool = getPool()) => {
   await seedDefaultPaymentProducts(pool);
   const products = await repository.listPaymentProducts(pool, {
-    productType: ['subscription', 'recharge'].includes(filters.productType) ? filters.productType : '',
+    productType: normalizeProductType(filters.productType),
     status: ['active', 'inactive'].includes(filters.status) ? filters.status : '',
     keyword: String(filters.keyword || '').trim()
   });
@@ -321,6 +361,7 @@ const updateAdminPaymentProduct = async (payload = {}, pool = getPool()) => {
 
   const product = toDbProduct({
     ...payload,
+    productType: current.product_type,
     skuId: current.sku_id
   });
   product.id = id;
@@ -395,6 +436,20 @@ const validatePromotionInput = async (pool, promotion = {}) => {
     error.statusCode = 404;
     throw error;
   }
+  if (product.product_type === 'account' && Number(promotion.promotionBonusQuotaUsd || 0) > 0) {
+    const error = new Error('账号/代充档位不能配置额度赠送');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (promotion.promotionPrice !== null) {
+    const promotionPrice = Number(promotion.promotionPrice);
+    const basePrice = Number(product.base_price);
+    if (!Number.isFinite(promotionPrice) || promotionPrice <= 0 || promotionPrice > basePrice) {
+      const error = new Error('促销价必须大于 0 且不能高于商品原价');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
   if (!promotion.title) {
     const error = new Error('促销名称不能为空');
     error.statusCode = 400;
@@ -459,7 +514,7 @@ const updateAdminPaymentPromotion = async (payload = {}, pool = getPool()) => {
   return { promotion: mapPromotion(row) };
 };
 
-const buildOrderProductSnapshot = async ({ productId, durationId, userId, ignorePromotion = false } = {}, pool = getPool()) => {
+const buildOrderProductSnapshot = async ({ productId, productType, durationId, userId, ignorePromotion = false } = {}, pool = getPool()) => {
   await seedDefaultPaymentProducts(pool);
   await closeExpiredOrdersAndClaims(pool);
   const normalizedProductId = Number(productId || 0);
@@ -468,6 +523,17 @@ const buildOrderProductSnapshot = async ({ productId, durationId, userId, ignore
     : await repository.getPaymentProductBySkuId(pool, String(productId || '').trim());
   if (!product || product.status !== 'active') {
     const error = new Error('支付款项无效');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (String(product.currency || 'CNY').trim().toUpperCase() !== 'CNY') {
+    const error = new Error('支付款项币种配置无效');
+    error.statusCode = 400;
+    throw error;
+  }
+  const normalizedProductType = normalizeProductType(productType);
+  if (!normalizedProductType || product.product_type !== normalizedProductType) {
+    const error = new Error('支付款项类型不匹配');
     error.statusCode = 400;
     throw error;
   }
@@ -490,16 +556,31 @@ const buildOrderProductSnapshot = async ({ productId, durationId, userId, ignore
     availableFor,
     redeemedSkuSet
   });
+  if (mapped.productType === 'account' && (!mapped.description || !mapped.orderNote)) {
+    const error = new Error('账号/代充档位缺少服务说明或交付说明');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (mapped.activePromotion && toCents(mapped.price) > toCents(mapped.basePrice)) {
+    const error = new Error('支付款项促销价格配置无效');
+    error.statusCode = 400;
+    throw error;
+  }
   const normalizedBonusQuotaUsd = mapped.bonusRedeemCodeUsed ? '0.00' : mapped.bonusQuotaUsd;
   const normalizedQuotaUsd = product.product_type === 'recharge'
     ? (Number(mapped.baseQuotaUsd) + Number(normalizedBonusQuotaUsd)).toFixed(2)
-    : mapped.baseQuotaUsd;
+    : product.product_type === 'subscription' ? mapped.baseQuotaUsd : '0.00';
   const amount = product.product_type === 'subscription'
     ? fromCents(toCents(mapped.price) * Number(duration.months || 1))
     : mapped.price;
+  if (toCents(amount) <= 0) {
+    const error = new Error('支付款项金额无效');
+    error.statusCode = 400;
+    throw error;
+  }
   const quotaUsd = product.product_type === 'recharge'
     ? normalizedQuotaUsd
-    : normalizedBonusQuotaUsd;
+    : product.product_type === 'subscription' ? normalizedBonusQuotaUsd : '0.00';
   const snapshot = {
     ...mapped,
     bonusQuotaUsd: normalizedBonusQuotaUsd,

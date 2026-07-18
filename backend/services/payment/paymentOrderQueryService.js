@@ -4,12 +4,13 @@ const {
   getPaymentPlan,
   getRechargePackage
 } = require('./plans');
-const { parseSnapshotJson } = require('./paymentProductUtils');
+const { normalizeProductType, parseSnapshotJson } = require('./paymentProductUtils');
 const { decryptRedeemCode } = require('./redeemCodeCrypto');
 const {
   PAYMENT_SUPPORT_WECHAT,
   PAYMENT_SUPPORT_NOTE,
   PAYMENT_REDEEM_URL,
+  PAYMENT_ACCOUNT_TARGET_SUBMITTED_NOTE,
   PROMOTION_PAYER_ALREADY_USED_NOTE,
   PROMOTION_PAYER_MISSING_NOTE,
   toMysqlDateTime,
@@ -88,12 +89,17 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
     throw error;
   }
 
-  const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
+  const productType = normalizeProductType(order.product_type);
+  if (!productType) {
+    const error = new Error('订单商品类型无效');
+    error.statusCode = 500;
+    throw error;
+  }
   const productSnapshot = parseSnapshotJson(order.product_snapshot_json) || {};
   const product = productType === 'recharge'
     ? getRechargePackage(order.plan_id)
-    : getPaymentPlan(order.plan_id);
-  const redeemCodes = order.status === 'paid' && (productType === 'recharge' || productType === 'subscription')
+    : productType === 'subscription' ? getPaymentPlan(order.plan_id) : null;
+  const redeemCodes = order.status === 'paid' && productType !== 'account'
     ? buildOrderRedeemCodes(order, await getRedeemCodeRowsById(pool, [order]))
     : [];
 
@@ -110,7 +116,7 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
     redeemCode: getRedeemCodeByLabel(redeemCodes, (label) => label === '原有额度'),
     bonusRedeemCode: getRedeemCodeByLabel(redeemCodes, (label) => label.includes('赠送')),
     redeemCodes,
-    redeemUrl: order.redeem_url || PAYMENT_REDEEM_URL,
+    redeemUrl: productType === 'account' ? '' : order.redeem_url || PAYMENT_REDEEM_URL,
     supportWechat: order.support_wechat || PAYMENT_SUPPORT_WECHAT,
     supportNote: order.support_note || PAYMENT_SUPPORT_NOTE,
     promotionPayerRejectReason: getPromotionPayerRejectReason(order.support_note),
@@ -121,11 +127,16 @@ const getPaymentOrderResult = async ({ userId, orderNo } = {}, pool = getPool())
 };
 
 const resolvePaymentProductName = (order = {}) => {
-  const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
+  const productType = normalizeProductType(order.product_type);
+  if (!productType) {
+    const error = new Error('订单商品类型无效');
+    error.statusCode = 500;
+    throw error;
+  }
   const productSnapshot = parseSnapshotJson(order.product_snapshot_json) || {};
   const product = productType === 'recharge'
     ? getRechargePackage(order.plan_id)
-    : getPaymentPlan(order.plan_id);
+    : productType === 'subscription' ? getPaymentPlan(order.plan_id) : null;
   return {
     productType: productSnapshot.productType || productType,
     productName: productSnapshot.name || product?.name || order.subject || order.plan_id,
@@ -286,12 +297,12 @@ const submitPaymentOrderApiUsername = async ({ userId, orderNo, apiUsername } = 
     throw error;
   }
   if (!normalizedApiUsername) {
-    const error = new Error('请输入 DPCC-API 平台用户名');
+    const error = new Error('请输入目标账号');
     error.statusCode = 400;
     throw error;
   }
   if (normalizedApiUsername.length > 96) {
-    const error = new Error('DPCC-API 平台用户名不能超过 96 个字符');
+    const error = new Error('目标账号不能超过 96 个字符');
     error.statusCode = 400;
     throw error;
   }
@@ -307,17 +318,28 @@ const submitPaymentOrderApiUsername = async ({ userId, orderNo, apiUsername } = 
     throw error;
   }
   if (order.status !== 'paid') {
-    const error = new Error('订单支付完成后才能填写 DPCC-API 平台用户名');
+    const error = new Error('订单支付完成后才能填写目标账号');
     error.statusCode = 400;
     throw error;
   }
-  if (order.product_type === 'recharge') {
-    const error = new Error('普通额度订单不需要填写 DPCC-API 平台用户名');
+  const productType = normalizeProductType(order.product_type);
+  if (!productType) {
+    const error = new Error('订单商品类型无效');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (productType === 'recharge') {
+    const error = new Error('普通额度订单不需要填写目标账号');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (/[\u0000-\u001f\u007f]/.test(normalizedApiUsername)) {
+    const error = new Error('目标账号包含无效字符');
     error.statusCode = 400;
     throw error;
   }
   if (order.api_username || order.fulfillment_status === 'username_submitted') {
-    const error = new Error('DPCC-API 平台用户名已经提交');
+    const error = new Error(productType === 'account' ? '目标账号已经提交' : 'DPCC-API 平台用户名已经提交');
     error.statusCode = 400;
     throw error;
   }
@@ -325,10 +347,11 @@ const submitPaymentOrderApiUsername = async ({ userId, orderNo, apiUsername } = 
   const [result] = await repository.updatePaymentOrderApiUsername(pool, {
     orderNo: normalizedOrderNo,
     userId,
-    apiUsername: normalizedApiUsername
+    apiUsername: normalizedApiUsername,
+    supportNote: productType === 'account' ? PAYMENT_ACCOUNT_TARGET_SUBMITTED_NOTE : null
   });
   if (!result || result.affectedRows !== 1) {
-    const error = new Error('保存 DPCC-API 平台用户名失败');
+    const error = new Error('保存目标账号失败');
     error.statusCode = 500;
     throw error;
   }
@@ -337,7 +360,7 @@ const submitPaymentOrderApiUsername = async ({ userId, orderNo, apiUsername } = 
     orderNo: normalizedOrderNo,
     apiUsername: normalizedApiUsername,
     fulfillmentStatus: order.fulfillment_status === 'manual_required' ? 'manual_required' : 'username_submitted',
-    message: '已提交，请等待 5 分钟'
+    message: productType === 'account' ? '目标账号已提交，请等待售后核验与交付' : '已提交，请等待 5 分钟'
   };
 };
 

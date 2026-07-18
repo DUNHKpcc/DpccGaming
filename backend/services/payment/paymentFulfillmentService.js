@@ -5,13 +5,14 @@ const {
   getRechargePackage,
   getRechargeBonusPackage
 } = require('./plans');
-const { parseSnapshotJson, normalizeQuota } = require('./paymentProductUtils');
+const { normalizeProductType, parseSnapshotJson, normalizeQuota, toCents } = require('./paymentProductUtils');
 const { decryptRedeemCode } = require('./redeemCodeCrypto');
 const {
   PAYMENT_SUPPORT_WECHAT,
   PAYMENT_SUPPORT_NOTE,
   PAYMENT_REDEEM_URL,
   PAYMENT_API_USERNAME_WAIT_NOTE,
+  PAYMENT_ACCOUNT_TARGET_WAIT_NOTE,
   BONUS_REDEEM_CODE_ALREADY_USED_NOTE,
   BONUS_REDEEM_CODE_PAYER_MISSING_NOTE,
   PROMOTION_PAYER_ALREADY_USED_NOTE,
@@ -222,6 +223,30 @@ const setSubscriptionUsernameRequired = async (connection, order = {}, bonusAssi
   };
 };
 
+const setAccountTargetRequired = async (connection, order = {}) => {
+  await repository.updatePaymentOrderFulfillment(connection, {
+    orderNo: order.order_no,
+    fulfillmentStatus: 'username_required',
+    redeemCodeId: null,
+    bonusRedeemCodeId: null,
+    redeemCode: null,
+    bonusRedeemCode: null,
+    redeemUrl: null,
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote: PAYMENT_ACCOUNT_TARGET_WAIT_NOTE
+  });
+
+  return {
+    fulfillmentStatus: 'username_required',
+    redeemCode: null,
+    bonusRedeemCode: null,
+    redeemCodes: [],
+    redeemUrl: '',
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote: PAYMENT_ACCOUNT_TARGET_WAIT_NOTE
+  };
+};
+
 const acquirePromotionPayerClaim = async (connection, order = {}, payload = {}) => {
   const promotionSnapshot = getOrderPromotionSnapshot(order);
   if (!promotionSnapshot.limitOnce) {
@@ -308,7 +333,7 @@ const handlePaidOrder = async (pool, payload = {}) => {
       throw error;
     }
 
-    if (Number(order.amount).toFixed(2) !== Number(payload.totalAmount).toFixed(2)) {
+    if (toCents(order.amount) <= 0 || toCents(order.amount) !== toCents(payload.totalAmount)) {
       const error = new Error('支付金额不匹配');
       error.statusCode = 400;
       error.nonRetryable = true;
@@ -316,6 +341,12 @@ const handlePaidOrder = async (pool, payload = {}) => {
     }
 
     if (order.status === 'paid') {
+      if (order.alipay_trade_no && order.alipay_trade_no !== payload.alipayTradeNo) {
+        const error = new Error('已支付订单的支付宝交易号不匹配');
+        error.statusCode = 409;
+        error.nonRetryable = true;
+        throw error;
+      }
       await connection.commit();
       transactionClosed = true;
       return { status: 'paid', orderNo: order.order_no, alreadyPaid: true };
@@ -338,7 +369,12 @@ const handlePaidOrder = async (pool, payload = {}) => {
       };
     }
 
-    const productType = order.product_type === 'recharge' ? 'recharge' : 'subscription';
+    const productType = normalizeProductType(order.product_type);
+    if (!productType) {
+      const error = new Error('订单商品类型无效');
+      error.statusCode = 500;
+      throw error;
+    }
     const productSnapshot = getOrderProductSnapshot(order);
     const promotionPayerClaim = await acquirePromotionPayerClaim(connection, order, {
       alipayBuyerId: payload.alipayBuyerId
@@ -350,12 +386,30 @@ const handlePaidOrder = async (pool, payload = {}) => {
       months: Number(productSnapshot.durationMonths || 0)
     };
     const rechargePackage = getRechargePackage(order.plan_id);
-    const [markResult] = await repository.markOrderPaid(connection, {
-      orderNo: payload.orderNo,
-      alipayTradeNo: payload.alipayTradeNo,
-      alipayBuyerId: payload.alipayBuyerId,
-      paidAt: toMysqlDateTime(paidAt)
-    });
+    const tradeOrder = await repository.getPaymentOrderByTradeNoForUpdate(connection, payload.alipayTradeNo);
+    if (tradeOrder && tradeOrder.order_no !== order.order_no) {
+      const error = new Error('支付宝交易号已关联其他订单');
+      error.statusCode = 409;
+      error.nonRetryable = true;
+      throw error;
+    }
+    let markResult;
+    try {
+      [markResult] = await repository.markOrderPaid(connection, {
+        orderNo: payload.orderNo,
+        alipayTradeNo: payload.alipayTradeNo,
+        alipayBuyerId: payload.alipayBuyerId,
+        paidAt: toMysqlDateTime(paidAt)
+      });
+    } catch (error) {
+      if (error?.code === 'ER_DUP_ENTRY') {
+        const conflictError = new Error('支付宝交易号已关联其他订单');
+        conflictError.statusCode = 409;
+        conflictError.nonRetryable = true;
+        throw conflictError;
+      }
+      throw error;
+    }
     if (!markResult || markResult.affectedRows !== 1) {
       const latestOrder = await repository.getPaymentOrderByNoForUpdate(connection, payload.orderNo);
       if (latestOrder?.status === 'paid') {
@@ -379,6 +433,13 @@ const handlePaidOrder = async (pool, payload = {}) => {
         alreadyPaid: false,
         ...fulfillment
       };
+    }
+
+    if (productType === 'account') {
+      const fulfillment = await setAccountTargetRequired(connection, order);
+      await connection.commit();
+      transactionClosed = true;
+      return { status: 'paid', orderNo: order.order_no, productType, alreadyPaid: false, ...fulfillment };
     }
 
     if (productType === 'recharge') {

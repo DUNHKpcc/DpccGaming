@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+
 const PAYMENT_SUPPORT_WECHAT = '15160701051';
 
 const PAYMENT_SUPPORT_NOTE = '售后和技术支持添加微信 15160701051';
@@ -5,6 +7,10 @@ const PAYMENT_SUPPORT_NOTE = '售后和技术支持添加微信 15160701051';
 const PAYMENT_REDEEM_URL = 'https://api.dpccgaming.xyz/console/topup';
 
 const PAYMENT_API_USERNAME_WAIT_NOTE = '已收到 DPCC-API 平台用户名，请等待 5 分钟。';
+
+const PAYMENT_ACCOUNT_TARGET_WAIT_NOTE = '支付已确认，请提交账号/代充服务的目标账号，售后核验后人工交付。';
+
+const PAYMENT_ACCOUNT_TARGET_SUBMITTED_NOTE = '已收到账号/代充服务的目标账号，请等待售后核验与人工交付。';
 
 const BONUS_REDEEM_CODE_ALREADY_USED_NOTE = '赠送兑换码每个用户仅可领取一次，本次不会重复赠送。';
 
@@ -58,7 +64,7 @@ const isPaymentAfterOrderExpiry = (order = {}, paidAt = new Date()) => {
 
 const createOrderNo = () => {
   const datePart = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
-  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const randomPart = crypto.randomBytes(8).toString('hex').toUpperCase();
   return `DPCC${datePart}${randomPart}`;
 };
 
@@ -108,7 +114,7 @@ const parseAlipayPaymentDate = (value = '') => {
   const normalized = String(value || '').trim();
   const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
   if (!match) return null;
-  return new Date(
+  const date = new Date(
     Number(match[1]),
     Number(match[2]) - 1,
     Number(match[3]),
@@ -116,6 +122,17 @@ const parseAlipayPaymentDate = (value = '') => {
     Number(match[5]),
     Number(match[6])
   );
+  if (
+    date.getFullYear() !== Number(match[1])
+    || date.getMonth() !== Number(match[2]) - 1
+    || date.getDate() !== Number(match[3])
+    || date.getHours() !== Number(match[4])
+    || date.getMinutes() !== Number(match[5])
+    || date.getSeconds() !== Number(match[6])
+  ) {
+    return null;
+  }
+  return date;
 };
 
 module.exports = {
@@ -123,6 +140,8 @@ module.exports = {
   PAYMENT_SUPPORT_NOTE,
   PAYMENT_REDEEM_URL,
   PAYMENT_API_USERNAME_WAIT_NOTE,
+  PAYMENT_ACCOUNT_TARGET_WAIT_NOTE,
+  PAYMENT_ACCOUNT_TARGET_SUBMITTED_NOTE,
   BONUS_REDEEM_CODE_ALREADY_USED_NOTE,
   BONUS_REDEEM_CODE_PAYER_MISSING_NOTE,
   PROMOTION_PAYER_ALREADY_USED_NOTE,

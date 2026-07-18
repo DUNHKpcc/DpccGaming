@@ -9,6 +9,7 @@ const {
 } = require('./alipay');
 const { handlePaidOrder } = require('./paymentFulfillmentService');
 const { buildOrderProductSnapshot } = require('./paymentProductService');
+const { normalizeProductType } = require('./paymentProductUtils');
 const { acquireUserClaim, buildPromotionClaimPurpose, releaseClaims } = require('./paymentClaimService');
 const {
   createOrderNo,
@@ -21,6 +22,10 @@ const PAYMENT_ORDER_LOCK_MINUTES = 5;
 const MAX_PENDING_PAYMENT_ORDERS_PER_USER = 5;
 const ORDER_CREATE_LOCK_TIMEOUT_SECONDS = 5;
 const ALIPAY_NOTIFY_PROVIDER = 'alipay';
+const ALIPAY_GATEWAY_HOSTS = new Set([
+  'openapi.alipay.com',
+  'openapi-sandbox.dl.alipaydev.com'
+]);
 
 const createNotifyError = (message, statusCode = 400, options = {}) => {
   const error = new Error(message);
@@ -95,12 +100,27 @@ const ensureAlipayCreateConfig = () => {
     error.statusCode = 500;
     throw error;
   }
+  let gatewayUrl;
+  try {
+    gatewayUrl = new URL(paymentConfig.alipay.gatewayUrl);
+  } catch {
+    const error = new Error('支付宝支付未配置：ALIPAY_GATEWAY_URL 无效');
+    error.statusCode = 500;
+    throw error;
+  }
+  if (gatewayUrl.protocol !== 'https:' || !ALIPAY_GATEWAY_HOSTS.has(gatewayUrl.hostname.toLowerCase())) {
+    const error = new Error('支付宝支付未配置：ALIPAY_GATEWAY_URL 必须使用支付宝官方 HTTPS 网关');
+    error.statusCode = 500;
+    throw error;
+  }
   if (process.env.NODE_ENV === 'production') {
     let notifyUrl;
+    let returnUrl;
     try {
       notifyUrl = new URL(paymentConfig.alipay.notifyUrl);
+      returnUrl = new URL(paymentConfig.alipay.returnUrl);
     } catch {
-      const error = new Error('支付宝支付未配置：ALIPAY_NOTIFY_URL 必须是公网 HTTPS 地址');
+      const error = new Error('支付宝支付未配置：回调地址必须是公网 HTTPS 地址');
       error.statusCode = 500;
       throw error;
     }
@@ -115,12 +135,37 @@ const ensureAlipayCreateConfig = () => {
       error.statusCode = 500;
       throw error;
     }
+    const returnHostname = returnUrl.hostname.toLowerCase();
+    if (
+      returnUrl.protocol !== 'https:'
+      || returnHostname === 'localhost'
+      || returnHostname === '127.0.0.1'
+      || returnHostname === '::1'
+    ) {
+      const error = new Error('支付宝支付未配置：ALIPAY_RETURN_URL 必须是公网 HTTPS 地址');
+      error.statusCode = 500;
+      throw error;
+    }
   }
 };
 
-const createAlipayOrder = async ({ userId, productType = 'subscription', productId, planId, durationId, rechargePackageId } = {}) => {
-  const normalizedProductType = productType === 'recharge' ? 'recharge' : 'subscription';
-  const requestedProductId = productId || (normalizedProductType === 'recharge' ? rechargePackageId || planId : planId);
+const createAlipayOrder = async ({ userId, productType, productId, planId, durationId, rechargePackageId, accountProductId } = {}) => {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    const error = new Error('登录用户无效');
+    error.statusCode = 401;
+    throw error;
+  }
+  const normalizedProductType = normalizeProductType(productType);
+  if (!normalizedProductType) {
+    const error = new Error('支付款项类型无效');
+    error.statusCode = 400;
+    throw error;
+  }
+  const requestedProductId = productId
+    || (normalizedProductType === 'recharge' ? rechargePackageId : null)
+    || (normalizedProductType === 'account' ? accountProductId : null)
+    || planId;
   ensureAlipayCreateConfig();
 
   const pool = getPool();
@@ -131,13 +176,13 @@ const createAlipayOrder = async ({ userId, productType = 'subscription', product
   let promotionClaims = [];
 
   try {
-    orderCreateLockName = await acquireOrderCreateLock(lockConnection, userId);
+    orderCreateLockName = await acquireOrderCreateLock(lockConnection, normalizedUserId);
     const now = new Date();
     const mysqlNow = toMysqlDateTime(now);
     await repository.closeExpiredPaymentOrders(pool, mysqlNow);
     await repository.deletePaymentBonusClaimsForClosedOrders(pool);
     const pendingOrderCount = await repository.countPendingPaymentOrdersForUser(pool, {
-      userId,
+      userId: normalizedUserId,
       now: mysqlNow
     });
     if (pendingOrderCount >= MAX_PENDING_PAYMENT_ORDERS_PER_USER) {
@@ -148,14 +193,15 @@ const createAlipayOrder = async ({ userId, productType = 'subscription', product
     orderNo = createOrderNo();
     let productSnapshot = await buildOrderProductSnapshot({
       productId: requestedProductId,
+      productType: normalizedProductType,
       durationId,
-      userId
+      userId: normalizedUserId
     }, pool);
     const activePromotion = productSnapshot.product.activePromotion;
     if (activePromotion?.limitOnce) {
       const claimResult = await acquireUserClaim(pool, {
         purpose: buildPromotionClaimPurpose(activePromotion),
-        userId,
+        userId: normalizedUserId,
         orderNo
       });
       if (claimResult.claimed) {
@@ -163,8 +209,9 @@ const createAlipayOrder = async ({ userId, productType = 'subscription', product
       } else {
         productSnapshot = await buildOrderProductSnapshot({
           productId: requestedProductId,
+          productType: normalizedProductType,
           durationId,
-          userId,
+          userId: normalizedUserId,
           ignorePromotion: true
         }, pool);
       }
@@ -174,16 +221,18 @@ const createAlipayOrder = async ({ userId, productType = 'subscription', product
     const expiresAt = addMinutes(now, PAYMENT_ORDER_LOCK_MINUTES);
     const order = {
       orderNo,
-      userId,
+      userId: normalizedUserId,
       productType: product.productType,
       planId: product.skuId,
-      durationId: product.productType === 'recharge' ? 'one_time' : duration.id,
+      durationId: product.productType === 'subscription' ? duration.id : 'one_time',
       quotaUsd: productSnapshot.quotaUsd,
       amount: product.price,
       subject: product.subject,
       body: product.productType === 'recharge'
         ? `一次性充值 ${productSnapshot.quotaUsd} 美元额度`
-        : `${duration.label}，赠送 ${productSnapshot.quotaUsd} 美元普通余额`,
+        : product.productType === 'account'
+          ? '账号与代充服务，支付后提交目标账号并由售后人工交付'
+          : `${duration.label}，赠送 ${productSnapshot.quotaUsd} 美元普通余额`,
       expiresAt: toMysqlDateTime(expiresAt),
       expiresInMinutes: PAYMENT_ORDER_LOCK_MINUTES,
       productSnapshotJson: productSnapshot.productSnapshotJson,
@@ -237,9 +286,22 @@ const handleAlipayNotify = async (params = {}, options = {}) => {
     return { status: 'ignored' };
   }
 
+  const orderNo = String(params.out_trade_no || '').trim();
+  const tradeNo = String(params.trade_no || '').trim();
+  const totalAmount = String(params.total_amount || '').trim();
+  if (!/^DPCC\d{14}(?:[A-Z0-9]{6}|[A-F0-9]{16})$/.test(orderNo)) {
+    throw createNotifyError('支付宝通知订单号格式无效');
+  }
+  if (!/^[A-Za-z0-9]{8,96}$/.test(tradeNo)) {
+    throw createNotifyError('支付宝通知交易号格式无效');
+  }
+  if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(totalAmount) || Number(totalAmount) <= 0) {
+    throw createNotifyError('支付宝通知金额格式无效');
+  }
+
   const notifyId = String(params.notify_id || '').trim();
-  if (!notifyId) {
-    throw createNotifyError('支付宝通知缺少 notify_id');
+  if (!notifyId || notifyId.length > 128 || /[\u0000-\u001f\u007f]/.test(notifyId)) {
+    throw createNotifyError('支付宝通知 notify_id 无效');
   }
 
   const notifyTime = parseAlipayPaymentDate(params.notify_time);
@@ -251,14 +313,17 @@ const handleAlipayNotify = async (params = {}, options = {}) => {
     throw createNotifyError('支付宝通知已超过允许处理时间窗');
   }
   const alipayBuyerId = await resolveAlipayBuyerId(params);
+  if (alipayBuyerId.length > 128 || /[\u0000-\u001f\u007f]/.test(alipayBuyerId)) {
+    throw createNotifyError('支付宝付款账号标识无效');
+  }
 
   const pool = getPool();
   await repository.ensurePaymentTables(pool);
   const [insertResult] = await repository.createPaymentNotification(pool, {
     provider: ALIPAY_NOTIFY_PROVIDER,
     notifyId,
-    orderNo: params.out_trade_no,
-    tradeNo: params.trade_no,
+    orderNo,
+    tradeNo,
     notifiedAt: toMysqlDateTime(notifyTime)
   });
   if (Number(insertResult?.affectedRows || 0) !== 1) {
@@ -267,10 +332,10 @@ const handleAlipayNotify = async (params = {}, options = {}) => {
 
   try {
     const result = await handlePaidOrder(pool, {
-      orderNo: params.out_trade_no,
-      alipayTradeNo: params.trade_no,
+      orderNo,
+      alipayTradeNo: tradeNo,
       alipayBuyerId,
-      totalAmount: params.total_amount,
+      totalAmount,
       paidAt
     });
     await repository.updatePaymentNotificationStatus(pool, {

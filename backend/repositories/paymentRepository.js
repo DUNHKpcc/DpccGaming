@@ -257,6 +257,7 @@ const ensurePaymentTables = async (pool) => {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX idx_payment_orders_user_id (user_id),
           INDEX idx_payment_orders_status (status),
+          UNIQUE INDEX uq_payment_orders_alipay_trade_no (alipay_trade_no),
           INDEX idx_payment_orders_alipay_buyer_id (alipay_buyer_id),
           INDEX idx_payment_orders_redeem_code_id (redeem_code_id),
           INDEX idx_payment_orders_bonus_redeem_code_id (bonus_redeem_code_id),
@@ -470,6 +471,11 @@ const ensurePaymentTables = async (pool) => {
       await pool.execute('ALTER TABLE payment_orders MODIFY COLUMN alipay_buyer_id VARCHAR(128) DEFAULT NULL')
         .catch((error) => {
           if (error?.code === 'ER_BAD_FIELD_ERROR') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_orders ADD UNIQUE INDEX uq_payment_orders_alipay_trade_no (alipay_trade_no)')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_KEYNAME') return null;
           throw error;
         });
       await pool.execute('ALTER TABLE payment_orders ADD INDEX idx_payment_orders_alipay_buyer_id (alipay_buyer_id)')
@@ -908,6 +914,14 @@ const getPaymentOrderByNoForUpdate = async (executor, orderNo = '') => {
   return rows[0] || null;
 };
 
+const getPaymentOrderByTradeNoForUpdate = async (executor, tradeNo = '') => {
+  const [rows] = await executor.execute(
+    'SELECT * FROM payment_orders WHERE alipay_trade_no = ? LIMIT 1 FOR UPDATE',
+    [tradeNo]
+  );
+  return rows[0] || null;
+};
+
 const getPaymentOrderForUser = async (executor, payload = {}) => {
   const [rows] = await executor.execute(
     'SELECT * FROM payment_orders WHERE order_no = ? AND user_id = ? LIMIT 1',
@@ -1200,6 +1214,10 @@ const updatePaymentOrderApiUsername = async (executor, payload = {}) => executor
   `
     UPDATE payment_orders
     SET api_username = ?,
+        support_note = CASE
+          WHEN fulfillment_status = 'username_required' THEN COALESCE(?, support_note)
+          ELSE support_note
+        END,
         fulfillment_status = CASE
           WHEN fulfillment_status = 'manual_required' THEN 'manual_required'
           ELSE 'username_submitted'
@@ -1210,6 +1228,7 @@ const updatePaymentOrderApiUsername = async (executor, payload = {}) => executor
   `,
   [
     payload.apiUsername,
+    payload.supportNote || null,
     payload.orderNo,
     payload.userId
   ]
@@ -1340,6 +1359,7 @@ module.exports = {
   deletePaymentBonusClaimsByOrderNo,
   deletePaymentBonusClaimsForClosedOrders,
   getPaymentOrderByNoForUpdate,
+  getPaymentOrderByTradeNoForUpdate,
   getPaymentOrderForUser,
   countPendingPaymentOrdersForUser,
   listAssignedRedeemCodeSkusForUser,

@@ -31,7 +31,8 @@ const createAlipayOrder = async (req, res) => {
       productId: req.body?.productId,
       planId: req.body?.planId,
       durationId: req.body?.durationId,
-      rechargePackageId: req.body?.rechargePackageId
+      rechargePackageId: req.body?.rechargePackageId,
+      accountProductId: req.body?.accountProductId
     });
 
     res.json(result);
@@ -84,7 +85,7 @@ const submitPaymentOrderApiUsername = async (req, res) => {
     res.json(result);
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      message: toPublicErrorMessage('保存 DPCC-API 平台用户名失败') || error.message || '保存 DPCC-API 平台用户名失败'
+      message: toPublicErrorMessage('保存交付信息失败') || error.message || '保存交付信息失败'
     });
   }
 };

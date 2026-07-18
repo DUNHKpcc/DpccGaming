@@ -14,10 +14,17 @@ const createOrderLimiter = rateLimit({
   )
 });
 
+const fulfillmentInputLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  message: '提交交付信息过于频繁，请稍后再试',
+  keyGenerator: (req) => `user:${req.user?.userId || req.ip || req.connection.remoteAddress}`
+});
+
 router.get('/catalog', optionalAuthenticateToken, paymentController.getPaymentCatalog);
 router.get('/orders', authenticateToken, paymentController.listUserPaymentOrders);
 router.get('/orders/:orderNo', authenticateToken, paymentController.getPaymentOrderResult);
-router.post('/orders/:orderNo/api-username', authenticateToken, paymentController.submitPaymentOrderApiUsername);
+router.post('/orders/:orderNo/api-username', authenticateToken, fulfillmentInputLimiter, paymentController.submitPaymentOrderApiUsername);
 router.post('/alipay/orders', authenticateToken, createOrderLimiter, paymentController.createAlipayOrder);
 router.post('/alipay/notify', paymentController.handleAlipayNotify);
 
