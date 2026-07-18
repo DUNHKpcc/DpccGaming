@@ -122,7 +122,8 @@ const routes = [
   {
     path: '/payment',
     name: 'Payment',
-    component: Payment
+    component: Payment,
+    meta: { hideSidebar: true }
   },
   {
     path: '/payment/orders',

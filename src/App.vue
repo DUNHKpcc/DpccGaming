@@ -25,7 +25,7 @@
     
     <!-- 通知组件 -->
     <Notification v-if="showOverlays" />
-    <CookieConsentBanner v-if="showOverlays" />
+    <CookieConsentBanner v-if="showOverlays && !isDevPreview" />
   </div>
 </template>
 
@@ -51,6 +51,7 @@ const mainContent = ref(null)
 const route = useRoute()
 const isFullscreen = computed(() => modalStore.isFullscreen)
 const isDesktop = ref(true)
+const isDevPreview = import.meta.env.DEV
 
 const showSidebar = computed(() => !route.meta?.hideSidebar)
 const showTopbar = computed(() => {

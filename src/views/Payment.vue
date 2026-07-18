@@ -6,22 +6,13 @@
           <img src="/favicon.png" alt="DPCC API" class="payment-logo" />
           <div>
             <h1>DPCC API</h1>
-            <p class="payment-kicker">{{ pageKicker }}</p>
           </div>
         </div>
 
       </header>
 
       <main class="payment-workspace">
-        <section class="plan-area" aria-labelledby="payment-title">
-          <div class="section-heading">
-            <div>
-              <h2 id="payment-title">{{ paymentTitle }}</h2>
-              <p>{{ paymentDescription }}</p>
-            </div>
-            <span class="lock-pill" :class="{ expired: isOrderLockExpired }">{{ lockPillText }}</span>
-          </div>
-
+        <section class="plan-area">
           <div class="product-switch" role="tablist" aria-label="支付类型">
             <button
               type="button"
@@ -40,6 +31,15 @@
               @click="selectProductMode('recharge')"
             >
               额度充值
+            </button>
+            <button
+              type="button"
+              :class="{ active: productMode === 'account' }"
+              :aria-selected="productMode === 'account'"
+              role="tab"
+              @click="selectProductMode('account')"
+            >
+              账号/代充
             </button>
           </div>
 
@@ -111,8 +111,8 @@
 
             <div
               class="plan-mode-panel"
-              :class="{ active: !isSubscriptionMode }"
-              :aria-hidden="isSubscriptionMode"
+              :class="{ active: isRechargeMode }"
+              :aria-hidden="!isRechargeMode"
             >
               <div class="tier-control-bar">
                 <div class="recharge-scroll-hint">向右滑动查看更多额度</div>
@@ -177,15 +177,171 @@
                 </button>
               </div>
             </div>
+
+            <div
+              class="plan-mode-panel"
+              :class="{ active: isAccountMode }"
+              :aria-hidden="!isAccountMode"
+            >
+              <div class="tier-control-bar">
+                <div class="recharge-scroll-hint">向右滑动查看更多账号与代充服务</div>
+                <div class="tier-nav-buttons" aria-label="账号代充档位切换">
+                  <button
+                    type="button"
+                    class="tier-nav-button"
+                    :disabled="!canMoveAccountPrev"
+                    aria-label="上一档账号代充规格"
+                    @click="moveAccountTier(-1)"
+                  >
+                    <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="tier-nav-button"
+                    :disabled="!canMoveAccountNext"
+                    aria-label="下一档账号代充规格"
+                    @click="moveAccountTier(1)"
+                  >
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                  </button>
+                </div>
+              </div>
+              <div ref="accountTierGrid" class="plan-grid tier-scroll-grid" aria-label="账号代充规格，可横向滚动">
+                <button
+                  v-for="service in accountProducts"
+                  :key="service.id"
+                  type="button"
+                  class="plan-card"
+                  :class="{ selected: service.id === selectedAccountProductId, 'has-card-badges': service.badgeText || service.promotionBadgeText }"
+                  :aria-pressed="service.id === selectedAccountProductId"
+                  @click="selectAccountProduct(service.id)"
+                >
+                  <span v-if="service.badgeText" class="recommend-badge">{{ service.badgeText }}</span>
+                  <span v-if="service.promotionBadgeText" class="bonus-badge-stack">
+                    <span class="recharge-bonus-badge">{{ service.promotionBadgeText }}</span>
+                  </span>
+                  <span class="plan-name">{{ service.name }}</span>
+                  <span class="plan-price"><strong>{{ service.priceText }}</strong></span>
+                  <span class="daily-quota">{{ service.serviceText }}</span>
+                  <span class="stock-line" :class="{ empty: !service.available }">{{ service.availabilityText }}</span>
+                  <span class="plan-divider"></span>
+                  <span v-for="feature in service.features" :key="feature" class="plan-feature">
+                    {{ feature }}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div class="payment-config" :class="{ 'recharge-mode': !isSubscriptionMode }">
-            <section
-              class="config-panel duration-panel"
-              :class="{ 'is-hidden': !isSubscriptionMode }"
-              :aria-hidden="!isSubscriptionMode"
-              aria-labelledby="duration-title"
-            >
+          <button
+            type="button"
+            class="checkout-trigger"
+            :disabled="isPayDisabled"
+            @click="openOrderDialog"
+          >
+            <i class="fa-brands fa-alipay" aria-hidden="true"></i>
+            <span>确认支付 {{ orderAmountText }}</span>
+          </button>
+        </section>
+      </main>
+    </div>
+
+    <Teleport to="body">
+      <Transition name="order-dialog">
+        <div
+          v-if="isOrderDialogOpen"
+          ref="orderDialogRef"
+          class="order-dialog-backdrop"
+          tabindex="-1"
+          @click.self="closeOrderDialog"
+          @keydown.esc="closeOrderDialog"
+        >
+          <aside
+            class="order-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-title"
+          >
+            <div class="order-head">
+              <h2 id="order-title">订单确认</h2>
+              <button
+                type="button"
+                class="order-dialog-close"
+                aria-label="关闭订单确认"
+                title="关闭订单确认"
+                @click="closeOrderDialog"
+              >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <section class="amount-box">
+              <span>支付宝应付金额</span>
+              <span v-if="hasOrderPromotionPrice" class="promotion-original-price amount-original-price">{{ orderOriginalAmountText }}</span>
+              <strong>{{ orderAmountText }}</strong>
+              <p>{{ orderSummaryText }}</p>
+            </section>
+
+            <section class="order-details">
+              <h3>支付款项</h3>
+              <dl>
+                <div>
+                  <dt>商品</dt>
+                  <dd>{{ selectedProductName }}</dd>
+                </div>
+                <div v-if="isSubscriptionMode">
+                  <dt>周期</dt>
+                  <dd>{{ selectedDuration.label }}</dd>
+                </div>
+                <div v-if="isSubscriptionMode && selectedPlan.hasPlanBonus">
+                  <dt>赠送余额</dt>
+                  <dd>{{ selectedPlan.bonusQuotaText }}</dd>
+                </div>
+                <div v-if="isSubscriptionMode && selectedPlan.hasPlanBonus">
+                  <dt>赠送码库存</dt>
+                  <dd :class="{ 'stock-warning': !selectedPlan.hasBonusStock }">{{ selectedPlan.bonusStockText }}</dd>
+                </div>
+                <div v-if="isSubscriptionMode && selectedPlan.bonusRedeemCodeUsed">
+                  <dt>赠送限制</dt>
+                  <dd class="stock-warning">你已领取过赠送兑换码，本次不重复赠送</dd>
+                </div>
+                <div v-if="isRechargeMode">
+                  <dt>到账</dt>
+                  <dd>
+                    <span class="recharge-quota order-recharge-quota">
+                      <span v-if="selectedRechargePackage.hasRechargeBonus" class="quota-original">{{ selectedRechargePackage.originalQuotaText }}</span>
+                      <span class="quota-upgraded">{{ selectedRechargePackage.quotaText }}</span>
+                    </span>
+                  </dd>
+                </div>
+                <div v-if="isRechargeMode">
+                  <dt>兑换码库存</dt>
+                  <dd :class="{ 'stock-warning': !selectedRechargePackage.hasMainStock }">{{ selectedRechargePackage.stockText }}</dd>
+                </div>
+                <div v-if="isRechargeMode && selectedRechargePackage.hasRechargeBonus">
+                  <dt>赠送码库存</dt>
+                  <dd :class="{ 'stock-warning': !selectedRechargePackage.hasBonusStock }">{{ selectedRechargePackage.bonusStockText }}</dd>
+                </div>
+                <div v-if="isRechargeMode && selectedRechargePackage.bonusRedeemCodeUsed">
+                  <dt>赠送限制</dt>
+                  <dd class="stock-warning">你已领取过赠送兑换码，本次不重复赠送</dd>
+                </div>
+                <div v-if="isAccountMode">
+                  <dt>服务</dt>
+                  <dd>{{ selectedAccountProduct.serviceText }}</dd>
+                </div>
+                <div v-if="isAccountMode">
+                  <dt>交付</dt>
+                  <dd :class="{ 'stock-warning': !selectedAccountProduct.available }">{{ selectedAccountProduct.availabilityText }}</dd>
+                </div>
+                <div v-if="selectedPromotionLimitNotice">
+                  <dt>限购说明</dt>
+                  <dd class="stock-warning">{{ selectedPromotionLimitNotice }}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section v-if="isSubscriptionMode" class="order-duration" aria-labelledby="duration-title">
               <h3 id="duration-title">开通周期</h3>
               <div class="duration-options">
                 <button
@@ -200,7 +356,7 @@
               </div>
             </section>
 
-            <section class="config-panel" aria-labelledby="method-title">
+            <section class="order-payment-method" aria-labelledby="method-title">
               <h3 id="method-title">支付方式</h3>
               <div class="payment-method-icons">
                 <button
@@ -215,106 +371,32 @@
                 </button>
               </div>
             </section>
-          </div>
-        </section>
 
-        <aside class="order-panel" aria-labelledby="order-title">
-          <div class="order-head">
-            <h2 id="order-title">订单确认</h2>
-            <span>已校验</span>
-          </div>
-
-          <section class="amount-box">
-            <span>支付宝应付金额</span>
-            <span v-if="hasOrderPromotionPrice" class="promotion-original-price amount-original-price">{{ orderOriginalAmountText }}</span>
-            <strong>{{ orderAmountText }}</strong>
-            <p>{{ orderSummaryText }}</p>
-          </section>
-
-          <section class="order-details">
-            <h3>支付款项</h3>
-            <dl>
-              <div>
-                <dt>商品</dt>
-                <dd>{{ selectedProductName }}</dd>
-              </div>
-              <div v-if="isSubscriptionMode">
-                <dt>周期</dt>
-                <dd>{{ selectedDuration.label }}</dd>
-              </div>
-              <div v-if="isSubscriptionMode && selectedPlan.hasPlanBonus">
-                <dt>赠送余额</dt>
-                <dd>{{ selectedPlan.bonusQuotaText }}</dd>
-              </div>
-              <div v-if="isSubscriptionMode && selectedPlan.hasPlanBonus">
-                <dt>赠送码库存</dt>
-                <dd :class="{ 'stock-warning': !selectedPlan.hasBonusStock }">{{ selectedPlan.bonusStockText }}</dd>
-              </div>
-              <div v-if="isSubscriptionMode && selectedPlan.bonusRedeemCodeUsed">
-                <dt>赠送限制</dt>
-                <dd class="stock-warning">你已领取过赠送兑换码，本次不重复赠送</dd>
-              </div>
-              <div v-if="!isSubscriptionMode">
-                <dt>到账</dt>
-                <dd>
-                  <span class="recharge-quota order-recharge-quota">
-                    <span v-if="selectedRechargePackage.hasRechargeBonus" class="quota-original">{{ selectedRechargePackage.originalQuotaText }}</span>
-                    <span class="quota-upgraded">{{ selectedRechargePackage.quotaText }}</span>
-                  </span>
-                </dd>
-              </div>
-              <div v-if="!isSubscriptionMode">
-                <dt>兑换码库存</dt>
-                <dd :class="{ 'stock-warning': !selectedRechargePackage.hasMainStock }">{{ selectedRechargePackage.stockText }}</dd>
-              </div>
-              <div v-if="!isSubscriptionMode && selectedRechargePackage.hasRechargeBonus">
-                <dt>赠送码库存</dt>
-                <dd :class="{ 'stock-warning': !selectedRechargePackage.hasBonusStock }">{{ selectedRechargePackage.bonusStockText }}</dd>
-              </div>
-              <div v-if="!isSubscriptionMode && selectedRechargePackage.bonusRedeemCodeUsed">
-                <dt>赠送限制</dt>
-                <dd class="stock-warning">你已领取过赠送兑换码，本次不重复赠送</dd>
-              </div>
-              <div v-if="selectedPromotionLimitNotice">
-                <dt>限购说明</dt>
-                <dd class="stock-warning">{{ selectedPromotionLimitNotice }}</dd>
-              </div>
-              <div>
-                <dt>订单</dt>
-                <dd>{{ orderId }}</dd>
-              </div>
-              <div>
-                <dt>收款方</dt>
-                <dd>DPCC API 官方支付宝</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="order-footer-note">
-            <h3>订单提示</h3>
-            <p>{{ orderFooterText }}</p>
-          </section>
-
-          <button
-            type="button"
-            class="pay-button"
-            :disabled="isPayDisabled"
-            @click="redirectToAlipay"
-          >
-            {{ payButtonText }}
-          </button>
-          <p v-if="paymentError" class="payment-error">{{ paymentError }}</p>
-        </aside>
-      </main>
-    </div>
+            <div class="order-dialog-actions">
+              <button type="button" class="order-dialog-secondary" @click="closeOrderDialog">
+                返回修改
+              </button>
+              <button
+                type="button"
+                class="pay-button"
+                :disabled="isPayDisabled"
+                @click="redirectToAlipay"
+              >
+                {{ payButtonText }}
+              </button>
+            </div>
+            <p v-if="paymentError" class="payment-error">{{ paymentError }}</p>
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { apiCall } from '../utils/api'
 
-const ORDER_LOCK_SECONDS = 5 * 60
 const DEFAULT_DURATIONS = [
   { id: '1m', label: '1个月', months: 1 },
   { id: '3m', label: '3个月', months: 3 },
@@ -382,11 +464,11 @@ const productMode = ref('subscription')
 const plans = ref([])
 const durations = ref(DEFAULT_DURATIONS.map((duration) => ({ ...duration })))
 const rechargePackages = ref([])
+const accountProducts = ref([])
 const paymentError = ref('')
 const isCreatingOrder = ref(false)
-const orderExpiresAt = ref('')
-const countdownNow = ref(Date.now())
-let countdownTimerId = null
+const isOrderDialogOpen = ref(false)
+const orderDialogRef = ref(null)
 const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度', hasBonusStock: false, bonusRedeemCodeUsed: false, bonusStockText: '赠送码库存同步中' }
 const emptyDuration = { label: '加载中', months: 1 }
 const emptyRechargePackage = {
@@ -400,65 +482,90 @@ const emptyRechargePackage = {
   stockText: '兑换码库存同步中',
   bonusStockText: '赠送码库存同步中'
 }
+const emptyAccountProduct = {
+  name: '加载中',
+  price: 0,
+  serviceText: '正在加载服务',
+  availabilityText: '正在同步交付状态',
+  available: false
+}
 
 const selectedPlanId = ref('')
 const selectedDurationId = ref('1m')
 const selectedRechargePackageId = ref('')
+const selectedAccountProductId = ref('')
 const subscriptionTierGrid = ref(null)
 const rechargeTierGrid = ref(null)
+const accountTierGrid = ref(null)
 
 const selectProductMode = (mode) => {
   productMode.value = mode
   paymentError.value = ''
-  clearOrderLock()
 }
 
 const selectPlan = (planId) => {
   selectedPlanId.value = planId
-  clearOrderLock()
 }
 
 const selectDuration = (durationId) => {
   selectedDurationId.value = durationId
-  clearOrderLock()
 }
 
 const selectRechargePackage = (packageId) => {
   selectedRechargePackageId.value = packageId
-  clearOrderLock()
+}
+
+const selectAccountProduct = (productId) => {
+  selectedAccountProductId.value = productId
+}
+
+const openOrderDialog = async () => {
+  if (isPayDisabled.value) return
+  paymentError.value = ''
+  isOrderDialogOpen.value = true
+  await nextTick()
+  orderDialogRef.value?.focus()
+}
+
+const closeOrderDialog = () => {
+  if (isCreatingOrder.value) return
+  isOrderDialogOpen.value = false
+  paymentError.value = ''
 }
 
 const isSubscriptionMode = computed(() => productMode.value === 'subscription')
+const isRechargeMode = computed(() => productMode.value === 'recharge')
+const isAccountMode = computed(() => productMode.value === 'account')
 const selectedPlan = computed(() => plans.value.find((plan) => plan.id === selectedPlanId.value) || plans.value[0] || emptyPlan)
 const selectedDuration = computed(() => durations.value.find((duration) => duration.id === selectedDurationId.value) || durations.value[0] || emptyDuration)
 const selectedRechargePackage = computed(() => (
   rechargePackages.value.find((pack) => pack.id === selectedRechargePackageId.value) || rechargePackages.value[0] || emptyRechargePackage
 ))
+const selectedAccountProduct = computed(() => (
+  accountProducts.value.find((product) => product.id === selectedAccountProductId.value) || accountProducts.value[0] || emptyAccountProduct
+))
+const selectedProduct = computed(() => {
+  if (isSubscriptionMode.value) return selectedPlan.value
+  if (isRechargeMode.value) return selectedRechargePackage.value
+  return selectedAccountProduct.value
+})
 const selectedSubscriptionIndex = computed(() => plans.value.findIndex((plan) => plan.id === selectedPlanId.value))
 const selectedRechargeIndex = computed(() => rechargePackages.value.findIndex((pack) => pack.id === selectedRechargePackageId.value))
+const selectedAccountIndex = computed(() => accountProducts.value.findIndex((product) => product.id === selectedAccountProductId.value))
 const canMoveSubscriptionPrev = computed(() => selectedSubscriptionIndex.value > 0)
 const canMoveSubscriptionNext = computed(() => selectedSubscriptionIndex.value >= 0 && selectedSubscriptionIndex.value < plans.value.length - 1)
 const canMoveRechargePrev = computed(() => selectedRechargeIndex.value > 0)
 const canMoveRechargeNext = computed(() => selectedRechargeIndex.value >= 0 && selectedRechargeIndex.value < rechargePackages.value.length - 1)
-const pageKicker = computed(() => (isSubscriptionMode.value ? '月卡充值中心' : '普通额度充值中心'))
-const paymentTitle = computed(() => (isSubscriptionMode.value ? '选择月卡款项' : '选择充值额度'))
-const paymentDescription = computed(() => (
-  isSubscriptionMode.value
-    ? '月卡不支持退款，所有月卡用户均享受VIP渠道，PRO号池，最快的响应速度'
-    : '普通额度一次性到账，按实际调用消耗，不改变当前月卡订阅状态'
-))
-const selectedActivePromotion = computed(() => (
-  isSubscriptionMode.value
-    ? selectedPlan.value.activePromotion
-    : selectedRechargePackage.value.activePromotion
-))
+const canMoveAccountPrev = computed(() => selectedAccountIndex.value > 0)
+const canMoveAccountNext = computed(() => selectedAccountIndex.value >= 0 && selectedAccountIndex.value < accountProducts.value.length - 1)
+const selectedActivePromotion = computed(() => selectedProduct.value.activePromotion)
 const orderAmount = computed(() => (
   isSubscriptionMode.value
     ? Number(selectedPlan.value.price || 0) * Number(selectedDuration.value.months || 1)
-    : Number(selectedRechargePackage.value.price || 0)
+    : Number(selectedProduct.value.price || 0)
 ))
 const orderOriginalAmount = computed(() => {
-  const product = isSubscriptionMode.value ? selectedPlan.value : selectedRechargePackage.value
+  const product = selectedProduct.value
   const originalPrice = Number(product.originalPrice ?? product.basePrice ?? product.price ?? 0)
   return isSubscriptionMode.value
     ? originalPrice * Number(selectedDuration.value.months || 1)
@@ -471,88 +578,31 @@ const hasOrderPromotionPrice = computed(() => (
 ))
 const orderAmountText = computed(() => formatMoney(orderAmount.value))
 const orderOriginalAmountText = computed(() => formatMoney(orderOriginalAmount.value))
-const selectedProductName = computed(() => (isSubscriptionMode.value ? selectedPlan.value.name : selectedRechargePackage.value.name))
-const orderSummaryText = computed(() => (
-  isSubscriptionMode.value
-    ? `${selectedPlan.value.name} · ${selectedDuration.value.label} · ${selectedPlan.value.dailyQuota}`
-    : `${selectedRechargePackage.value.name} · ${selectedRechargePackage.value.quotaText}`
-))
-const selectedBonusRedeemCodeUsed = computed(() => (
-  isSubscriptionMode.value
-    ? selectedPlan.value.bonusRedeemCodeUsed
-    : selectedRechargePackage.value.bonusRedeemCodeUsed
-))
+const selectedProductName = computed(() => selectedProduct.value.name)
+const orderSummaryText = computed(() => {
+  if (isSubscriptionMode.value) {
+    return `${selectedPlan.value.name} · ${selectedDuration.value.label} · ${selectedPlan.value.dailyQuota}`
+  }
+  if (isRechargeMode.value) {
+    return `${selectedRechargePackage.value.name} · ${selectedRechargePackage.value.quotaText}`
+  }
+  return `${selectedAccountProduct.value.name} · ${selectedAccountProduct.value.serviceText}`
+})
 const selectedPromotionLimitNotice = computed(() => (
   selectedActivePromotion.value?.limitOnce
     ? '本促销同一站内账号和同一支付宝支付ID限购一次；重复支付不会自动发放权益，请联系售后补差价或退款。'
     : ''
 ))
-const orderFooterText = computed(() => (
-  selectedPromotionLimitNotice.value
-    ? selectedPromotionLimitNotice.value
-    : selectedBonusRedeemCodeUsed.value
-    ? '赠送兑换码按站内账号和支付宝付款账号各限领取一次，本次只处理所选款项，不再重复赠送。'
-    : isSubscriptionMode.value
-    ? (selectedPlan.value.hasBonusStock
-        ? '支付完成后请在结果页提交 DPCC-API 用户名，赠送码按站内账号和支付宝付款账号各限领取一次。'
-        : '当前赠送码暂无库存，支付后请提交用户名，赠送码会转入人工补发。')
-    : (selectedRechargePackage.value.hasMainStock && selectedRechargePackage.value.hasBonusStock
-        ? '支付完成后结果页会展示兑换码；赠送码按站内账号和支付宝付款账号各限领取一次。'
-        : '当前有兑换码库存不足，支付后会转入人工发码，请凭订单号联系售后处理。')
-))
-const orderId = computed(() => `服务端创建后锁定`)
 const isPayDisabled = computed(() => (
   isCreatingOrder.value
   || (isSubscriptionMode.value && (!selectedPlan.value.id || !selectedDuration.value.id))
-  || (!isSubscriptionMode.value && !selectedRechargePackage.value.id)
+  || (isRechargeMode.value && !selectedRechargePackage.value.id)
+  || (isAccountMode.value && !selectedAccountProduct.value.id)
 ))
 const payButtonText = computed(() => {
   if (isCreatingOrder.value) return '正在创建订单...'
   return `跳转支付宝支付 ${orderAmountText.value}`
 })
-const orderLockRemainingMs = computed(() => {
-  if (!orderExpiresAt.value) return ORDER_LOCK_SECONDS * 1000
-  const expiresAt = new Date(orderExpiresAt.value).getTime()
-  if (!Number.isFinite(expiresAt)) return 0
-  return Math.max(0, expiresAt - countdownNow.value)
-})
-const orderLockCountdownText = computed(() => {
-  const totalSeconds = Math.ceil(orderLockRemainingMs.value / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-})
-const isOrderLockExpired = computed(() => Boolean(orderExpiresAt.value) && orderLockRemainingMs.value <= 0)
-const lockPillText = computed(() => {
-  if (!orderExpiresAt.value) return `下单后锁价 ${orderLockCountdownText.value}`
-  if (isOrderLockExpired.value) return '订单锁价已过期'
-  return `订单已锁价 ${orderLockCountdownText.value}`
-})
-
-const stopCountdown = () => {
-  if (countdownTimerId) {
-    window.clearInterval(countdownTimerId)
-    countdownTimerId = null
-  }
-}
-
-const startCountdown = () => {
-  stopCountdown()
-  countdownNow.value = Date.now()
-  countdownTimerId = window.setInterval(() => {
-    countdownNow.value = Date.now()
-    if (orderLockRemainingMs.value <= 0) {
-      stopCountdown()
-    }
-  }, 1000)
-}
-
-const clearOrderLock = () => {
-  orderExpiresAt.value = ''
-  countdownNow.value = Date.now()
-  stopCountdown()
-}
-
 const getTierTargetIndex = (items, currentIndex, direction) => {
   if (!items.length || currentIndex < 0) return -1
   return Math.min(Math.max(currentIndex + direction, 0), items.length - 1)
@@ -578,6 +628,13 @@ const moveRechargeTier = (direction) => {
   if (targetIndex < 0) return
   selectRechargePackage(rechargePackages.value[targetIndex].id)
   scrollTierCardIntoView(rechargeTierGrid, targetIndex)
+}
+
+const moveAccountTier = (direction) => {
+  const targetIndex = getTierTargetIndex(accountProducts.value, selectedAccountIndex.value, direction)
+  if (targetIndex < 0) return
+  selectAccountProduct(accountProducts.value[targetIndex].id)
+  scrollTierCardIntoView(accountTierGrid, targetIndex)
 }
 
 const loadPaymentCatalog = async () => {
@@ -636,6 +693,17 @@ const loadPaymentCatalog = async () => {
           : ['✅到账余额 · ⚡调用扣费', '🔒服务端锁定金额和额度']
       }
     })
+    const accountProductList = catalog.accountProducts || []
+    accountProducts.value = accountProductList.map((product) => ({
+      ...product,
+      priceText: formatMoney(product.price),
+      serviceText: product.serviceText || product.description || '账号与代充服务',
+      availabilityText: product.availabilityText || '交付状态待确认',
+      available: product.available !== false,
+      badgeText: normalizeCardBadge(product.badgeText || product.cardBadge),
+      promotionBadgeText: buildPromotionBadgeText(product),
+      features: Array.isArray(product.features) ? product.features : []
+    }))
     if (!plans.value.some((plan) => plan.id === selectedPlanId.value)) {
       selectedPlanId.value = (plans.value.find((plan) => plan.recommended) || plans.value[0])?.id || ''
     }
@@ -644,6 +712,9 @@ const loadPaymentCatalog = async () => {
     }
     if (!rechargePackages.value.some((pack) => pack.id === selectedRechargePackageId.value)) {
       selectedRechargePackageId.value = rechargePackages.value[0]?.id || ''
+    }
+    if (!accountProducts.value.some((product) => product.id === selectedAccountProductId.value)) {
+      selectedAccountProductId.value = (accountProducts.value.find((product) => product.recommended) || accountProducts.value[0])?.id || ''
     }
   } catch (error) {
     paymentError.value = error.message || '支付款项加载失败'
@@ -681,6 +752,9 @@ const redirectToAlipay = async () => {
   isCreatingOrder.value = true
 
   try {
+    if (isAccountMode.value) {
+      throw new Error('账号/代充支付接口暂未接入')
+    }
     const result = await apiCall('/payments/alipay/orders', {
       method: 'POST',
       body: JSON.stringify(isSubscriptionMode.value
@@ -696,10 +770,6 @@ const redirectToAlipay = async () => {
             rechargePackageId: selectedRechargePackage.value.skuId || selectedRechargePackage.value.id
           })
     })
-    if (result.expiresAt) {
-      orderExpiresAt.value = result.expiresAt
-      startCountdown()
-    }
     if (result.orderNo) {
       sessionStorage.setItem('lastPaymentOrderNo', result.orderNo)
     }
@@ -711,7 +781,6 @@ const redirectToAlipay = async () => {
 }
 
 onMounted(loadPaymentCatalog)
-onBeforeUnmount(stopCountdown)
 </script>
 
 <style scoped src="../styles/payment.css"></style>
