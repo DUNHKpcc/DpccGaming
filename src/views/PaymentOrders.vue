@@ -28,7 +28,7 @@
         <div v-else-if="errorMessage" class="payment-orders-state is-error">{{ errorMessage }}</div>
         <div v-else-if="!orders.length" class="payment-orders-state">
           <strong>暂无历史订单</strong>
-          <span>购买 CDK 或额度充值后，订单会显示在这里。</span>
+          <span>购买月卡、额度或账号代充服务后，订单会显示在这里。</span>
         </div>
         <div v-else class="payment-orders-list">
           <RouterLink

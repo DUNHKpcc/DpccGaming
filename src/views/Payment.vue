@@ -72,7 +72,7 @@
                   </button>
                 </div>
               </div>
-              <div ref="subscriptionTierGrid" class="plan-grid tier-scroll-grid" aria-label="月卡订阅规格，可横向滚动">
+              <div ref="subscriptionTierGrid" class="plan-grid tier-scroll-grid subscription-grid" aria-label="月卡订阅规格，可横向滚动">
                 <button
                   v-for="plan in plans"
                   :key="plan.id"
@@ -221,7 +221,10 @@
                     <span class="recharge-bonus-badge">{{ service.promotionBadgeText }}</span>
                   </span>
                   <span class="plan-name">{{ service.name }}</span>
-                  <span class="plan-price"><strong>{{ service.priceText }}</strong></span>
+                  <span class="plan-price">
+                    <span v-if="service.hasPromotionPrice" class="promotion-original-price">{{ service.originalPriceText }}</span>
+                    <strong>{{ service.priceText }}</strong>
+                  </span>
                   <span class="daily-quota">{{ service.serviceText }}</span>
                   <span class="stock-line" :class="{ empty: !service.available }">{{ service.availabilityText }}</span>
                   <span class="plan-divider"></span>
@@ -439,6 +442,10 @@ const formatRedeemStock = (count, label = '兑换码') => {
   const normalized = normalizeStock(count)
   return normalized > 0 ? `${label}剩余 ${normalized} 个` : `${label}暂无库存，支付后人工处理`
 }
+const ALIPAY_GATEWAY_HOSTS = new Set([
+  'openapi.alipay.com',
+  'openapi-sandbox.dl.alipaydev.com'
+])
 const buildPromotionBadgeText = (product = {}) => {
   const promotion = product.activePromotion
   if (!promotion) return ''
@@ -597,7 +604,8 @@ const isPayDisabled = computed(() => (
   isCreatingOrder.value
   || (isSubscriptionMode.value && (!selectedPlan.value.id || !selectedDuration.value.id))
   || (isRechargeMode.value && !selectedRechargePackage.value.id)
-  || (isAccountMode.value && !selectedAccountProduct.value.id)
+  || (isAccountMode.value && (!selectedAccountProduct.value.id || !selectedAccountProduct.value.available))
+  || selectedProduct.value.isPurchasable === false
 ))
 const payButtonText = computed(() => {
   if (isCreatingOrder.value) return '正在创建订单...'
@@ -694,16 +702,20 @@ const loadPaymentCatalog = async () => {
       }
     })
     const accountProductList = catalog.accountProducts || []
-    accountProducts.value = accountProductList.map((product) => ({
-      ...product,
-      priceText: formatMoney(product.price),
-      serviceText: product.serviceText || product.description || '账号与代充服务',
-      availabilityText: product.availabilityText || '交付状态待确认',
-      available: product.available !== false,
-      badgeText: normalizeCardBadge(product.badgeText || product.cardBadge),
-      promotionBadgeText: buildPromotionBadgeText(product),
-      features: Array.isArray(product.features) ? product.features : []
-    }))
+    accountProducts.value = accountProductList.map((product) => {
+      const priceMeta = buildPromotionPriceMeta(product)
+      return {
+        ...product,
+        ...priceMeta,
+        priceText: formatMoney(product.price),
+        serviceText: product.serviceText || product.description || '账号与代充服务',
+        availabilityText: product.availabilityText || '支付后提交目标账号，由售后人工交付',
+        available: product.available !== false && product.isPurchasable !== false,
+        badgeText: normalizeCardBadge(product.badgeText || product.cardBadge),
+        promotionBadgeText: buildPromotionBadgeText(product),
+        features: Array.isArray(product.features) ? product.features : []
+      }
+    })
     if (!plans.value.some((plan) => plan.id === selectedPlanId.value)) {
       selectedPlanId.value = (plans.value.find((plan) => plan.recommended) || plans.value[0])?.id || ''
     }
@@ -726,15 +738,19 @@ const submitAlipayForm = (alipayForm) => {
     throw new Error('支付宝支付表单无效')
   }
   const actionUrl = new URL(alipayForm.action)
-  if (!['https:', 'http:'].includes(actionUrl.protocol)) {
+  if (actionUrl.protocol !== 'https:' || !ALIPAY_GATEWAY_HOSTS.has(actionUrl.hostname.toLowerCase())) {
     throw new Error('支付宝支付地址无效')
+  }
+  if (!alipayForm.params.app_id || !alipayForm.params.sign || !alipayForm.params.biz_content) {
+    throw new Error('支付宝支付参数不完整')
   }
 
   const form = document.createElement('form')
   form.style.display = 'none'
   form.action = actionUrl.href
-  form.method = alipayForm.method || 'post'
-  form.acceptCharset = alipayForm.charset || 'utf-8'
+  form.method = 'post'
+  form.acceptCharset = 'utf-8'
+  form.referrerPolicy = 'no-referrer'
   Object.entries(alipayForm.params).forEach(([key, value]) => {
     const input = document.createElement('input')
     input.type = 'hidden'
@@ -752,23 +768,28 @@ const redirectToAlipay = async () => {
   isCreatingOrder.value = true
 
   try {
-    if (isAccountMode.value) {
-      throw new Error('账号/代充支付接口暂未接入')
-    }
     const result = await apiCall('/payments/alipay/orders', {
       method: 'POST',
-      body: JSON.stringify(isSubscriptionMode.value
-        ? {
+      body: JSON.stringify(
+        isSubscriptionMode.value
+          ? {
             productType: 'subscription',
             productId: selectedPlan.value.id,
             planId: selectedPlan.value.skuId || selectedPlan.value.id,
             durationId: selectedDurationId.value
           }
-        : {
+          : isRechargeMode.value
+            ? {
             productType: 'recharge',
             productId: selectedRechargePackage.value.id,
             rechargePackageId: selectedRechargePackage.value.skuId || selectedRechargePackage.value.id
-          })
+          }
+            : {
+              productType: 'account',
+              productId: selectedAccountProduct.value.id,
+              accountProductId: selectedAccountProduct.value.skuId || selectedAccountProduct.value.id
+            }
+      )
     })
     if (result.orderNo) {
       sessionStorage.setItem('lastPaymentOrderNo', result.orderNo)

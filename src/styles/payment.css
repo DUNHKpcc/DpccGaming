@@ -440,8 +440,10 @@
   max-width: calc(100% - 7.25rem);
 }
 
+.subscription-grid .plan-card.has-card-badges .plan-name,
 .recharge-grid .plan-card.has-card-badges .plan-name {
-  max-width: 100%;
+  max-width: calc(100% - 6.75rem);
+  padding-top: 0;
 }
 
 .recharge-quota {

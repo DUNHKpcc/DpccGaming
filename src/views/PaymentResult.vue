@@ -46,8 +46,8 @@
               <dt>金额</dt>
               <dd>¥{{ orderResult.amount }}</dd>
             </div>
-            <div>
-              <dt>DPCC-API 用户名</dt>
+            <div v-if="isServiceOrder">
+              <dt>{{ accountFieldTitle }}</dt>
               <dd>{{ apiUsernameText }}</dd>
             </div>
           </dl>
@@ -58,27 +58,28 @@
         </div>
 
         <div class="result-panel redeem-panel">
-          <template v-if="isSubscriptionPaid">
-            <h2>DPCC-API 平台用户名</h2>
+          <template v-if="isServiceOrder">
+            <h2>{{ accountPanelTitle }}</h2>
             <form v-if="needsApiUsername" class="api-username-form" @submit.prevent="submitApiUsername">
               <label>
-                用户名
+                {{ accountFieldTitle }}
                 <input
                   v-model="apiUsernameInput"
                   type="text"
                   maxlength="96"
                   autocomplete="off"
-                  placeholder="请输入你在 DPCC-API 平台的用户名"
+                  :placeholder="accountInputPlaceholder"
                 />
               </label>
               <button type="submit" :disabled="isSubmittingApiUsername">
-                {{ isSubmittingApiUsername ? '提交中...' : '提交用户名' }}
+                {{ isSubmittingApiUsername ? '提交中...' : accountSubmitText }}
               </button>
             </form>
-            <p v-else class="muted-copy">已提交 {{ orderResult.apiUsername }}，请等待 5 分钟。</p>
+            <p v-else-if="orderResult.apiUsername" class="muted-copy">{{ accountSubmittedText }}</p>
+            <p v-else class="muted-copy">支付确认后可提交{{ accountFieldTitle }}。</p>
             <p v-if="apiUsernameMessage" class="success-message">{{ apiUsernameMessage }}</p>
 
-            <div v-if="subscriptionBonusRedeemCodes.length" class="subscription-bonus-codes">
+            <div v-if="isSubscriptionPaid && subscriptionBonusRedeemCodes.length" class="subscription-bonus-codes">
               <h3>赠送金兑换码</h3>
               <div
                 v-for="item in subscriptionBonusRedeemCodes"
@@ -170,7 +171,10 @@ const supportWechat = computed(() => orderResult.value.supportWechat || '1516070
 const redeemUrl = computed(() => orderResult.value.redeemUrl || 'https://api.dpccgaming.xyz/console/topup')
 const isPaid = computed(() => orderResult.value.status === 'paid')
 const isSubscriptionOrder = computed(() => orderResult.value.productType === 'subscription')
+const isAccountOrder = computed(() => orderResult.value.productType === 'account')
+const isServiceOrder = computed(() => isSubscriptionOrder.value || isAccountOrder.value)
 const isSubscriptionPaid = computed(() => isPaid.value && isSubscriptionOrder.value)
+const isAccountPaid = computed(() => isPaid.value && isAccountOrder.value)
 const isSubscriptionManualRequired = computed(() => isSubscriptionPaid.value && orderResult.value.fulfillmentStatus === 'manual_required')
 const isBonusSkipped = computed(() => isPaid.value && orderResult.value.fulfillmentStatus === 'bonus_skipped')
 const promotionPayerRejectReason = computed(() => String(orderResult.value.promotionPayerRejectReason || '').trim())
@@ -186,7 +190,7 @@ const bonusNoticeText = computed(() => {
 const isPromotionPayerMissing = computed(() => isPaid.value && promotionPayerRejectReason.value === 'payer_missing')
 const isPromotionPayerAlreadyUsed = computed(() => isPaid.value && promotionPayerRejectReason.value === 'already_used')
 const isPromotionPayerBlocked = computed(() => isPromotionPayerMissing.value || isPromotionPayerAlreadyUsed.value)
-const needsApiUsername = computed(() => isSubscriptionPaid.value && !orderResult.value.apiUsername)
+const needsApiUsername = computed(() => (isSubscriptionPaid.value || isAccountPaid.value) && !orderResult.value.apiUsername)
 const redeemCodes = computed(() => {
   if (Array.isArray(orderResult.value.redeemCodes) && orderResult.value.redeemCodes.length) {
     return orderResult.value.redeemCodes.filter((item) => item?.code)
@@ -216,9 +220,20 @@ const isPaymentInNotifyGrace = computed(() => {
 })
 const isPaymentFinalIncomplete = computed(() => isPaymentIncomplete.value && !isPaymentInNotifyGrace.value)
 const formattedCreatedAt = computed(() => formatDateTime(orderResult.value.createdAt))
+const accountFieldTitle = computed(() => (isAccountOrder.value ? '服务目标账号' : 'DPCC-API 用户名'))
+const accountPanelTitle = computed(() => (isAccountOrder.value ? '账号/代充交付信息' : 'DPCC-API 平台用户名'))
+const accountInputPlaceholder = computed(() => (
+  isAccountOrder.value ? '请输入需要交付或代充的目标账号' : '请输入你在 DPCC-API 平台的用户名'
+))
+const accountSubmitText = computed(() => (isAccountOrder.value ? '提交目标账号' : '提交用户名'))
+const accountSubmittedText = computed(() => (
+  isAccountOrder.value
+    ? `已提交 ${orderResult.value.apiUsername}，请等待售后核验与交付。`
+    : `已提交 ${orderResult.value.apiUsername}，请等待 5 分钟。`
+))
 const apiUsernameText = computed(() => {
   if (orderResult.value.apiUsername) return orderResult.value.apiUsername
-  if (isSubscriptionPaid.value) return '待填写'
+  if (isSubscriptionPaid.value || isAccountPaid.value) return '待填写'
   return '-'
 })
 const appendSupportWechat = (message = '') => {
@@ -235,6 +250,8 @@ const supportCopy = computed(() => (
     ? `添加微信 ${supportWechat.value}，请同时提供订单号和 DPCC-API 用户名，售后会补发赠送码。`
     : isSubscriptionPaid.value
     ? `添加微信 ${supportWechat.value}，请同时提供订单号、DPCC-API 用户名和赠送金兑换码。`
+    : isAccountPaid.value
+    ? `添加微信 ${supportWechat.value}，请同时提供订单号和已提交的服务目标账号，等待售后核验与交付。`
     : `添加微信 ${supportWechat.value}，请同时提供订单号和兑换码。`
 ))
 
@@ -242,7 +259,8 @@ const titleText = computed(() => {
   if (isPromotionPayerBlocked.value) return '支付成功，限购待核验'
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '支付成功，等待补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '支付成功，等待处理'
-  if (needsApiUsername.value) return '支付成功，填写用户名'
+  if (isAccountPaid.value && orderResult.value.apiUsername) return '支付成功，等待交付'
+  if (needsApiUsername.value) return isAccountOrder.value ? '支付成功，填写目标账号' : '支付成功，填写用户名'
   if (isBonusSkipped.value) return '支付成功'
   if (isManualRequired.value) return '支付成功，等待发码'
   if (hasAllRedeemCodes.value) return '支付成功'
@@ -254,6 +272,7 @@ const statusTone = computed(() => {
   if (isPromotionPayerBlocked.value) return 'warning'
   if (isSubscriptionManualRequired.value) return 'warning'
   if (isSubscriptionPaid.value) return 'success'
+  if (isAccountPaid.value) return 'success'
   if (isBonusSkipped.value) return 'success'
   if (hasAllRedeemCodes.value) return 'success'
   if (isManualRequired.value) return 'warning'
@@ -266,6 +285,7 @@ const statusIcon = computed(() => {
   if (isPromotionPayerBlocked.value) return 'fa-solid fa-circle-exclamation'
   if (isSubscriptionManualRequired.value) return 'fa-solid fa-headset'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return 'fa-solid fa-clock'
+  if (isAccountPaid.value && orderResult.value.apiUsername) return 'fa-solid fa-clock'
   if (needsApiUsername.value) return 'fa-solid fa-user'
   if (isBonusSkipped.value) return 'fa-solid fa-check'
   if (isManualRequired.value) return 'fa-solid fa-headset'
@@ -281,7 +301,8 @@ const statusHeading = computed(() => {
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '用户名已提交，赠送码待补发'
   if (isSubscriptionManualRequired.value) return '已确认支付，赠送码待人工补发'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '用户名已提交，请等待 5 分钟'
-  if (needsApiUsername.value) return '已确认支付，请填写 DPCC-API 用户名'
+  if (isAccountPaid.value && orderResult.value.apiUsername) return '目标账号已提交，等待人工交付'
+  if (needsApiUsername.value) return isAccountOrder.value ? '已确认支付，请填写服务目标账号' : '已确认支付，请填写 DPCC-API 用户名'
   if (isBonusSkipped.value) return '已发放本次兑换码'
   if (isManualRequired.value) return '已确认支付，库存待人工处理'
   if (hasAllRedeemCodes.value) return '已确认支付并发放兑换码'
@@ -295,7 +316,10 @@ const statusDescription = computed(() => {
   if (isSubscriptionManualRequired.value && orderResult.value.apiUsername) return '我们会处理月卡订阅，并通过售后补发赠送码。'
   if (isSubscriptionManualRequired.value) return '请提交你在另一个平台的用户名，赠送码库存不足的部分会由人工补发。'
   if (isSubscriptionPaid.value && orderResult.value.apiUsername) return '我们会按你提交的平台用户名处理月卡订阅。'
-  if (needsApiUsername.value) return bonusNoticeText.value || '请提交你在另一个平台的用户名，赠送金兑换码可在本页领取。'
+  if (isAccountPaid.value && orderResult.value.apiUsername) return '售后将核验你提交的目标账号，并按所购档位人工交付。'
+  if (needsApiUsername.value) return isAccountOrder.value
+    ? '请提交需要交付或代充的目标账号；不要填写密码、验证码或其他敏感凭证。'
+    : bonusNoticeText.value || '请提交你在另一个平台的用户名，赠送金兑换码可在本页领取。'
   if (isBonusSkipped.value) return bonusNoticeText.value || '主兑换码已发放，赠送兑换码本次不再重复发放。'
   if (hasAllRedeemCodes.value) return '复制原有额度和赠送额度两个兑换码后前往外部兑换网站完成充值。'
   if (isManualRequired.value) return canRedeem.value
@@ -407,7 +431,7 @@ const loadOrderResult = async (options = {}) => {
 const submitApiUsername = async () => {
   const apiUsername = apiUsernameInput.value.trim()
   if (!apiUsername) {
-    errorMessage.value = '请输入 DPCC-API 平台用户名'
+    errorMessage.value = isAccountOrder.value ? '请输入服务目标账号' : '请输入 DPCC-API 平台用户名'
     return
   }
 
@@ -424,9 +448,9 @@ const submitApiUsername = async () => {
       apiUsername: result.apiUsername,
       fulfillmentStatus: result.fulfillmentStatus
     }
-    apiUsernameMessage.value = result.message || '已提交，请等待 5 分钟'
+    apiUsernameMessage.value = result.message || (isAccountOrder.value ? '目标账号已提交，请等待售后核验与交付' : '已提交，请等待 5 分钟')
   } catch (error) {
-    errorMessage.value = error.message || '保存 DPCC-API 平台用户名失败'
+    errorMessage.value = error.message || (isAccountOrder.value ? '保存服务目标账号失败' : '保存 DPCC-API 平台用户名失败')
   } finally {
     isSubmittingApiUsername.value = false
   }

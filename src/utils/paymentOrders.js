@@ -10,14 +10,18 @@ export const paymentStatusTone = (value = '') => {
   return 'pending'
 }
 
-export const productTypeText = (value = '') => (value === 'recharge' ? '额度充值' : '月卡订阅')
+export const productTypeText = (value = '') => {
+  if (value === 'recharge') return '额度充值'
+  if (value === 'account') return '账号/代充'
+  return '月卡订阅'
+}
 
 export const fulfillmentStatusText = (value = '') => {
   if (value === 'code_assigned') return '已发放'
   if (value === 'bonus_skipped') return '赠送跳过'
   if (value === 'manual_required') return '人工处理'
-  if (value === 'username_required') return '待填用户名'
-  if (value === 'username_submitted') return '用户名已提交'
+  if (value === 'username_required') return '待提交账号'
+  if (value === 'username_submitted') return '账号已提交'
   return '待处理'
 }
 

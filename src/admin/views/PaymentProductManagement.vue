@@ -26,6 +26,7 @@
         <el-select v-model="filters.productType" class="product-filter-select" clearable placeholder="全部类型" @change="fetchProducts">
           <el-option label="订阅月卡" value="subscription" />
           <el-option label="充值额度" value="recharge" />
+          <el-option label="账号/代充" value="account" />
         </el-select>
         <el-select v-model="filters.status" class="product-filter-select" clearable placeholder="全部状态" @change="fetchProducts">
           <el-option label="上架" value="active" />
@@ -69,8 +70,9 @@
             <el-table-column label="额度" min-width="190">
               <template #default="{ row }">
                 <span v-if="row.productType === 'subscription'">每日 ${{ row.dailyQuotaUsd }}</span>
-                <span v-else>到账 ${{ row.baseQuotaUsd }}</span>
-                <small>赠送 ${{ row.bonusQuotaUsd || '0.00' }}</small>
+                <span v-else-if="row.productType === 'recharge'">到账 ${{ row.baseQuotaUsd }}</span>
+                <span v-else>人工交付服务</span>
+                <small v-if="row.productType !== 'account'">赠送 ${{ row.bonusQuotaUsd || '0.00' }}</small>
               </template>
             </el-table-column>
             <el-table-column label="促销" min-width="220">
@@ -85,7 +87,8 @@
             <el-table-column label="库存" width="150">
               <template #default="{ row }">
                 <span v-if="row.productType === 'recharge'">主码 {{ row.availableRedeemCodes }}</span>
-                <span v-else>赠送码 {{ row.bonusRedeemCodesAvailable }}</span>
+                <span v-else-if="row.productType === 'subscription'">赠送码 {{ row.bonusRedeemCodesAvailable }}</span>
+                <span v-else>无需兑换码</span>
                 <small v-if="row.productType === 'recharge'">赠送码 {{ row.bonusRedeemCodesAvailable }}</small>
               </template>
             </el-table-column>
@@ -138,12 +141,13 @@
                     >
                       <el-radio-button label="subscription">订阅月卡</el-radio-button>
                       <el-radio-button label="recharge">充值额度</el-radio-button>
+                      <el-radio-button label="account">账号/代充</el-radio-button>
                     </el-radio-group>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
                   <el-form-item label="SKU">
-                    <el-input v-model="productForm.skuId" :disabled="Boolean(editingProductId)" placeholder="bronze 或 usd-25" />
+                    <el-input v-model="productForm.skuId" :disabled="Boolean(editingProductId)" placeholder="bronze / usd-25 / account-service" />
                   </el-form-item>
                 </el-col>
               </el-row>
@@ -171,7 +175,7 @@
                 </el-col>
               </el-row>
 
-              <el-row :gutter="12">
+              <el-row v-if="productForm.productType !== 'account'" :gutter="12">
                 <el-col :span="12">
                   <el-form-item :label="productForm.productType === 'subscription' ? '月卡赠送额度 USD' : '到账额度 USD'">
                     <el-input-number v-model="productForm.baseQuotaUsd" class="product-full-control" :min="0" :precision="2" />
@@ -189,7 +193,7 @@
                 </el-col>
               </el-row>
 
-              <el-row :gutter="12">
+              <el-row v-if="productForm.productType !== 'account'" :gutter="12">
                 <el-col :span="12">
                   <el-form-item label="赠送码 SKU">
                     <el-input v-model="productForm.bonusRedeemSkuId" placeholder="usd-30-bonus" />
@@ -254,12 +258,12 @@
           <el-input v-model="promotionForm.badgeText" placeholder="限时优惠" />
         </el-form-item>
         <el-row :gutter="12">
-          <el-col :span="12">
+          <el-col :span="selectedProduct?.productType === 'account' ? 24 : 12">
             <el-form-item label="促销价 CNY">
               <el-input-number v-model="promotionForm.promotionPrice" class="product-full-control" :min="0" :precision="2" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col v-if="selectedProduct?.productType !== 'account'" :span="12">
             <el-form-item label="促销赠送额度 USD">
               <el-input-number v-model="promotionForm.promotionBonusQuotaUsd" class="product-full-control" :min="0" :precision="2" />
             </el-form-item>
@@ -366,6 +370,12 @@ const productSections = computed(() => ([
     title: '额度档位',
     description: '一次性充值额度，按主兑换码和赠送码库存管理',
     items: products.value.filter((product) => product.productType === 'recharge')
+  },
+  {
+    type: 'account',
+    title: '账号/代充档位',
+    description: '支付后提交目标账号，由售后人工核验并交付',
+    items: products.value.filter((product) => product.productType === 'account')
   }
 ]))
 
@@ -444,10 +454,11 @@ const openProductDrawer = (product = null) => {
 const buildProductPayload = () => ({
   ...productForm,
   basePrice: String(productForm.basePrice || 0),
-  baseQuotaUsd: String(productForm.baseQuotaUsd || 0),
+  baseQuotaUsd: productForm.productType === 'account' ? null : String(productForm.baseQuotaUsd || 0),
   dailyQuotaUsd: productForm.productType === 'subscription' ? String(productForm.dailyQuotaUsd || 0) : null,
   mainRedeemSkuId: productForm.productType === 'recharge' ? productForm.mainRedeemSkuId || productForm.skuId : '',
-  bonusQuotaUsd: String(productForm.bonusQuotaUsd || 0),
+  bonusRedeemSkuId: productForm.productType === 'account' ? '' : productForm.bonusRedeemSkuId,
+  bonusQuotaUsd: productForm.productType === 'account' ? '0' : String(productForm.bonusQuotaUsd || 0),
   cardFeatures: String(productForm.cardFeaturesText || '')
     .split('\n')
     .map((item) => item.trim())

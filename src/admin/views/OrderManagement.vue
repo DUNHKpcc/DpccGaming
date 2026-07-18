@@ -146,7 +146,7 @@
           <dd>¥{{ selectedOrder.amount }} {{ selectedOrder.currency || 'CNY' }}</dd>
         </div>
         <div v-if="selectedOrder.apiUsername">
-          <dt>DPCC-API 用户名</dt>
+          <dt>{{ selectedOrder.productType === 'account' ? '服务目标账号' : 'DPCC-API 用户名' }}</dt>
           <dd>{{ selectedOrder.apiUsername }}</dd>
         </div>
         <div v-if="displayRedeemCodes(selectedOrder).length">
@@ -285,7 +285,11 @@ const confirmDeleteOrder = async (order) => {
   }
 }
 
-const productTypeText = (value) => (value === 'recharge' ? '充值额度' : '订阅月卡')
+const productTypeText = (value) => {
+  if (value === 'recharge') return '充值额度'
+  if (value === 'account') return '账号/代充'
+  return '订阅月卡'
+}
 
 const statusText = (value) => {
   if (value === 'paid') return '已支付'
@@ -343,15 +347,17 @@ const fulfillmentMeta = (order = {}) => {
   }
   if (fulfillmentStatus === 'username_required') {
     return {
-      title: '待提交用户名',
-      detail: supportNote || '月卡已确认，等待用户提交 DPCC-API 平台用户名',
+      title: productType === 'account' ? '待提交目标账号' : '待提交用户名',
+      detail: supportNote || (productType === 'account' ? '支付已确认，等待用户提交服务目标账号' : '月卡已确认，等待用户提交 DPCC-API 平台用户名'),
       tone: 'warning'
     }
   }
   if (fulfillmentStatus === 'username_submitted') {
     return {
-      title: '用户名已提交',
-      detail: apiUsername ? `已提交 ${apiUsername}，等待后台处理月卡权益` : '已提交用户名，等待后台处理月卡权益',
+      title: productType === 'account' ? '目标账号已提交' : '用户名已提交',
+      detail: productType === 'account'
+        ? (apiUsername ? `已提交 ${apiUsername}，等待售后核验与交付` : '目标账号已提交，等待售后核验与交付')
+        : (apiUsername ? `已提交 ${apiUsername}，等待后台处理月卡权益` : '已提交用户名，等待后台处理月卡权益'),
       tone: 'done'
     }
   }
@@ -365,7 +371,9 @@ const fulfillmentMeta = (order = {}) => {
   if (paymentStatus === 'paid') {
     return {
       title: fulfillmentText(fulfillmentStatus),
-      detail: productType === 'subscription' ? '月卡订单等待后续处理' : '已支付，等待兑换码处理',
+      detail: productType === 'subscription'
+        ? '月卡订单等待后续处理'
+        : productType === 'account' ? '账号/代充订单等待人工交付' : '已支付，等待兑换码处理',
       tone: 'warning'
     }
   }
