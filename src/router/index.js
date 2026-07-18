@@ -19,6 +19,7 @@ const CookiePolicy = () => import('../views/CookiePolicy.vue')
 const Payment = () => import('../views/Payment.vue')
 const PaymentOrders = () => import('../views/PaymentOrders.vue')
 const PaymentResult = () => import('../views/PaymentResult.vue')
+const Download = () => import('../views/Download.vue')
 
 const routes = [
   {
@@ -133,6 +134,12 @@ const routes = [
     path: '/payment/result',
     name: 'PaymentResult',
     component: PaymentResult
+  },
+  {
+    path: '/download',
+    name: 'Download',
+    component: Download,
+    meta: { hideSidebar: true, hideOverlays: true }
   },
   {
     path: '/:pathMatch(.*)*',
