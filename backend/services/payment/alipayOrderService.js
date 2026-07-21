@@ -18,7 +18,13 @@ const {
   parseAlipayPaymentDate
 } = require('./paymentUtils');
 
-const PAYMENT_ORDER_LOCK_MINUTES = 5;
+// 订单待支付有效期。必须显著长于支付宝异步通知的重试间隔（前几次重试在数十分钟内），
+// 否则首次回调因瞬时故障失败后，重试到达时订单已被过期关闭，导致已付款订单被静默作废。
+// 默认 30 分钟；可通过 PAYMENT_ORDER_LOCK_MINUTES 覆盖，但不建议低于 30。
+const PAYMENT_ORDER_LOCK_MINUTES = (() => {
+  const parsed = Number(process.env.PAYMENT_ORDER_LOCK_MINUTES);
+  return Number.isFinite(parsed) && parsed >= 5 && parsed <= 1440 ? parsed : 30;
+})();
 const MAX_PENDING_PAYMENT_ORDERS_PER_USER = 5;
 const ORDER_CREATE_LOCK_TIMEOUT_SECONDS = 5;
 const ALIPAY_NOTIFY_PROVIDER = 'alipay';

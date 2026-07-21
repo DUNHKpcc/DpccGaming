@@ -114,25 +114,13 @@ const parseAlipayPaymentDate = (value = '') => {
   const normalized = String(value || '').trim();
   const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
   if (!match) return null;
-  const date = new Date(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3]),
-    Number(match[4]),
-    Number(match[5]),
-    Number(match[6])
-  );
-  if (
-    date.getFullYear() !== Number(match[1])
-    || date.getMonth() !== Number(match[2]) - 1
-    || date.getDate() !== Number(match[3])
-    || date.getHours() !== Number(match[4])
-    || date.getMinutes() !== Number(match[5])
-    || date.getSeconds() !== Number(match[6])
-  ) {
-    return null;
-  }
-  return date;
+  // 支付宝 notify_time / gmt_payment 是 GMT+8（Asia/Shanghai）无时区标记的字符串。
+  // 必须显式按 +08:00 解析，不能依赖服务器本地时区：否则非 GMT+8 服务器会把时间整体错位 8 小时，
+  // 导致 isDateInsideNotifyWindow / isPaymentAfterOrderExpiry 判断失真，合法回调被静默丢弃。
+  const iso = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}+08:00`;
+  const date = new Date(iso);
+  // ISO 字符串形式的非法日期（如 2 月 30 日、13 月）会返回 Invalid Date，无需再像构造函数那样做回滚校验。
+  return Number.isFinite(date.getTime()) ? date : null;
 };
 
 module.exports = {

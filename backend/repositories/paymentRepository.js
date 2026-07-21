@@ -889,6 +889,32 @@ const closeExpiredPaymentOrder = async (executor, payload = {}) => executor.exec
   [payload.orderNo, payload.now]
 );
 
+const reopenClosedPaymentOrder = async (executor, orderNo = '') => executor.execute(
+  `
+    UPDATE payment_orders
+    SET status = 'pending'
+    WHERE order_no = ?
+      AND status = 'closed'
+  `,
+  [orderNo]
+);
+
+const recordPaymentMetadataOnOrder = async (executor, payload = {}) => executor.execute(
+  `
+    UPDATE payment_orders
+    SET alipay_trade_no = COALESCE(alipay_trade_no, ?),
+        alipay_buyer_id = COALESCE(alipay_buyer_id, ?),
+        paid_at = COALESCE(paid_at, ?)
+    WHERE order_no = ?
+  `,
+  [
+    payload.alipayTradeNo || null,
+    payload.alipayBuyerId || null,
+    payload.paidAt || null,
+    payload.orderNo
+  ]
+);
+
 const deletePaymentBonusClaimsByOrderNo = async (executor, orderNo = '') => executor.execute(
   `
     DELETE FROM payment_bonus_claims
@@ -1356,6 +1382,8 @@ module.exports = {
   deleteUnpaidPaymentOrder,
   closeExpiredPaymentOrders,
   closeExpiredPaymentOrder,
+  reopenClosedPaymentOrder,
+  recordPaymentMetadataOnOrder,
   deletePaymentBonusClaimsByOrderNo,
   deletePaymentBonusClaimsForClosedOrders,
   getPaymentOrderByNoForUpdate,

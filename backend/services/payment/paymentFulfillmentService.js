@@ -317,6 +317,35 @@ const setPromotionManualReview = async (connection, order = {}, payerClaim = {})
   };
 };
 
+const markOrderNeedsRefund = async (connection, order = {}, payload = {}, paidAt = new Date()) => {
+  // 订单已超时付款（窗口外）：不发放，把支付宝交易号/付款人/付款时间补记到订单上，
+  // 便于管理员核对并人工退款；同时打一条可被日志监控捕获的告警。
+  await repository.recordPaymentMetadataOnOrder(connection, {
+    orderNo: order.order_no,
+    alipayTradeNo: payload.alipayTradeNo,
+    alipayBuyerId: payload.alipayBuyerId,
+    paidAt: toMysqlDateTime(paidAt)
+  });
+  await repository.updatePaymentOrderFulfillment(connection, {
+    orderNo: order.order_no,
+    fulfillmentStatus: 'manual_required',
+    redeemCodeId: null,
+    bonusRedeemCodeId: null,
+    redeemCode: null,
+    bonusRedeemCode: null,
+    redeemUrl: null,
+    supportWechat: PAYMENT_SUPPORT_WECHAT,
+    supportNote: '订单已超时付款，已记录支付宝交易号，需人工退款，请联系售后'
+  });
+  console.error('[PAYMENT-REFUND-REQUIRED] 订单超时付款需人工退款:', {
+    orderNo: order.order_no,
+    alipayTradeNo: payload.alipayTradeNo,
+    alipayBuyerId: payload.alipayBuyerId,
+    paidAt: paidAt instanceof Date ? paidAt.toISOString() : String(paidAt),
+    amount: order.amount
+  });
+};
+
 const handlePaidOrder = async (pool, payload = {}) => {
   await repository.ensurePaymentTables(pool);
   const connection = await pool.getConnection();
@@ -340,6 +369,16 @@ const handlePaidOrder = async (pool, payload = {}) => {
       throw error;
     }
 
+    // 支付宝交易号全局唯一校验放在所有状态分支之前：无论本单是 pending/closed/paid，
+    // 同一个 trade_no 都只能关联一个订单。提前锁定也避免下面给已关闭订单补记 trade_no 时撞唯一索引。
+    const tradeOrder = await repository.getPaymentOrderByTradeNoForUpdate(connection, payload.alipayTradeNo);
+    if (tradeOrder && tradeOrder.order_no !== order.order_no) {
+      const error = new Error('支付宝交易号已关联其他订单');
+      error.statusCode = 409;
+      error.nonRetryable = true;
+      throw error;
+    }
+
     if (order.status === 'paid') {
       if (order.alipay_trade_no && order.alipay_trade_no !== payload.alipayTradeNo) {
         const error = new Error('已支付订单的支付宝交易号不匹配');
@@ -352,21 +391,36 @@ const handlePaidOrder = async (pool, payload = {}) => {
       return { status: 'paid', orderNo: order.order_no, alreadyPaid: true };
     }
     const paidAt = payload.paidAt || new Date();
+    const paidAfterExpiry = isPaymentAfterOrderExpiry(order, paidAt);
+
+    // 已关闭订单收到合法（验签通过）回调：通常是回调延迟/重试，订单先被过期关闭。
+    if (order.status === 'closed') {
+      if (paidAfterExpiry) {
+        // 确实超期付款：不发放，记录付款信息并告警，等待人工退款。
+        await markOrderNeedsRefund(connection, order, payload, paidAt);
+        await connection.commit();
+        transactionClosed = true;
+        return { status: 'closed', orderNo: order.order_no, expired: true, needsRefund: true };
+      }
+      // 付款实际落在有效窗口内（延迟回调竞态）：重开为 pending，走正常履约。
+      await repository.reopenClosedPaymentOrder(connection, order.order_no);
+      order.status = 'pending';
+    }
+
     if (order.status !== 'pending') {
       const error = new Error('支付订单不是待支付状态');
       error.statusCode = 400;
       error.nonRetryable = true;
       throw error;
     }
-    if (isPaymentAfterOrderExpiry(order, paidAt)) {
+
+    if (paidAfterExpiry) {
+      // pending 订单但付款超期：关闭、记录、告警，等待人工退款。
       await closeExpiredPaymentOrder(connection, order.order_no, paidAt);
+      await markOrderNeedsRefund(connection, order, payload, paidAt);
       await connection.commit();
       transactionClosed = true;
-      return {
-        status: 'closed',
-        orderNo: order.order_no,
-        expired: true
-      };
+      return { status: 'closed', orderNo: order.order_no, expired: true, needsRefund: true };
     }
 
     const productType = normalizeProductType(order.product_type);
@@ -386,13 +440,6 @@ const handlePaidOrder = async (pool, payload = {}) => {
       months: Number(productSnapshot.durationMonths || 0)
     };
     const rechargePackage = getRechargePackage(order.plan_id);
-    const tradeOrder = await repository.getPaymentOrderByTradeNoForUpdate(connection, payload.alipayTradeNo);
-    if (tradeOrder && tradeOrder.order_no !== order.order_no) {
-      const error = new Error('支付宝交易号已关联其他订单');
-      error.statusCode = 409;
-      error.nonRetryable = true;
-      throw error;
-    }
     let markResult;
     try {
       [markResult] = await repository.markOrderPaid(connection, {
