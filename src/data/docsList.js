@@ -86,6 +86,15 @@ export const docsList = [
     file: '/doc-files/getting-started.md'
   },
   {
+    id: 'bilibili-videos',
+    title: '我的 B 站视频',
+    tag: '视频',
+    summary: '在文档中直接嵌入播放 B 站视频，把链接单独放一行即可自动渲染。',
+    publisher: docsPublisher,
+    cover: '/doc-covers/claude.webp',
+    file: '/doc-files/bilibili-videos.md'
+  },
+  {
     id: 'content-publish',
     title: '内容发布规范',
     tag: '文档与资源管理',

@@ -44,6 +44,57 @@ export const renderInlineMarkdown = (text = '', options = {}) => {
     ))
 }
 
+const BILIBILI_LINK_RE = /^\s*\[([^\]]*)\]\((https?:\/\/(?:www\.|m\.)?bilibili\.com\/video\/[^)\s]+)\)\s*$/
+const BILIBILI_URL_RE = /^\s*(https?:\/\/(?:www\.|m\.)?bilibili\.com\/video\/\S+|BV[0-9A-Za-z]{10})\s*$/
+
+const parseBilibiliEmbed = (rawUrl) => {
+  const url = String(rawUrl || '').trim()
+  if (!url) return null
+
+  const isBilibiliPage = /^https?:\/\/(?:www\.|m\.)?bilibili\.com\/video\//i.test(url)
+  const isBareBvid = /^BV[0-9A-Za-z]{10}$/.test(url)
+  if (!isBilibiliPage && !isBareBvid) return null
+
+  const bvidMatch = url.match(/(BV[0-9A-Za-z]{10})/)
+  const aidMatch = !bvidMatch ? url.match(/av(\d+)/i) : null
+  const bvid = bvidMatch ? bvidMatch[1] : ''
+  const aid = aidMatch ? aidMatch[1] : ''
+  if (!bvid && !aid) return null
+
+  let page = 1
+  let startTime = 0
+  try {
+    const parsedUrl = new URL(isBareBvid ? `https://www.bilibili.com/video/${url}` : url)
+    const pageParam = parseInt(parsedUrl.searchParams.get('p') || parsedUrl.searchParams.get('page'), 10)
+    if (Number.isFinite(pageParam) && pageParam > 0) page = pageParam
+    const tParam = parseInt(parsedUrl.searchParams.get('t'), 10)
+    if (Number.isFinite(tParam) && tParam > 0) startTime = tParam
+  } catch {
+    // Malformed query — fall back to defaults.
+  }
+
+  const params = new URLSearchParams()
+  if (bvid) params.set('bvid', bvid)
+  else params.set('aid', aid)
+  params.set('page', String(page))
+  params.set('high_quality', '1')
+  params.set('autoplay', '0')
+  if (startTime > 0) params.set('t', String(startTime))
+
+  return {
+    src: `https://player.bilibili.com/player.html?${params.toString()}`,
+    id: bvid || `av${aid}`
+  }
+}
+
+const renderBilibiliEmbed = (embed, caption = '') => {
+  const safeSrc = escapeHtml(embed.src)
+  const captionHtml = caption
+    ? `<figcaption class="markdown-video-caption">${escapeHtml(caption)}</figcaption>`
+    : ''
+  return `<figure class="markdown-video"><div class="markdown-video-frame"><iframe src="${safeSrc}" scrolling="no" frameborder="0" framespacing="0" allowfullscreen="true" referrerpolicy="no-referrer" loading="lazy" allow="fullscreen; encrypted-media"></iframe></div>${captionHtml}</figure>`
+}
+
 const CODE_LANGUAGE_LABELS = {
   js: 'JS',
   jsx: 'JSX',
@@ -104,6 +155,27 @@ export const renderMarkdownToHtml = async (markdown = '', options = {}) => {
 
   const flushParagraph = () => {
     if (!paragraph.length) return
+    const text = paragraph.join(' ').trim()
+
+    const linkMatch = text.match(BILIBILI_LINK_RE)
+    if (linkMatch) {
+      const embed = parseBilibiliEmbed(linkMatch[2])
+      if (embed) {
+        html += renderBilibiliEmbed(embed, linkMatch[1])
+        paragraph = []
+        return
+      }
+    }
+
+    if (BILIBILI_URL_RE.test(text)) {
+      const embed = parseBilibiliEmbed(text)
+      if (embed) {
+        html += renderBilibiliEmbed(embed)
+        paragraph = []
+        return
+      }
+    }
+
     html += `<p>${renderInlineMarkdown(paragraph.join(' '), options)}</p>`
     paragraph = []
   }
