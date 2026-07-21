@@ -164,6 +164,7 @@ router.put('/content/blog-posts/:id', authenticateToken, checkAdminPermission, h
 router.delete('/content/blog-posts/:id', authenticateToken, checkAdminPermission, contentController.deleteAdminBlogPost);
 router.get('/content/docs', authenticateToken, checkAdminPermission, contentController.listAdminDocs);
 router.post('/content/docs', authenticateToken, checkAdminPermission, handleMulter(uploadDocAssets, '内容资源大小超出限制（最大 20MB）'), contentController.createAdminDoc);
+router.put('/content/docs/sort', authenticateToken, checkAdminPermission, contentController.reorderAdminDocs);
 router.put('/content/docs/:id', authenticateToken, checkAdminPermission, handleMulter(uploadDocAssets, '内容资源大小超出限制（最大 20MB）'), contentController.updateAdminDoc);
 router.delete('/content/docs/:id', authenticateToken, checkAdminPermission, contentController.deleteAdminDoc);
 

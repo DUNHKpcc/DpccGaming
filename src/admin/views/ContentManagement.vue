@@ -106,8 +106,10 @@
             <el-table-column label="排序" width="90">
               <template #default="{ row }">{{ row.sortOrder }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="260" fixed="right">
+            <el-table-column label="操作" width="360" fixed="right">
               <template #default="{ row }">
+                <el-button size="small" :disabled="isReorderingDocs || isFirstDoc(row)" @click="moveDoc(row, 'up')">上移</el-button>
+                <el-button size="small" :disabled="isReorderingDocs || isLastDoc(row)" @click="moveDoc(row, 'down')">下移</el-button>
                 <el-button size="small" @click="previewUrl(row.fileUrl)">文档</el-button>
                 <el-button size="small" @click="openDocDialog(row)">编辑</el-button>
                 <el-button size="small" type="danger" @click="confirmDeleteDoc(row)">删除</el-button>
@@ -294,6 +296,7 @@ const blogDialogVisible = ref(false)
 const docDialogVisible = ref(false)
 const isSavingBlog = ref(false)
 const isSavingDoc = ref(false)
+const isReorderingDocs = ref(false)
 const blogImageFile = ref(null)
 const docCoverFile = ref(null)
 const docMarkdownFile = ref(null)
@@ -628,6 +631,42 @@ const confirmDeleteDoc = async (doc) => {
     await fetchDocs()
   } catch (error) {
     if (error !== 'cancel') notificationStore.error('删除失败', error.message || '文档删除失败')
+  }
+}
+
+const isFirstDoc = (row) => docs.value.findIndex((d) => d.numericId === row.numericId) === 0
+const isLastDoc = (row) => {
+  const idx = docs.value.findIndex((d) => d.numericId === row.numericId)
+  return idx >= 0 && idx === docs.value.length - 1
+}
+const moveDoc = async (doc, direction) => {
+  if (isReorderingDocs.value) return
+  const currentIndex = docs.value.findIndex((d) => d.numericId === doc.numericId)
+  if (currentIndex < 0) return
+  const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+  if (targetIndex < 0 || targetIndex >= docs.value.length) return
+
+  const nextDocs = [...docs.value]
+  const [moved] = nextDocs.splice(currentIndex, 1)
+  nextDocs.splice(targetIndex, 0, moved)
+  const orderedIds = nextDocs.map((d) => d.numericId)
+  const snapshot = docs.value
+  // 乐观更新：按新顺序刷新本地 sortOrder（与后端 index*10 保持一致）
+  docs.value = nextDocs.map((d, index) => ({ ...d, sortOrder: index * 10 }))
+  isReorderingDocs.value = true
+  try {
+    const response = await fetch('/api/admin/content/docs/sort', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: orderedIds })
+    })
+    await readJsonResponse(response)
+  } catch (error) {
+    docs.value = snapshot
+    notificationStore.error('排序失败', error.message || '文档排序失败')
+  } finally {
+    isReorderingDocs.value = false
   }
 }
 

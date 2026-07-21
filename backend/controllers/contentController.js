@@ -674,6 +674,55 @@ const deleteAdminDoc = async (req, res) => {
   }
 };
 
+const reorderAdminDocs = async (req, res) => {
+  try {
+    const rawIds = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    // 去重 + 仅保留正整数 ID，保持传入顺序
+    const ids = [];
+    const seen = new Set();
+    for (const item of rawIds) {
+      const id = Number(item);
+      if (Number.isInteger(id) && id > 0 && !seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    }
+
+    if (ids.length === 0) {
+      return res.status(400).json({ error: '请提供有效的文档排序顺序' });
+    }
+    if (ids.length > 500) {
+      return res.status(400).json({ error: '单次排序文档数量超出限制' });
+    }
+
+    const pool = getPool();
+    await ensureContentTables(pool);
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      // 按传入顺序赋值 sort_order = index * 10，间隔 10 便于后续微调，
+      // 同时把历史重复/默认 0 值规范化为唯一递增序列。
+      for (let index = 0; index < ids.length; index += 1) {
+        await connection.execute(
+          'UPDATE content_docs SET sort_order = ?, updated_by = ? WHERE id = ?',
+          [index * 10, req.user.userId, ids[index]]
+        );
+      }
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    res.json({ updated: ids.length });
+  } catch (error) {
+    console.error('文档排序失败:', error);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+};
+
 module.exports = {
   BLOG_UPLOAD_DIR,
   DOC_FILE_UPLOAD_DIR,
@@ -689,5 +738,6 @@ module.exports = {
   listAdminDocs,
   createAdminDoc,
   updateAdminDoc,
-  deleteAdminDoc
+  deleteAdminDoc,
+  reorderAdminDocs
 };
