@@ -287,7 +287,7 @@ onUnmounted(() => {
 }
 
 .menu-button {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   width: 2.5rem;
@@ -572,6 +572,12 @@ onUnmounted(() => {
 
 [data-theme="light"] .dropdown-item {
   color: #1f2937;
+}
+
+@media (max-width: 1023px) {
+  .menu-button {
+    display: flex;
+  }
 }
 
 @media (max-width: 768px) {
