@@ -10,6 +10,7 @@ const adminUserController = require('../controllers/adminUserController');
 const adminRedeemCodeController = require('../controllers/adminRedeemCodeController');
 const adminPaymentOrderController = require('../controllers/adminPaymentOrderController');
 const adminPaymentProductController = require('../controllers/adminPaymentProductController');
+const adminSecurityController = require('../controllers/adminSecurityController');
 const contentController = require('../controllers/contentController');
 const {
   authenticateToken,
@@ -17,6 +18,38 @@ const {
   requireSuperAdminPermission,
   requireCookieAuthForSensitiveAdminAction
 } = require('../middleware/auth');
+const {
+  requireTrustedAdminMutation,
+  requireAdminElevation,
+  requireFreshAdminElevation,
+  requireFreshAdminMutation
+} = require('../middleware/adminSecurity');
+
+const adminFactorLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: '管理员二次验证尝试过于频繁，请稍后再试',
+    code: 'ADMIN_FACTOR_RATE_LIMITED'
+  },
+  keyGenerator: (req) => `admin-factor:${req.user?.userId || req.ip}`
+});
+
+const adminSetupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: '管理员验证器配置尝试过于频繁，请稍后再试',
+    code: 'ADMIN_SETUP_RATE_LIMITED'
+  },
+  keyGenerator: (req) => `admin-setup:${req.user?.userId || req.ip}`
+});
 
 const secretReadLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -129,43 +162,55 @@ const handleMulter = (uploader, sizeMessage) => (req, res, next) => {
   });
 };
 
-router.post('/games/:gameId/review', authenticateToken, checkAdminPermission, adminGameController.reviewGame);
-router.get('/games/pending', authenticateToken, checkAdminPermission, adminGameController.getPendingGames);
-router.get('/games/all', authenticateToken, checkAdminPermission, adminGameController.getAllGames);
-router.delete('/games/:gameId/delete', authenticateToken, checkAdminPermission, adminGameController.deleteGame);
+router.use(authenticateToken, checkAdminPermission);
 
-router.get('/check-permission', authenticateToken, checkAdminPermission, adminUserController.checkPermission);
-router.get('/users', authenticateToken, checkAdminPermission, adminUserController.getUsers);
-router.post('/users/:userId/role', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminUserController.updateUserRole);
-router.post('/users/:userId/ban', authenticateToken, checkAdminPermission, adminUserController.toggleUserBan);
-router.delete('/users/:userId/delete', authenticateToken, checkAdminPermission, adminUserController.deleteUser);
+router.get('/check-permission', adminUserController.checkPermission);
+router.get('/security/status', adminSecurityController.getStatus);
+router.post('/security/setup', requireTrustedAdminMutation, adminSetupLimiter, adminSecurityController.beginSetup);
+router.post('/security/setup/confirm', requireTrustedAdminMutation, adminFactorLimiter, adminSecurityController.finishSetup);
+router.post('/security/verify', requireTrustedAdminMutation, adminFactorLimiter, adminSecurityController.verify);
+router.post('/security/revoke', requireTrustedAdminMutation, adminSecurityController.revoke);
 
-router.get('/redeem-codes/catalog', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.getRedeemCodeCatalog);
-router.get('/redeem-codes', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.listRedeemCodes);
-router.post('/redeem-codes/import', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.importRedeemCodes);
-router.post('/redeem-codes/batch-delete', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.batchDeleteRedeemCodes);
-router.get('/redeem-codes/:id/secret', authenticateToken, checkAdminPermission, requireSuperAdminPermission, requireCookieAuthForSensitiveAdminAction, secretReadLimiter, adminRedeemCodeController.getRedeemCodeSecret);
-router.delete('/redeem-codes/:id', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminRedeemCodeController.deleteRedeemCode);
+router.use(requireAdminElevation);
+router.use(requireTrustedAdminMutation);
+router.use(requireFreshAdminMutation);
 
-router.get('/payment-products', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentProductController.listProducts);
-router.post('/payment-products', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentProductController.createProduct);
-router.put('/payment-products/:id', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentProductController.updateProduct);
-router.post('/payment-products/:id/copy', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentProductController.copyProduct);
-router.post('/payment-products/:productId/promotions', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentProductController.createPromotion);
-router.put('/payment-promotions/:id', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentProductController.updatePromotion);
+router.post('/games/:gameId/review', adminGameController.reviewGame);
+router.get('/games/pending', adminGameController.getPendingGames);
+router.get('/games/all', adminGameController.getAllGames);
+router.delete('/games/:gameId/delete', adminGameController.deleteGame);
 
-router.get('/payment-orders', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentOrderController.listOrders);
-router.get('/payment-orders/:orderNo', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentOrderController.getOrderDetail);
-router.delete('/payment-orders/:orderNo', authenticateToken, checkAdminPermission, requireSuperAdminPermission, adminPaymentOrderController.deleteOrder);
+router.get('/users', adminUserController.getUsers);
+router.post('/users/:userId/role', requireSuperAdminPermission, adminUserController.updateUserRole);
+router.post('/users/:userId/ban', adminUserController.toggleUserBan);
+router.delete('/users/:userId/delete', adminUserController.deleteUser);
 
-router.get('/content/blog-posts', authenticateToken, checkAdminPermission, contentController.listAdminBlogPosts);
-router.post('/content/blog-posts', authenticateToken, checkAdminPermission, handleMulter(uploadBlogImage, '图片文件大小超出限制（最大 8MB）'), contentController.createAdminBlogPost);
-router.put('/content/blog-posts/:id', authenticateToken, checkAdminPermission, handleMulter(uploadBlogImage, '图片文件大小超出限制（最大 8MB）'), contentController.updateAdminBlogPost);
-router.delete('/content/blog-posts/:id', authenticateToken, checkAdminPermission, contentController.deleteAdminBlogPost);
-router.get('/content/docs', authenticateToken, checkAdminPermission, contentController.listAdminDocs);
-router.post('/content/docs', authenticateToken, checkAdminPermission, handleMulter(uploadDocAssets, '内容资源大小超出限制（最大 20MB）'), contentController.createAdminDoc);
-router.put('/content/docs/sort', authenticateToken, checkAdminPermission, contentController.reorderAdminDocs);
-router.put('/content/docs/:id', authenticateToken, checkAdminPermission, handleMulter(uploadDocAssets, '内容资源大小超出限制（最大 20MB）'), contentController.updateAdminDoc);
-router.delete('/content/docs/:id', authenticateToken, checkAdminPermission, contentController.deleteAdminDoc);
+router.get('/redeem-codes/catalog', requireSuperAdminPermission, adminRedeemCodeController.getRedeemCodeCatalog);
+router.get('/redeem-codes', requireSuperAdminPermission, adminRedeemCodeController.listRedeemCodes);
+router.post('/redeem-codes/import', requireSuperAdminPermission, adminRedeemCodeController.importRedeemCodes);
+router.post('/redeem-codes/batch-delete', requireSuperAdminPermission, adminRedeemCodeController.batchDeleteRedeemCodes);
+router.get('/redeem-codes/:id/secret', requireSuperAdminPermission, requireFreshAdminElevation, requireCookieAuthForSensitiveAdminAction, secretReadLimiter, adminRedeemCodeController.getRedeemCodeSecret);
+router.delete('/redeem-codes/:id', requireSuperAdminPermission, adminRedeemCodeController.deleteRedeemCode);
+
+router.get('/payment-products', requireSuperAdminPermission, adminPaymentProductController.listProducts);
+router.post('/payment-products', requireSuperAdminPermission, adminPaymentProductController.createProduct);
+router.put('/payment-products/:id', requireSuperAdminPermission, adminPaymentProductController.updateProduct);
+router.post('/payment-products/:id/copy', requireSuperAdminPermission, adminPaymentProductController.copyProduct);
+router.post('/payment-products/:productId/promotions', requireSuperAdminPermission, adminPaymentProductController.createPromotion);
+router.put('/payment-promotions/:id', requireSuperAdminPermission, adminPaymentProductController.updatePromotion);
+
+router.get('/payment-orders', requireSuperAdminPermission, adminPaymentOrderController.listOrders);
+router.get('/payment-orders/:orderNo', requireSuperAdminPermission, adminPaymentOrderController.getOrderDetail);
+router.delete('/payment-orders/:orderNo', requireSuperAdminPermission, adminPaymentOrderController.deleteOrder);
+
+router.get('/content/blog-posts', contentController.listAdminBlogPosts);
+router.post('/content/blog-posts', handleMulter(uploadBlogImage, '图片文件大小超出限制（最大 8MB）'), contentController.createAdminBlogPost);
+router.put('/content/blog-posts/:id', handleMulter(uploadBlogImage, '图片文件大小超出限制（最大 8MB）'), contentController.updateAdminBlogPost);
+router.delete('/content/blog-posts/:id', contentController.deleteAdminBlogPost);
+router.get('/content/docs', contentController.listAdminDocs);
+router.post('/content/docs', handleMulter(uploadDocAssets, '内容资源大小超出限制（最大 20MB）'), contentController.createAdminDoc);
+router.put('/content/docs/sort', contentController.reorderAdminDocs);
+router.put('/content/docs/:id', handleMulter(uploadDocAssets, '内容资源大小超出限制（最大 20MB）'), contentController.updateAdminDoc);
+router.delete('/content/docs/:id', contentController.deleteAdminDoc);
 
 module.exports = router;

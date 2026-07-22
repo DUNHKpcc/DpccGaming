@@ -3,8 +3,23 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
 const authController = require('../controllers/authController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, optionalAuthenticateToken } = require('../middleware/auth');
+const { clearAdminElevationOnLogout } = require('../middleware/adminSecurity');
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '登录尝试过于频繁，请稍后再试' },
+  keyGenerator: (req) => {
+    const username = String(req.body?.username || '').trim().toLowerCase().slice(0, 128);
+    return `login:${req.ip}:${username}`;
+  }
+});
 
 const avatarStorage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -63,8 +78,8 @@ const uploadCover = multer({
 });
 
 router.post('/register', authController.register);
-router.post('/login', authController.login);
-router.post('/logout', authController.logout);
+router.post('/login', loginLimiter, authController.login);
+router.post('/logout', optionalAuthenticateToken, clearAdminElevationOnLogout, authController.logout);
 router.get('/auth/wechat/start', authController.startWechatLogin);
 router.get('/auth/wechat/bind/start', authenticateToken, authController.startWechatBind);
 router.get('/auth/wechat/bind-status', authenticateToken, authController.getWechatBindStatus);

@@ -11,6 +11,7 @@ const getEnv = (key, fallback = '') => {
 const parseCorsOrigins = () => {
   const raw = getEnv('CORS_ORIGINS', '');
   if (!raw) {
+    if (isProduction) return ['https://dpccgaming.xyz'];
     return [
       'http://localhost:8000',
       'http://127.0.0.1:8000',
@@ -18,7 +19,6 @@ const parseCorsOrigins = () => {
       'https://localhost:3000',
       'http://localhost:8080',
       'http://127.0.0.1:8080',
-      'http://dpccgaming.xyz',
       'https://dpccgaming.xyz'
     ];
   }
@@ -33,6 +33,10 @@ const jwtSecret = getEnv(
 const redeemCodeEncryptionKey = getEnv(
   'REDEEM_CODE_ENCRYPTION_KEY',
   isProduction ? '' : 'dev-redeem-code-encryption-key-change-me'
+);
+const adminTotpEncryptionKey = getEnv(
+  'ADMIN_TOTP_ENCRYPTION_KEY',
+  isProduction ? '' : 'dev-admin-totp-encryption-key-change-me'
 );
 const jwtExpiresIn = getEnv('JWT_EXPIRES_IN', '30d');
 const jwtCookieName = getEnv('JWT_COOKIE_NAME', 'dpcc_auth_token');
@@ -80,6 +84,7 @@ if (isProduction) {
   if (!dbPassword) missing.push('DB_PASSWORD');
   if (!jwtSecret) missing.push('JWT_SECRET');
   if (!redeemCodeEncryptionKey) missing.push('REDEEM_CODE_ENCRYPTION_KEY');
+  if (adminTotpEncryptionKey.length < 32) missing.push('ADMIN_TOTP_ENCRYPTION_KEY (min 32 chars)');
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables in production: ${missing.join(', ')}`);
   }
@@ -96,6 +101,11 @@ if (!isProduction) {
   }
   if (!process.env.REDEEM_CODE_ENCRYPTION_KEY) {
     console.warn('[config] REDEEM_CODE_ENCRYPTION_KEY 未设置，已使用开发密钥。');
+  }
+  if (!process.env.ADMIN_TOTP_ENCRYPTION_KEY) {
+    console.warn('[config] ADMIN_TOTP_ENCRYPTION_KEY 未设置，已使用开发密钥。');
+  } else if (adminTotpEncryptionKey.length < 32) {
+    console.warn('[config] ADMIN_TOTP_ENCRYPTION_KEY 长度小于 32，建议提高复杂度。');
   }
 }
 
@@ -124,6 +134,18 @@ const config = {
 
   redeemCode: {
     encryptionKey: redeemCodeEncryptionKey
+  },
+
+  adminSecurity: {
+    encryptionKey: adminTotpEncryptionKey,
+    cookieName: getEnv('ADMIN_ELEVATION_COOKIE_NAME', 'dpcc_admin_elevation'),
+    issuer: getEnv('ADMIN_TOTP_ISSUER', 'DPCC Gaming Admin'),
+    idleMinutes: 15,
+    absoluteHours: 4,
+    freshMinutes: 5,
+    setupTtlMinutes: 10,
+    maxFailedAttempts: 5,
+    lockoutMinutes: 10
   },
 
   wechat: {

@@ -225,6 +225,7 @@ function errorHandler(err, req, res, next) {
 }
 
 module.exports = {
+  parseCookies,
   authenticateToken,
   optionalAuthenticateToken,
   checkAdminPermission,
