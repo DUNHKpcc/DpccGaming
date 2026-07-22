@@ -1,5 +1,7 @@
 .payment-page {
-  --payment-plan-card-height: clamp(18.5rem, 38vh, 21rem);
+  --payment-plan-card-width: 16.6875rem;
+  --payment-plan-card-height: 23rem;
+  --payment-selection-border: #000000;
   width: 100%;
   max-width: 100%;
   min-height: calc(100vh - 4rem);
@@ -15,15 +17,19 @@
   padding: clamp(1rem, 3vh, 2.75rem) clamp(1rem, 3vw, 2.5rem) clamp(1.25rem, 3vh, 2.5rem);
 }
 
-:global([data-theme="light"]) .payment-page {
+:global([data-theme="light"] .payment-page) {
   --text-primary: #000000;
+}
+
+:global([data-theme="dark"] .payment-page) {
+  --payment-selection-border: #ffffff;
 }
 
 .payment-shell {
   width: min(1280px, 100%);
   max-width: 100%;
   min-height: 100%;
-  margin: auto;
+  margin: 3.65rem auto 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -198,9 +204,12 @@
 
 .plan-mode-frame {
   display: grid;
+  align-items: center;
+  min-height: max(calc(var(--payment-plan-card-height) + 3.65rem), calc(100svh - 23rem));
 }
 
 .plan-mode-panel {
+  position: relative;
   grid-area: 1 / 1;
   min-width: 0;
   opacity: 0;
@@ -225,6 +234,50 @@
   gap: 0.75rem;
   min-height: 2rem;
   margin: -0.2rem 0 0.45rem;
+}
+
+.account-category-filter {
+  position: absolute;
+  top: -3rem;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 2.65rem;
+  margin: 0;
+  transform: translateX(-50%);
+}
+
+.account-category-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0.36rem;
+  border: 2px solid transparent;
+  border-radius: 0.4rem;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: opacity 0.16s ease;
+}
+
+.account-category-button img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.account-category-button.active {
+  border-color: var(--payment-selection-border);
+}
+
+.account-category-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
 }
 
 .recharge-scroll-hint {
@@ -289,7 +342,9 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  height: var(--payment-plan-card-height);
   min-height: var(--payment-plan-card-height);
+  overflow: hidden;
   padding: clamp(1.25rem, 2.5vh, 1.875rem) clamp(1rem, 2vw, 1.5rem) clamp(1rem, 2vh, 1.5rem);
   border: 1px solid var(--border-primary);
   border-radius: 0.5rem;
@@ -300,31 +355,34 @@
 }
 
 .tier-scroll-grid .plan-card {
-  flex: 0 0 max(14.625rem, calc((100% - 5.8125rem) / 4));
-  min-width: 14.625rem;
+  flex: 0 0 var(--payment-plan-card-width);
+  width: var(--payment-plan-card-width);
+  min-width: var(--payment-plan-card-width);
   scroll-snap-align: start;
 }
 
 .plan-card.selected {
-  background: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-primary);
-  box-shadow: inset 0 0 0 1px var(--text-primary);
+  border-color: var(--payment-selection-border);
 }
 
-.plan-card.selected .daily-quota,
-.plan-card.selected .plan-feature,
-.plan-card.selected .stock-line {
-  color: var(--bg-primary);
+.plan-card.selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 2px solid var(--payment-selection-border);
+  border-radius: inherit;
+  pointer-events: none;
 }
 
-.plan-card.selected .plan-divider {
-  background: var(--bg-primary);
-}
-
-.plan-card.selected .recommend-badge {
-  background: var(--bg-primary);
-  color: var(--text-primary);
+.plan-select-trigger {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .recommend-badge {
@@ -336,7 +394,7 @@
   background: var(--text-primary);
   color: var(--bg-primary);
   padding: 0.35rem 0.65rem;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -348,9 +406,27 @@
 }
 
 .plan-name {
+  display: flex;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  gap: 0.45rem;
+  width: 100%;
   min-height: 1.7rem;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 900;
+  line-height: 1.35;
+}
+
+.plan-ai-icon {
+  flex: 0 0 1.35rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: 0.12rem;
+  object-fit: contain;
+}
+
+.plan-name-text {
+  min-width: 0;
 }
 
 .plan-card.has-card-badges .plan-name {
@@ -360,6 +436,7 @@
 
 .plan-price {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   align-items: flex-start;
   margin-top: 0.7rem;
@@ -367,21 +444,24 @@
 }
 
 .plan-card strong {
-  font-size: clamp(1.85rem, 2.8vw, 2.25rem);
+  font-size: clamp(1.6rem, 2.3vw, 1.9rem);
   line-height: 1;
   white-space: nowrap;
 }
 
 .daily-quota {
+  flex: 0 0 auto;
   margin-top: 0.9rem;
   color: var(--text-secondary);
+  font-size: 0.88rem;
   font-weight: 900;
 }
 
 .stock-line {
+  flex: 0 0 auto;
   margin-top: 0.45rem;
   color: var(--text-tertiary);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 900;
   line-height: 1.35;
 }
@@ -419,7 +499,7 @@
   background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
   color: #ffffff;
   box-shadow: 0 0.45rem 1rem rgba(239, 68, 68, 0.26);
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
@@ -436,7 +516,7 @@
 }
 
 .recharge-grid .plan-name {
-  display: block;
+  display: flex;
   max-width: calc(100% - 7.25rem);
 }
 
@@ -456,7 +536,7 @@
 
 .quota-original {
   color: inherit;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-weight: 800;
   text-decoration: line-through;
   text-decoration-color: #f5b301;
@@ -466,7 +546,7 @@
 
 .promotion-original-price {
   color: var(--text-tertiary);
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 900;
   line-height: 1;
   text-decoration: line-through;
@@ -476,8 +556,7 @@
 }
 
 .plan-card.selected .promotion-original-price {
-  color: var(--bg-primary);
-  opacity: 0.72;
+  color: var(--text-tertiary);
 }
 
 .quota-upgraded {
@@ -489,7 +568,24 @@
   margin-top: 0;
 }
 
+.plan-card-details {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  max-height: 7.9rem;
+  overflow: hidden;
+}
+
+.plan-card-details.is-clipped {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 2.25rem), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 2.25rem), transparent 100%);
+}
+
 .plan-divider {
+  flex: 0 0 auto;
   width: 100%;
   height: 1px;
   margin: 1rem 0;
@@ -498,16 +594,58 @@
 
 .plan-feature {
   color: var(--text-tertiary);
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 700;
   line-height: 1.65;
 }
 
-.checkout-trigger {
-  width: min(21rem, 100%);
-  align-self: center;
-  min-height: 3.5rem;
+.plan-details-toggle {
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+  flex: 0 0 auto;
+  margin-top: auto;
+  border: 0;
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: 0.65rem 0 0;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.plan-card.selected .plan-details-toggle {
+  border-color: color-mix(in srgb, var(--payment-selection-border) 30%, var(--border-primary));
+}
+
+.plan-details-toggle:hover {
+  color: var(--payment-selection-border);
+}
+
+.plan-details-features {
+  display: grid;
+  gap: 0.55rem;
   margin-top: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.plan-details-features p {
+  margin: 0;
+}
+
+.checkout-trigger {
+  position: fixed;
+  right: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 100;
+  width: min(21rem, calc(100% - 2rem));
+  min-height: 3.5rem;
+  margin: 0;
   border: 0;
   border-radius: 0.5rem;
   background: var(--text-primary);
@@ -518,11 +656,13 @@
   gap: 0.65rem;
   font-size: 1rem;
   font-weight: 900;
+  box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.18);
+  transform: translateX(50%);
   transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 .checkout-trigger:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translate(50%, -1px);
 }
 
 .checkout-trigger:disabled {
@@ -807,6 +947,7 @@
 
 @media (max-height: 760px) and (min-width: 861px) {
   .payment-page {
+    --payment-plan-card-height: 20.5rem;
     padding-top: 1rem;
     padding-bottom: 1rem;
   }
@@ -870,16 +1011,17 @@
   }
 
   .checkout-trigger {
-    width: 100%;
+    width: min(20rem, calc(100% - 2rem));
   }
 
   .plan-card {
-    min-height: 0;
-    height: auto;
+    min-height: var(--payment-plan-card-height);
   }
 
   .tier-scroll-grid .plan-card {
     flex-basis: 100%;
+    width: 100%;
+    min-width: 100%;
   }
 
   .order-panel {

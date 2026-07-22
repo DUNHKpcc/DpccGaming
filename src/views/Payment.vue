@@ -73,21 +73,29 @@
                 </div>
               </div>
               <div ref="subscriptionTierGrid" class="plan-grid tier-scroll-grid subscription-grid" aria-label="月卡订阅规格，可横向滚动">
-                <button
+                <article
                   v-for="plan in plans"
                   :key="plan.id"
-                  type="button"
                   class="plan-card"
                   :class="{ selected: plan.id === selectedPlanId, 'has-card-badges': plan.promotionBadgeText || plan.hasPlanBonus }"
-                  :aria-pressed="plan.id === selectedPlanId"
                   @click="selectPlan(plan.id)"
                 >
+                  <button
+                    type="button"
+                    class="plan-select-trigger"
+                    :aria-pressed="plan.id === selectedPlanId"
+                    :aria-label="`选择 ${plan.name}`"
+                    @click.stop="selectPlan(plan.id)"
+                  ></button>
                   <span v-if="plan.badgeText" class="recommend-badge">{{ plan.badgeText }}</span>
                   <span v-if="plan.promotionBadgeText || plan.hasPlanBonus" class="bonus-badge-stack">
                     <span v-if="plan.promotionBadgeText" class="recharge-bonus-badge">{{ plan.promotionBadgeText }}</span>
                     <span v-if="plan.hasPlanBonus" class="recharge-bonus-badge">{{ plan.bonusText }}</span>
                   </span>
-                  <span class="plan-name">{{ plan.name }}</span>
+                  <span class="plan-name">
+                    <img v-if="aiIconUrl(plan.aiIcon)" class="plan-ai-icon" :src="aiIconUrl(plan.aiIcon)" :alt="`${aiIconLabel(plan.aiIcon)} 图标`" />
+                    <span class="plan-name-text">{{ plan.name }}</span>
+                  </span>
                   <span class="plan-price">
                     <span v-if="plan.hasPromotionPrice" class="promotion-original-price">{{ plan.originalPriceText }}</span>
                     <strong>{{ plan.priceText }}</strong>
@@ -101,11 +109,20 @@
                     {{ plan.bonusStockText }}
                   </span>
                   <span v-if="plan.bonusRedeemCodeUsed" class="stock-line used">已领取过赠送码，本次不重复赠送</span>
-                  <span class="plan-divider"></span>
-                  <span class="plan-feature" v-for="feature in plan.features" :key="feature">
-                    {{ feature }}
+                  <span v-overflow-fade class="plan-card-details">
+                    <span class="plan-divider"></span>
+                    <span class="plan-feature" v-for="feature in plan.features" :key="feature">
+                      {{ feature }}
+                    </span>
                   </span>
-                </button>
+                  <button
+                    type="button"
+                    class="plan-details-toggle"
+                    @click.stop="openDetailsDialog('subscription', plan)"
+                  >
+                    展开查看详情
+                  </button>
+                </article>
               </div>
             </div>
 
@@ -138,17 +155,25 @@
                 </div>
               </div>
               <div ref="rechargeTierGrid" class="plan-grid tier-scroll-grid recharge-grid" aria-label="额度充值规格，可横向滚动">
-                <button
+                <article
                   v-for="pack in rechargePackages"
                   :key="pack.id"
-                  type="button"
                   class="plan-card"
                   :class="{ selected: pack.id === selectedRechargePackageId, 'has-card-badges': pack.promotionBadgeText || pack.hasRechargeBonus }"
-                  :aria-pressed="pack.id === selectedRechargePackageId"
                   @click="selectRechargePackage(pack.id)"
                 >
+                  <button
+                    type="button"
+                    class="plan-select-trigger"
+                    :aria-pressed="pack.id === selectedRechargePackageId"
+                    :aria-label="`选择 ${pack.name}`"
+                    @click.stop="selectRechargePackage(pack.id)"
+                  ></button>
                   <span v-if="pack.badgeText" class="recommend-badge">{{ pack.badgeText }}</span>
-                  <span class="plan-name">{{ pack.name }}</span>
+                  <span class="plan-name">
+                    <img v-if="aiIconUrl(pack.aiIcon)" class="plan-ai-icon" :src="aiIconUrl(pack.aiIcon)" :alt="`${aiIconLabel(pack.aiIcon)} 图标`" />
+                    <span class="plan-name-text">{{ pack.name }}</span>
+                  </span>
                   <span v-if="pack.promotionBadgeText || pack.hasRechargeBonus" class="bonus-badge-stack">
                     <span v-if="pack.promotionBadgeText" class="recharge-bonus-badge">{{ pack.promotionBadgeText }}</span>
                     <span v-if="pack.hasRechargeBonus" class="recharge-bonus-badge">{{ pack.bonusText }}</span>
@@ -170,11 +195,20 @@
                     {{ pack.bonusStockText }}
                   </span>
                   <span v-if="pack.bonusRedeemCodeUsed" class="stock-line used">已领取过赠送码，本次不重复赠送</span>
-                  <span class="plan-divider"></span>
-                  <span class="plan-feature" v-for="feature in pack.features" :key="feature">
-                    {{ feature }}
+                  <span v-overflow-fade class="plan-card-details">
+                    <span class="plan-divider"></span>
+                    <span class="plan-feature" v-for="feature in pack.features" :key="feature">
+                      {{ feature }}
+                    </span>
                   </span>
-                </button>
+                  <button
+                    type="button"
+                    class="plan-details-toggle"
+                    @click.stop="openDetailsDialog('recharge', pack)"
+                  >
+                    展开查看详情
+                  </button>
+                </article>
               </div>
             </div>
 
@@ -183,6 +217,22 @@
               :class="{ active: isAccountMode }"
               :aria-hidden="!isAccountMode"
             >
+              <div class="account-category-filter" role="toolbar" aria-label="账号代充 AI 分类">
+                <button
+                  v-for="category in ACCOUNT_CATEGORIES"
+                  :key="category.id"
+                  type="button"
+                  class="account-category-button"
+                  :class="{ active: activeAccountCategory === category.id }"
+                  :aria-label="category.label"
+                  :aria-pressed="activeAccountCategory === category.id"
+                  :disabled="!accountCategoryHasProducts(category)"
+                  :title="category.label"
+                  @click="selectAccountCategory(category.id)"
+                >
+                  <img :src="category.icon" alt="" />
+                </button>
+              </div>
               <div class="tier-control-bar">
                 <div class="recharge-scroll-hint">向右滑动查看更多账号与代充服务</div>
                 <div class="tier-nav-buttons" aria-label="账号代充档位切换">
@@ -207,31 +257,48 @@
                 </div>
               </div>
               <div ref="accountTierGrid" class="plan-grid tier-scroll-grid" aria-label="账号代充规格，可横向滚动">
-                <button
-                  v-for="service in accountProducts"
+                <article
+                  v-for="service in filteredAccountProducts"
                   :key="service.id"
-                  type="button"
                   class="plan-card"
                   :class="{ selected: service.id === selectedAccountProductId, 'has-card-badges': service.badgeText || service.promotionBadgeText }"
-                  :aria-pressed="service.id === selectedAccountProductId"
                   @click="selectAccountProduct(service.id)"
                 >
+                  <button
+                    type="button"
+                    class="plan-select-trigger"
+                    :aria-pressed="service.id === selectedAccountProductId"
+                    :aria-label="`选择 ${service.name}`"
+                    @click.stop="selectAccountProduct(service.id)"
+                  ></button>
                   <span v-if="service.badgeText" class="recommend-badge">{{ service.badgeText }}</span>
                   <span v-if="service.promotionBadgeText" class="bonus-badge-stack">
                     <span class="recharge-bonus-badge">{{ service.promotionBadgeText }}</span>
                   </span>
-                  <span class="plan-name">{{ service.name }}</span>
+                  <span class="plan-name">
+                    <img v-if="aiIconUrl(service.aiIcon)" class="plan-ai-icon" :src="aiIconUrl(service.aiIcon)" :alt="`${aiIconLabel(service.aiIcon)} 图标`" />
+                    <span class="plan-name-text">{{ service.name }}</span>
+                  </span>
                   <span class="plan-price">
                     <span v-if="service.hasPromotionPrice" class="promotion-original-price">{{ service.originalPriceText }}</span>
                     <strong>{{ service.priceText }}</strong>
                   </span>
                   <span class="daily-quota">{{ service.serviceText }}</span>
                   <span class="stock-line" :class="{ empty: !service.available }">{{ service.availabilityText }}</span>
-                  <span class="plan-divider"></span>
-                  <span v-for="feature in service.features" :key="feature" class="plan-feature">
-                    {{ feature }}
+                  <span v-overflow-fade class="plan-card-details">
+                    <span class="plan-divider"></span>
+                    <span v-for="feature in service.features" :key="feature" class="plan-feature">
+                      {{ feature }}
+                    </span>
                   </span>
-                </button>
+                  <button
+                    type="button"
+                    class="plan-details-toggle"
+                    @click.stop="openDetailsDialog('account', service)"
+                  >
+                    展开查看详情
+                  </button>
+                </article>
               </div>
             </div>
           </div>
@@ -393,12 +460,87 @@
         </div>
       </Transition>
     </Teleport>
+
+    <Teleport to="body">
+      <Transition name="order-dialog">
+        <div
+          v-if="isDetailsDialogOpen"
+          ref="detailsDialogRef"
+          class="order-dialog-backdrop"
+          tabindex="-1"
+          @click.self="closeDetailsDialog"
+          @keydown.esc="closeDetailsDialog"
+        >
+          <aside
+            class="order-panel plan-details-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="details-title"
+          >
+            <div class="order-head">
+              <h2 id="details-title">档位详情</h2>
+              <button
+                type="button"
+                class="order-dialog-close"
+                aria-label="关闭档位详情"
+                title="关闭档位详情"
+                @click="closeDetailsDialog"
+              >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <section class="order-details plan-details-content">
+              <h3>{{ detailsProduct.name }}</h3>
+              <dl>
+                <div>
+                  <dt>价格</dt>
+                  <dd>{{ detailsProduct.priceText }}</dd>
+                </div>
+                <div v-if="detailsProductInfo">
+                  <dt>{{ detailsProduct.detailMode === 'account' ? '服务' : '额度' }}</dt>
+                  <dd>{{ detailsProductInfo }}</dd>
+                </div>
+                <div v-if="detailsProductAvailability">
+                  <dt>{{ detailsProduct.detailMode === 'account' ? '交付' : '库存' }}</dt>
+                  <dd>{{ detailsProductAvailability }}</dd>
+                </div>
+              </dl>
+              <div v-if="detailsProduct.features?.length" class="plan-details-features">
+                <p v-for="feature in detailsProduct.features" :key="feature">{{ feature }}</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { apiCall } from '../utils/api'
+
+const syncOverflowFade = (element) => {
+  nextTick(() => {
+    element.classList.toggle('is-clipped', element.scrollHeight > element.clientHeight + 1)
+  })
+}
+
+const vOverflowFade = {
+  mounted(element) {
+    const observer = new ResizeObserver(() => syncOverflowFade(element))
+    observer.observe(element)
+    element.__overflowFadeObserver = observer
+    syncOverflowFade(element)
+  },
+  updated(element) {
+    syncOverflowFade(element)
+  },
+  beforeUnmount(element) {
+    element.__overflowFadeObserver?.disconnect()
+  }
+}
 
 const DEFAULT_DURATIONS = [
   { id: '1m', label: '1个月', months: 1 },
@@ -466,6 +608,24 @@ const normalizeDurations = (items = []) => (
     ? items
     : DEFAULT_DURATIONS.map((duration) => ({ ...duration }))
 )
+const aiIconUrl = (aiIcon) => ({
+  chatgpt: '/Ai/ChatGPT.svg',
+  claude: '/Ai/Claude.png',
+  gemini: '/Ai/Gemini.svg',
+  grok: '/Ai/grok.png'
+}[aiIcon] || '')
+const aiIconLabel = (aiIcon) => ({
+  chatgpt: 'ChatGPT',
+  claude: 'Claude',
+  gemini: 'Gemini',
+  grok: 'Grok'
+}[aiIcon] || 'AI')
+const ACCOUNT_CATEGORIES = [
+  { id: 'claude', label: 'Claude', keyword: 'claude', icon: '/Ai/Claude.png' },
+  { id: 'gpt', label: 'GPT', keyword: 'gpt', icon: '/Ai/ChatGPT.svg' },
+  { id: 'gemini', label: 'Gemini', keyword: 'gemini', icon: '/Ai/Gemini.svg' },
+  { id: 'grok', label: 'Grok', keyword: 'grok', icon: '/Ai/grok.png' }
+]
 
 const productMode = ref('subscription')
 const plans = ref([])
@@ -476,6 +636,9 @@ const paymentError = ref('')
 const isCreatingOrder = ref(false)
 const isOrderDialogOpen = ref(false)
 const orderDialogRef = ref(null)
+const isDetailsDialogOpen = ref(false)
+const detailsDialogRef = ref(null)
+const detailsProduct = ref({})
 const emptyPlan = { name: '加载中', price: 0, dailyQuota: '正在加载额度', hasBonusStock: false, bonusRedeemCodeUsed: false, bonusStockText: '赠送码库存同步中' }
 const emptyDuration = { label: '加载中', months: 1 }
 const emptyRechargePackage = {
@@ -501,6 +664,7 @@ const selectedPlanId = ref('')
 const selectedDurationId = ref('1m')
 const selectedRechargePackageId = ref('')
 const selectedAccountProductId = ref('')
+const activeAccountCategory = ref('')
 const subscriptionTierGrid = ref(null)
 const rechargeTierGrid = ref(null)
 const accountTierGrid = ref(null)
@@ -526,6 +690,40 @@ const selectAccountProduct = (productId) => {
   selectedAccountProductId.value = productId
 }
 
+const accountProductMatchesCategory = (product, category) => (
+  String(product?.name || '').toLowerCase().includes(category.keyword)
+)
+
+const accountCategoryHasProducts = (category) => (
+  accountProducts.value.some((product) => accountProductMatchesCategory(product, category))
+)
+
+const selectAccountCategory = async (categoryId) => {
+  const category = ACCOUNT_CATEGORIES.find((item) => item.id === categoryId)
+  if (!category || !accountCategoryHasProducts(category)) return
+
+  const nextCategoryId = activeAccountCategory.value === categoryId ? '' : categoryId
+  activeAccountCategory.value = nextCategoryId
+  const categoryProducts = nextCategoryId
+    ? accountProducts.value.filter((product) => accountProductMatchesCategory(product, category))
+    : accountProducts.value
+  selectedAccountProductId.value = categoryProducts[0]?.id || ''
+  await nextTick()
+  accountTierGrid.value?.scrollTo({ left: 0, behavior: 'smooth' })
+}
+
+const openDetailsDialog = async (mode, product) => {
+  detailsProduct.value = { ...product, detailMode: mode }
+  isDetailsDialogOpen.value = true
+  await nextTick()
+  detailsDialogRef.value?.focus()
+}
+
+const closeDetailsDialog = () => {
+  isDetailsDialogOpen.value = false
+  detailsProduct.value = {}
+}
+
 const openOrderDialog = async () => {
   if (isPayDisabled.value) return
   paymentError.value = ''
@@ -543,13 +741,20 @@ const closeOrderDialog = () => {
 const isSubscriptionMode = computed(() => productMode.value === 'subscription')
 const isRechargeMode = computed(() => productMode.value === 'recharge')
 const isAccountMode = computed(() => productMode.value === 'account')
+const filteredAccountProducts = computed(() => {
+  const category = ACCOUNT_CATEGORIES.find((item) => item.id === activeAccountCategory.value)
+  if (!category) return accountProducts.value
+  return accountProducts.value.filter((product) => accountProductMatchesCategory(product, category))
+})
 const selectedPlan = computed(() => plans.value.find((plan) => plan.id === selectedPlanId.value) || plans.value[0] || emptyPlan)
 const selectedDuration = computed(() => durations.value.find((duration) => duration.id === selectedDurationId.value) || durations.value[0] || emptyDuration)
 const selectedRechargePackage = computed(() => (
   rechargePackages.value.find((pack) => pack.id === selectedRechargePackageId.value) || rechargePackages.value[0] || emptyRechargePackage
 ))
 const selectedAccountProduct = computed(() => (
-  accountProducts.value.find((product) => product.id === selectedAccountProductId.value) || accountProducts.value[0] || emptyAccountProduct
+  filteredAccountProducts.value.find((product) => product.id === selectedAccountProductId.value)
+  || filteredAccountProducts.value[0]
+  || emptyAccountProduct
 ))
 const selectedProduct = computed(() => {
   if (isSubscriptionMode.value) return selectedPlan.value
@@ -558,13 +763,13 @@ const selectedProduct = computed(() => {
 })
 const selectedSubscriptionIndex = computed(() => plans.value.findIndex((plan) => plan.id === selectedPlanId.value))
 const selectedRechargeIndex = computed(() => rechargePackages.value.findIndex((pack) => pack.id === selectedRechargePackageId.value))
-const selectedAccountIndex = computed(() => accountProducts.value.findIndex((product) => product.id === selectedAccountProductId.value))
+const selectedAccountIndex = computed(() => filteredAccountProducts.value.findIndex((product) => product.id === selectedAccountProductId.value))
 const canMoveSubscriptionPrev = computed(() => selectedSubscriptionIndex.value > 0)
 const canMoveSubscriptionNext = computed(() => selectedSubscriptionIndex.value >= 0 && selectedSubscriptionIndex.value < plans.value.length - 1)
 const canMoveRechargePrev = computed(() => selectedRechargeIndex.value > 0)
 const canMoveRechargeNext = computed(() => selectedRechargeIndex.value >= 0 && selectedRechargeIndex.value < rechargePackages.value.length - 1)
 const canMoveAccountPrev = computed(() => selectedAccountIndex.value > 0)
-const canMoveAccountNext = computed(() => selectedAccountIndex.value >= 0 && selectedAccountIndex.value < accountProducts.value.length - 1)
+const canMoveAccountNext = computed(() => selectedAccountIndex.value >= 0 && selectedAccountIndex.value < filteredAccountProducts.value.length - 1)
 const selectedActivePromotion = computed(() => selectedProduct.value.activePromotion)
 const orderAmount = computed(() => (
   isSubscriptionMode.value
@@ -586,6 +791,18 @@ const hasOrderPromotionPrice = computed(() => (
 const orderAmountText = computed(() => formatMoney(orderAmount.value))
 const orderOriginalAmountText = computed(() => formatMoney(orderOriginalAmount.value))
 const selectedProductName = computed(() => selectedProduct.value.name)
+const detailsProductInfo = computed(() => (
+  detailsProduct.value.dailyQuota
+  || detailsProduct.value.quotaText
+  || detailsProduct.value.serviceText
+  || ''
+))
+const detailsProductAvailability = computed(() => (
+  detailsProduct.value.availabilityText
+  || detailsProduct.value.stockText
+  || detailsProduct.value.bonusStockText
+  || ''
+))
 const orderSummaryText = computed(() => {
   if (isSubscriptionMode.value) {
     return `${selectedPlan.value.name} · ${selectedDuration.value.label} · ${selectedPlan.value.dailyQuota}`
@@ -639,9 +856,9 @@ const moveRechargeTier = (direction) => {
 }
 
 const moveAccountTier = (direction) => {
-  const targetIndex = getTierTargetIndex(accountProducts.value, selectedAccountIndex.value, direction)
+  const targetIndex = getTierTargetIndex(filteredAccountProducts.value, selectedAccountIndex.value, direction)
   if (targetIndex < 0) return
-  selectAccountProduct(accountProducts.value[targetIndex].id)
+  selectAccountProduct(filteredAccountProducts.value[targetIndex].id)
   scrollTierCardIntoView(accountTierGrid, targetIndex)
 }
 
@@ -725,8 +942,8 @@ const loadPaymentCatalog = async () => {
     if (!rechargePackages.value.some((pack) => pack.id === selectedRechargePackageId.value)) {
       selectedRechargePackageId.value = rechargePackages.value[0]?.id || ''
     }
-    if (!accountProducts.value.some((product) => product.id === selectedAccountProductId.value)) {
-      selectedAccountProductId.value = (accountProducts.value.find((product) => product.recommended) || accountProducts.value[0])?.id || ''
+    if (!filteredAccountProducts.value.some((product) => product.id === selectedAccountProductId.value)) {
+      selectedAccountProductId.value = (filteredAccountProducts.value.find((product) => product.recommended) || filteredAccountProducts.value[0])?.id || ''
     }
   } catch (error) {
     paymentError.value = error.message || '支付款项加载失败'
