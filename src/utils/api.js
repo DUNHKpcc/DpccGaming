@@ -1,5 +1,9 @@
 import { useAuthStore } from '../stores/auth'
 import { normalizeApiBase } from './apiBase.js'
+import {
+  handleAdminSecurityResponse,
+  withAdminSecurityHeaders
+} from './adminSecurity.js'
 
 const envApiBase = typeof import.meta !== 'undefined' && import.meta.env
   ? import.meta.env.VITE_API_BASE_URL
@@ -48,13 +52,17 @@ export async function apiCall(endpoint, options = {}) {
     defaultOptions.headers['Content-Type'] = 'application/json'
   }
 
-  const finalOptions = {
+  let finalOptions = {
     ...defaultOptions,
     ...options,
     headers: {
       ...defaultOptions.headers,
       ...options.headers,
     },
+  }
+
+  if (endpoint.startsWith('/admin')) {
+    finalOptions = withAdminSecurityHeaders(finalOptions)
   }
 
   delete finalOptions.suppressErrorLogging
@@ -70,6 +78,8 @@ export async function apiCall(endpoint, options = {}) {
     const data = contentType.includes('application/json')
       ? await response.json()
       : {}
+
+    handleAdminSecurityResponse(response, data)
 
     // 处理认证错误
     if (isAuthFailureResponse(response, data)) {

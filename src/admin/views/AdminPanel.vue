@@ -83,6 +83,7 @@ import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { useNotificationStore } from '../../stores/notification'
 import { categoryToZh } from '../../utils/category'
+import { adminFetch } from '../../utils/adminSecurity'
 
 const notificationStore = useNotificationStore()
 const pendingGames = ref([])
@@ -99,7 +100,7 @@ const setGamePending = (id, pending) => {
 
 const fetchPendingGames = async () => {
   try {
-    const response = await fetch('/api/admin/games/pending', {
+    const response = await adminFetch('/api/admin/games/pending', {
       credentials: 'include'
     })
 
@@ -121,7 +122,7 @@ const reviewGame = async (gameId, status, reviewNotes = '') => {
 
   setGamePending(gameId, true)
   try {
-    const response = await fetch(`/api/admin/games/${gameId}/review`, {
+    const response = await adminFetch(`/api/admin/games/${gameId}/review`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -192,7 +193,7 @@ const formatDate = (dateString) => {
 
 onMounted(async () => {
   try {
-    const response = await fetch('/api/admin/check-permission', {
+    const response = await adminFetch('/api/admin/check-permission', {
       credentials: 'include'
     })
 

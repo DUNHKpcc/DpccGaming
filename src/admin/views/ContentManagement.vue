@@ -283,6 +283,7 @@ import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { ADMIN_PAGE_SIZE_OPTIONS, DEFAULT_ADMIN_PAGE_SIZE, useAdminPagination } from '../utils/pagination'
 import { useNotificationStore } from '../../stores/notification'
+import { adminFetch } from '../../utils/adminSecurity'
 
 const notificationStore = useNotificationStore()
 const activeTab = ref('blog')
@@ -363,7 +364,7 @@ const readJsonResponse = async (response) => {
 }
 
 const fetchBlogPosts = async () => {
-  const response = await fetch('/api/admin/content/blog-posts', {
+  const response = await adminFetch('/api/admin/content/blog-posts', {
     credentials: 'include'
   })
   const data = await readJsonResponse(response)
@@ -371,7 +372,7 @@ const fetchBlogPosts = async () => {
 }
 
 const fetchDocs = async () => {
-  const response = await fetch('/api/admin/content/docs', {
+  const response = await adminFetch('/api/admin/content/docs', {
     credentials: 'include'
   })
   const data = await readJsonResponse(response)
@@ -555,7 +556,7 @@ const saveBlog = async () => {
   isSavingBlog.value = true
   try {
     const isEdit = Boolean(blogForm.value.id)
-    const response = await fetch(`/api/admin/content/blog-posts${isEdit ? `/${blogForm.value.id}` : ''}`, {
+    const response = await adminFetch(`/api/admin/content/blog-posts${isEdit ? `/${blogForm.value.id}` : ''}`, {
       method: isEdit ? 'PUT' : 'POST',
       credentials: 'include',
       body: appendBlogFormData()
@@ -580,7 +581,7 @@ const saveDoc = async () => {
   isSavingDoc.value = true
   try {
     const isEdit = Boolean(docForm.value.numericId)
-    const response = await fetch(`/api/admin/content/docs${isEdit ? `/${docForm.value.numericId}` : ''}`, {
+    const response = await adminFetch(`/api/admin/content/docs${isEdit ? `/${docForm.value.numericId}` : ''}`, {
       method: isEdit ? 'PUT' : 'POST',
       credentials: 'include',
       body: appendDocFormData()
@@ -603,7 +604,7 @@ const confirmDeleteBlog = async (post) => {
       cancelButtonText: '取消',
       type: 'error'
     })
-    const response = await fetch(`/api/admin/content/blog-posts/${post.id}`, {
+    const response = await adminFetch(`/api/admin/content/blog-posts/${post.id}`, {
       method: 'DELETE',
       credentials: 'include'
     })
@@ -622,7 +623,7 @@ const confirmDeleteDoc = async (doc) => {
       cancelButtonText: '取消',
       type: 'error'
     })
-    const response = await fetch(`/api/admin/content/docs/${doc.numericId}`, {
+    const response = await adminFetch(`/api/admin/content/docs/${doc.numericId}`, {
       method: 'DELETE',
       credentials: 'include'
     })
@@ -655,7 +656,7 @@ const moveDoc = async (doc, direction) => {
   docs.value = nextDocs.map((d, index) => ({ ...d, sortOrder: index * 10 }))
   isReorderingDocs.value = true
   try {
-    const response = await fetch('/api/admin/content/docs/sort', {
+    const response = await adminFetch('/api/admin/content/docs/sort', {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

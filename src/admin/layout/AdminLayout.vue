@@ -54,14 +54,17 @@
         </el-main>
       </el-container>
     </el-container>
+    <AdminReauthDialog v-model="reauthVisible" @verified="handleReauthVerified" />
   </div>
 </template>
 
 <script setup>
 import 'element-plus/dist/index.css'
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 import { useThemeStore } from '../../stores/theme'
+import AdminReauthDialog from '../components/AdminReauthDialog.vue'
 
 defineProps({
   title: {
@@ -79,7 +82,10 @@ defineProps({
 })
 
 const route = useRoute()
+const router = useRouter()
 const themeStore = useThemeStore()
+const reauthVisible = ref(false)
+const reauthReason = ref('')
 
 const themeToggleLabel = computed(() => {
   if (themeStore.themeMode === 'system') return '当前跟随系统，点击切换到亮色模式'
@@ -97,6 +103,29 @@ const toggleTheme = () => {
   themeStore.toggleTheme()
 }
 
+const handleSecurityRequired = (event) => {
+  const code = String(event.detail?.code || '')
+  if (code === 'ADMIN_TOTP_ENROLLMENT_REQUIRED') {
+    router.push({
+      path: '/admin/security',
+      query: { redirect: route.fullPath }
+    })
+    return
+  }
+
+  reauthReason.value = code
+  reauthVisible.value = true
+}
+
+const handleReauthVerified = () => {
+  if (reauthReason.value === 'ADMIN_ELEVATION_REQUIRED') {
+    window.location.reload()
+    return
+  }
+  reauthReason.value = ''
+  ElMessage.success('身份复验完成，请再次执行刚才的操作')
+}
+
 const menuItems = [
   { path: '/admin', label: '审核管理', icon: 'fa fa-check-circle' },
   { path: '/admin/users', label: '用户管理', icon: 'fa fa-users' },
@@ -104,8 +133,12 @@ const menuItems = [
   { path: '/admin/content', label: '内容管理', icon: 'fa fa-newspaper' },
   { path: '/admin/orders', label: '订单管理', icon: 'fa fa-receipt' },
   { path: '/admin/payment-products', label: '支付档位', icon: 'fa fa-credit-card' },
-  { path: '/admin/redeem-codes', label: '兑换码管理', icon: 'fa fa-ticket' }
+  { path: '/admin/redeem-codes', label: '兑换码管理', icon: 'fa fa-ticket' },
+  { path: '/admin/security', label: '安全验证', icon: 'fa fa-shield' }
 ]
+
+window.addEventListener('admin-security-required', handleSecurityRequired)
+onBeforeUnmount(() => window.removeEventListener('admin-security-required', handleSecurityRequired))
 </script>
 
 <style scoped>

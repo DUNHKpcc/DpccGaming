@@ -11,6 +11,7 @@ const ContentManagement = () => import('../admin/views/ContentManagement.vue')
 const RedeemCodeManagement = () => import('../admin/views/RedeemCodeManagement.vue')
 const OrderManagement = () => import('../admin/views/OrderManagement.vue')
 const PaymentProductManagement = () => import('../admin/views/PaymentProductManagement.vue')
+const AdminSecurity = () => import('../admin/views/AdminSecurity.vue')
 const CodingMode = () => import('../views/CodingMode.vue')
 const DocsPlaceholder = () => import('../views/DocsPlaceholder.vue')
 const CookiePolicy = () => import('../views/CookiePolicy.vue')
@@ -81,6 +82,12 @@ const routes = [
     name: 'PaymentProductManagement',
     component: PaymentProductManagement,
     meta: { requiresAuth: true, requiresAdmin: true, hideSidebar: true, hideTopbar: true, hideOverlays: true }
+  },
+  {
+    path: '/admin/security',
+    name: 'AdminSecurity',
+    component: AdminSecurity,
+    meta: { requiresAuth: true, requiresAdmin: true, skipAdminElevation: true, hideSidebar: true, hideTopbar: true, hideOverlays: true }
   },
   {
     path: '/coding/:id',
@@ -215,7 +222,23 @@ router.beforeEach(async (to, from, next) => {
         return
       }
 
-      // 权限验证通过，继续访问
+      if (!to.meta.skipAdminElevation) {
+        const securityResponse = await fetch('/api/admin/security/status', {
+          credentials: 'include'
+        })
+        const securityStatus = securityResponse.ok
+          ? await securityResponse.json()
+          : null
+
+        if (!securityStatus?.elevated) {
+          next({
+            path: '/admin/security',
+            query: { redirect: to.fullPath }
+          })
+          return
+        }
+      }
+
       next()
     } catch (error) {
       console.error('权限检查失败:', error)

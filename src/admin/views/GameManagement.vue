@@ -106,6 +106,7 @@ import AdminLayout from '../layout/AdminLayout.vue'
 import { ADMIN_PAGE_SIZE_OPTIONS, DEFAULT_ADMIN_PAGE_SIZE, useAdminPagination } from '../utils/pagination'
 import { useNotificationStore } from '../../stores/notification'
 import { categoryToCode, categoryToZh } from '../../utils/category'
+import { adminFetch } from '../../utils/adminSecurity'
 
 const notificationStore = useNotificationStore()
 const games = ref([])
@@ -151,7 +152,7 @@ const {
 
 const fetchGames = async () => {
   try {
-    const response = await fetch('/api/admin/games/all', {
+    const response = await adminFetch('/api/admin/games/all', {
       credentials: 'include'
     })
 
@@ -173,7 +174,7 @@ const deleteGame = async (game) => {
 
   setGamePending(game.game_id, true)
   try {
-    const response = await fetch(`/api/admin/games/${game.game_id}/delete`, {
+    const response = await adminFetch(`/api/admin/games/${game.game_id}/delete`, {
       method: 'DELETE',
       credentials: 'include'
     })
@@ -228,7 +229,7 @@ const formatDate = (dateString) => {
 
 onMounted(async () => {
   try {
-    const response = await fetch('/api/admin/check-permission', {
+    const response = await adminFetch('/api/admin/check-permission', {
       credentials: 'include'
     })
 

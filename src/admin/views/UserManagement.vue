@@ -130,6 +130,7 @@ import { ElMessageBox } from 'element-plus'
 import AdminLayout from '../layout/AdminLayout.vue'
 import { ADMIN_PAGE_SIZE_OPTIONS, DEFAULT_ADMIN_PAGE_SIZE, useAdminPagination } from '../utils/pagination'
 import { useNotificationStore } from '../../stores/notification'
+import { adminFetch } from '../../utils/adminSecurity'
 
 const notificationStore = useNotificationStore()
 const users = ref([])
@@ -178,7 +179,7 @@ const roleOptions = [
 
 const fetchUsers = async () => {
   try {
-    const response = await fetch('/api/admin/users', {
+    const response = await adminFetch('/api/admin/users', {
       credentials: 'include'
     })
 
@@ -216,7 +217,7 @@ const changeUserRole = async (user, newRole) => {
 
   setUserPending(user.id, true)
   try {
-    const response = await fetch(`/api/admin/users/${user.id}/role`, {
+    const response = await adminFetch(`/api/admin/users/${user.id}/role`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -300,7 +301,7 @@ const banUser = async (user) => {
 
   setUserPending(user.id, true)
   try {
-    const response = await fetch(`/api/admin/users/${user.id}/ban`, {
+    const response = await adminFetch(`/api/admin/users/${user.id}/ban`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -341,7 +342,7 @@ const unbanUser = async (user) => {
 
   setUserPending(user.id, true)
   try {
-    const response = await fetch(`/api/admin/users/${user.id}/ban`, {
+    const response = await adminFetch(`/api/admin/users/${user.id}/ban`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -372,7 +373,7 @@ const deleteUser = async (user) => {
 
   setUserPending(user.id, true)
   try {
-    const response = await fetch(`/api/admin/users/${user.id}/delete`, {
+    const response = await adminFetch(`/api/admin/users/${user.id}/delete`, {
       method: 'DELETE',
       credentials: 'include'
     })
