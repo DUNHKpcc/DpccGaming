@@ -53,7 +53,11 @@ const isFullscreen = computed(() => modalStore.isFullscreen)
 const isDesktop = ref(true)
 const isDevPreview = import.meta.env.DEV
 
-const showSidebar = computed(() => !route.meta?.hideSidebar)
+const showSidebar = computed(() => {
+  if (route.meta?.hideSidebar) return false
+  if (route.meta?.hideDesktopSidebar) return !isDesktop.value
+  return true
+})
 const showTopbar = computed(() => {
   if (isDesktop.value) {
     return !route.meta?.hideTopbar

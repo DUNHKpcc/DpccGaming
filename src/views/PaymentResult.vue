@@ -6,60 +6,51 @@
           <p>DPCC API</p>
           <h1>{{ titleText }}</h1>
         </div>
-        <RouterLink to="/payment" class="ghost-link">返回支付页</RouterLink>
+        <RouterLink to="/payment" class="order-dialog-secondary">返回支付页</RouterLink>
       </header>
 
-      <section class="status-band" :class="statusTone">
-        <div class="status-mark">
+      <section class="amount-box result-status" :class="statusTone">
+        <div class="result-status-mark">
           <i :class="statusIcon" aria-hidden="true"></i>
         </div>
         <div>
-          <strong :class="{ 'needs-username-heading': needsApiUsername }">{{ statusHeading }}</strong>
-          <span>{{ statusDescription }}</span>
+          <span>支付状态</span>
+          <strong :class="{ 'needs-username-heading': needsApiUsername }">{{ paymentStatusText }}</strong>
+          <p>{{ statusHeading }} · {{ statusDescription }}</p>
         </div>
       </section>
 
-      <section class="result-grid">
-        <div class="result-panel">
-          <h2>订单信息</h2>
-          <dl>
-            <div>
-              <dt>订单号</dt>
-              <dd class="order-number-value">
-                <span>{{ orderNo || '等待支付宝回传订单号' }}</span>
-                <button v-if="orderNo" type="button" @click="copyOrderNo">复制</button>
-              </dd>
-            </div>
-            <div>
-              <dt>支付状态</dt>
-              <dd>{{ paymentStatusText }}</dd>
-            </div>
-            <div v-if="orderResult.productName">
-              <dt>商品</dt>
-              <dd>{{ orderResult.productName }}</dd>
-            </div>
-            <div v-if="orderResult.createdAt">
-              <dt>下单时间</dt>
-              <dd>{{ formattedCreatedAt }}</dd>
-            </div>
-            <div v-if="orderResult.amount">
-              <dt>金额</dt>
-              <dd>¥{{ orderResult.amount }}</dd>
-            </div>
-            <div v-if="isServiceOrder">
-              <dt>{{ accountFieldTitle }}</dt>
-              <dd>{{ apiUsernameText }}</dd>
-            </div>
-          </dl>
-          <button type="button" class="primary-action" :disabled="isLoading || !orderNo" @click="loadOrderResult">
-            {{ isLoading ? '正在检查...' : '重新检查支付结果' }}
-          </button>
-          <RouterLink v-if="isPaymentFinalIncomplete" to="/payment" class="secondary-action">重新发起支付</RouterLink>
-        </div>
+      <section class="order-details result-order-details">
+        <h3>订单信息</h3>
+        <dl>
+          <div>
+            <dt>订单号</dt>
+            <dd class="order-number-value">
+              <span>{{ orderNo || '等待支付宝回传订单号' }}</span>
+              <button v-if="orderNo" type="button" @click="copyOrderNo">复制</button>
+            </dd>
+          </div>
+          <div v-if="orderResult.productName">
+            <dt>商品</dt>
+            <dd>{{ orderResult.productName }}</dd>
+          </div>
+          <div v-if="orderResult.createdAt">
+            <dt>下单时间</dt>
+            <dd>{{ formattedCreatedAt }}</dd>
+          </div>
+          <div v-if="orderResult.amount">
+            <dt>金额</dt>
+            <dd>¥{{ orderResult.amount }}</dd>
+          </div>
+          <div v-if="isServiceOrder">
+            <dt>{{ accountFieldTitle }}</dt>
+            <dd>{{ apiUsernameText }}</dd>
+          </div>
+        </dl>
 
-        <div class="result-panel redeem-panel">
+        <div class="result-section">
+          <h3>{{ isServiceOrder ? accountPanelTitle : '兑换码' }}</h3>
           <template v-if="isServiceOrder">
-            <h2>{{ accountPanelTitle }}</h2>
             <form v-if="needsApiUsername" class="api-username-form" @submit.prevent="submitApiUsername">
               <label>
                 {{ accountFieldTitle }}
@@ -80,7 +71,6 @@
             <p v-if="apiUsernameMessage" class="success-message">{{ apiUsernameMessage }}</p>
 
             <div v-if="isSubscriptionPaid && subscriptionBonusRedeemCodes.length" class="subscription-bonus-codes">
-              <h3>赠送金兑换码</h3>
               <div
                 v-for="item in subscriptionBonusRedeemCodes"
                 :key="item.label"
@@ -90,23 +80,13 @@
                 <code>{{ item.code }}</code>
                 <button type="button" @click="copyRedeemCode(item.code)">复制</button>
               </div>
-              <a
-                class="redeem-link"
-                :href="redeemUrl"
-                target="_blank"
-                rel="noopener"
-              >
-                前往兑换网站
-                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-              </a>
             </div>
-            <p v-else-if="isSubscriptionManualRequired" class="muted-copy manual-copy">
+            <p v-else-if="isSubscriptionManualRequired" class="muted-copy">
               赠送码当前库存不足，订单已转入人工补发。请先提交 DPCC-API 用户名，并通过售后微信提供订单号。
             </p>
           </template>
 
           <template v-else>
-            <h2>兑换码</h2>
             <template v-if="canRedeem">
               <div
                 v-for="item in redeemCodes"
@@ -119,28 +99,29 @@
               </div>
             </template>
             <p v-else class="muted-copy">{{ redeemPlaceholderText }}</p>
-
-            <a
-              class="redeem-link"
-              :href="redeemUrl"
-              target="_blank"
-              rel="noopener"
-            >
-              前往兑换网站
-              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-            </a>
           </template>
 
-          <div class="support-block">
-            <div>
-              <h2>售后和技术支持</h2>
-              <p>{{ supportCopy }}</p>
-            </div>
+          <a class="redeem-link" :href="redeemUrl" target="_blank" rel="noopener">
+            前往兑换网站
+            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          </a>
+        </div>
+
+        <div class="support-block">
+          <div>
+            <h3>售后和技术支持</h3>
+            <p>{{ supportCopy }}</p>
           </div>
         </div>
       </section>
 
-      <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+      <div class="order-dialog-actions">
+        <RouterLink to="/payment" class="order-dialog-secondary">返回支付页</RouterLink>
+        <button type="button" class="pay-button" :disabled="isLoading || !orderNo" @click="loadOrderResult">
+          {{ isLoading ? '正在检查...' : '重新检查支付结果' }}
+        </button>
+      </div>
+      <p v-if="errorMessage" class="payment-error">{{ errorMessage }}</p>
     </main>
   </section>
 </template>
@@ -480,198 +461,163 @@ onBeforeUnmount(() => {
   min-height: calc(100vh - 4rem);
   background: var(--bg-primary);
   color: var(--text-primary);
-  padding: 3rem 1.5rem;
+  padding: clamp(1.25rem, 4vw, 3rem);
 }
 
 .result-shell {
-  width: min(1080px, 100%);
-  margin: 0 auto;
-}
-
-.result-header,
-.status-band,
-.result-grid,
-.redeem-code-row,
-.support-block {
+  width: min(30rem, 100%);
+  margin: 3.65rem auto 0;
   display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.15rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 0.5rem;
+  background: var(--bg-secondary);
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.12);
 }
 
 .result-header {
-  align-items: end;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.5rem;
 }
 
 .result-header p,
-.result-header h1,
-.result-panel h2,
-.result-panel h3,
-.api-username-form label,
-.success-message {
+.result-header h1 {
   margin: 0;
 }
 
 .result-header p {
   color: var(--text-tertiary);
+  font-size: 0.78rem;
   font-weight: 900;
 }
 
 .result-header h1 {
   margin-top: 0.2rem;
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  line-height: 1;
+  font-size: 1.25rem;
+  line-height: 1.2;
 }
 
-.ghost-link,
-.primary-action,
-.secondary-action,
-.redeem-code-row button,
-.api-username-form button,
-.order-number-value button,
-.redeem-link {
+.result-header .order-dialog-secondary {
+  min-height: 2.5rem;
+  flex: 0 0 auto;
+  padding: 0 0.8rem;
+  white-space: nowrap;
+}
+
+.amount-box {
+  border: 1px solid var(--text-primary);
   border-radius: 0.5rem;
+  background: var(--bg-tertiary);
+  padding: 0.85rem 0.9rem;
+}
+
+.result-status {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.result-status.success {
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.result-status.warning {
+  border-color: rgba(245, 158, 11, 0.6);
+}
+
+.result-status.error {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.result-status-mark {
+  width: 2.6rem;
+  height: 2.6rem;
+  flex: 0 0 2.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.result-status span {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
   font-weight: 900;
 }
 
-.ghost-link {
-  border: 1px solid var(--border-primary);
-  color: var(--text-primary);
-  padding: 0.75rem 1rem;
-  text-decoration: none;
-}
-
-.status-band {
-  align-items: center;
-  gap: 1rem;
-  border: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-}
-
-.status-band.success {
-  border-color: rgba(34, 197, 94, 0.45);
-}
-
-.status-band.warning {
-  border-color: rgba(245, 158, 11, 0.5);
-}
-
-.status-band.error {
-  border-color: rgba(239, 68, 68, 0.5);
-}
-
-.status-mark {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 999px;
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  display: grid;
-  place-items: center;
-}
-
-.status-band strong,
-.status-band span {
+.result-status strong {
   display: block;
+  margin-top: 0.2rem;
+  font-size: 1.35rem;
+  line-height: 1.2;
 }
 
-.status-band strong {
-  font-size: 1.25rem;
-}
-
-.status-band strong.needs-username-heading {
+.result-status strong.needs-username-heading {
   color: #ef4444;
 }
 
-.status-band span {
-  margin-top: 0.25rem;
-  color: var(--text-tertiary);
+.result-status p {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
   font-weight: 700;
+  line-height: 1.5;
 }
 
-.result-grid {
-  align-items: stretch;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.result-panel {
+.order-details {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   border: 1px solid var(--border-primary);
-  background: var(--bg-secondary);
-  border-radius: 0.75rem;
-  padding: 1.25rem;
+  border-radius: 0.5rem;
+  padding: 0.85rem 0.9rem;
 }
 
-.support-block {
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1.25rem;
-  padding: 1rem 0 0;
-  border-top: 1px solid var(--border-primary);
-}
-
-.result-panel {
-  flex: 1 1 20rem;
-}
-
-.result-panel h2,
-.support-block h2 {
+.result-order-details h3 {
+  margin: 0;
   font-size: 1rem;
 }
 
-.subscription-bonus-codes {
-  margin-top: 1.25rem;
+.result-order-details dl {
+  display: grid;
+  gap: 0.46rem;
+  margin: 0.65rem 0 0;
 }
 
-.subscription-bonus-codes h3 {
-  font-size: 0.92rem;
+.result-order-details dl > div {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: 0.75rem;
 }
 
-.manual-copy {
-  margin-top: 1rem;
-}
-
-.result-panel dl {
-  margin: 1rem 0;
-}
-
-.result-panel dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  border-top: 1px solid var(--border-primary);
-  padding: 0.75rem 0;
-}
-
-.result-panel dt,
-.muted-copy,
-.support-block p {
-  color: var(--text-tertiary);
-  font-weight: 700;
-}
-
-.result-panel dd {
+.result-order-details dt,
+.result-order-details dd {
   margin: 0;
-  text-align: right;
-  font-weight: 900;
-  word-break: break-all;
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
-.primary-action,
-.secondary-action,
-.redeem-code-row button,
-.api-username-form button,
-.redeem-link {
-  min-height: 2.75rem;
-  border: 0;
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  padding: 0 1rem;
-  cursor: pointer;
+.result-order-details dt {
+  color: var(--text-tertiary);
+}
+
+.result-order-details dd {
+  color: var(--text-secondary);
+  font-weight: 800;
+  text-align: right;
+  word-break: break-word;
+}
+
+.result-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-primary);
 }
 
 .order-number-value {
@@ -682,55 +628,55 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-.order-number-value button {
-  min-height: 2.1rem;
+.order-number-value button,
+.redeem-code-row button,
+.api-username-form button {
+  min-height: 2.4rem;
   border: 0;
+  border-radius: 0.5rem;
   background: var(--text-primary);
   color: var(--bg-primary);
   padding: 0 0.7rem;
   cursor: pointer;
-}
-
-.secondary-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 0.75rem;
-  border: 1px solid var(--border-primary);
-  background: transparent;
-  color: var(--text-primary);
-  text-decoration: none;
-}
-
-.primary-action:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+  font-weight: 900;
 }
 
 .redeem-code-row {
+  display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin: 1rem 0;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
 }
 
 .redeem-code-label {
-  width: 5rem;
+  width: 4.5rem;
   flex: 0 0 auto;
   color: var(--text-tertiary);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 900;
+}
+
+.redeem-code-row code {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--border-primary);
+  border-radius: 0.5rem;
+  padding: 0.65rem;
+  font-size: 0.86rem;
+  word-break: break-all;
 }
 
 .api-username-form {
   display: grid;
-  gap: 0.85rem;
-  margin-top: 1rem;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
 }
 
 .api-username-form label {
   display: grid;
   gap: 0.45rem;
   color: var(--text-tertiary);
+  font-size: 0.84rem;
   font-weight: 800;
 }
 
@@ -745,44 +691,104 @@ onBeforeUnmount(() => {
   font: inherit;
 }
 
-.api-username-form button:disabled {
+.api-username-form button:disabled,
+.pay-button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.success-message {
-  margin-top: 0.85rem;
-  color: #22c55e;
-  font-weight: 800;
+.muted-copy,
+.support-block p {
+  margin: 0.75rem 0 0;
+  color: var(--text-tertiary);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
-.redeem-code-row code {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--border-primary);
-  border-radius: 0.5rem;
-  padding: 0.85rem;
-  font-size: 1rem;
-  word-break: break-all;
+.success-message {
+  margin: 0.75rem 0 0;
+  color: #22c55e;
+  font-size: 0.84rem;
+  font-weight: 800;
 }
 
 .redeem-link {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  text-decoration: none;
-}
-
-.error-message {
-  color: #ef4444;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+  font-size: 0.84rem;
   font-weight: 800;
 }
 
+.redeem-link:hover {
+  color: var(--text-primary);
+}
+
+.support-block {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-primary);
+}
+
+.order-dialog-actions {
+  display: grid;
+  grid-template-columns: 0.75fr 1.5fr;
+  gap: 0.65rem;
+}
+
+.order-dialog-secondary,
+.pay-button {
+  min-height: 3.1rem;
+  border-radius: 0.5rem;
+  font-weight: 900;
+}
+
+.order-dialog-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.pay-button {
+  border: 0;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  cursor: pointer;
+}
+
+.payment-error {
+  margin: 0;
+  color: #ef4444;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 @media (max-width: 720px) {
-  .result-header,
-  .support-block {
-    align-items: flex-start;
-    flex-direction: column;
+  .payment-result-page {
+    padding: 1rem;
+  }
+
+  .result-shell {
+    margin-top: 3.65rem;
+    padding: 1rem;
+  }
+
+  .result-header {
+    align-items: center;
+  }
+
+  .order-dialog-actions {
+    grid-template-columns: 1fr;
   }
 }
 </style>

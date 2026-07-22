@@ -115,7 +115,7 @@ const routes = [
     path: '/payment',
     name: 'Payment',
     component: Payment,
-    meta: { hideSidebar: true }
+    meta: { hideDesktopSidebar: true }
   },
   {
     path: '/payment/orders',

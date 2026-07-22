@@ -237,17 +237,26 @@
 }
 
 .account-category-filter {
-  position: absolute;
-  top: -3rem;
-  left: 50%;
-  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  max-width: 100%;
   gap: 0.55rem;
   min-height: 2.65rem;
-  margin: 0;
-  transform: translateX(-50%);
+  margin: 0 0 0.45rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.account-category-filter::-webkit-scrollbar {
+  display: none;
+}
+
+.account-category-filter + .tier-control-bar {
+  margin-top: 0;
 }
 
 .account-category-button {
@@ -256,6 +265,7 @@
   justify-content: center;
   width: 2.4rem;
   height: 2.4rem;
+  flex: 0 0 2.4rem;
   padding: 0.36rem;
   border: 2px solid transparent;
   border-radius: 0.4rem;
@@ -1008,6 +1018,30 @@
 
   .product-switch {
     width: 100%;
+  }
+
+  .product-switch button {
+    padding: 0.25rem;
+    font-size: 0.82rem;
+    line-height: 1.2;
+  }
+
+  .account-category-filter {
+    justify-content: flex-start;
+    padding: 0.1rem 0 0.35rem;
+  }
+
+  .tier-control-bar {
+    min-width: 0;
+  }
+
+  .recharge-scroll-hint {
+    min-width: 0;
+    line-height: 1.35;
+  }
+
+  .tier-scroll-grid {
+    gap: 0.75rem;
   }
 
   .checkout-trigger {

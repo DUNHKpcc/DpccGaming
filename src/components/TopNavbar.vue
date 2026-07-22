@@ -26,7 +26,7 @@
             BLOG
           </router-link>
           <router-link to="/aidocs" class="nav-link nav-link--optional" active-class="nav-link-active">
-            AI DOCS
+            DOCS
           </router-link>
           <a href="https://api.dpccgaming.xyz" class="nav-link nav-link--api">
             DPCC API
