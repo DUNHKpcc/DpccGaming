@@ -61,6 +61,12 @@
                 <small>{{ row.skuId }}</small>
               </template>
             </el-table-column>
+            <el-table-column label="AI" width="84" align="center">
+              <template #default="{ row }">
+                <img v-if="aiIconUrl(row.aiIcon)" class="product-ai-icon" :src="aiIconUrl(row.aiIcon)" :alt="aiIconLabel(row.aiIcon)" />
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
             <el-table-column label="金额" width="120">
               <template #default="{ row }">
                 <strong>¥{{ row.basePrice }}</strong>
@@ -209,6 +215,14 @@
               <el-form-item label="卡片角标">
                 <el-input v-model="productForm.cardBadge" placeholder="限时优惠 / 热门档位" />
               </el-form-item>
+              <el-form-item label="AI 图标">
+                <div class="product-ai-icon-field">
+                  <el-select v-model="productForm.aiIcon" class="product-full-control" placeholder="不显示 AI 图标" clearable>
+                    <el-option v-for="option in aiIconOptions" :key="option.value" :label="option.label" :value="option.value" />
+                  </el-select>
+                  <img v-if="aiIconUrl(productForm.aiIcon)" class="product-ai-icon" :src="aiIconUrl(productForm.aiIcon)" :alt="aiIconLabel(productForm.aiIcon)" />
+                </div>
+              </el-form-item>
               <el-form-item label="卡片文案">
                 <el-input v-model="productForm.cardFeaturesText" type="textarea" :rows="4" resize="vertical" placeholder="一行一个卖点" />
               </el-form-item>
@@ -320,6 +334,7 @@ const emptyProductForm = () => ({
   bonusQuotaUsd: 30,
   recommended: false,
   cardBadge: '',
+  aiIcon: '',
   cardFeaturesText: '',
   orderNote: '',
   sortOrder: 0,
@@ -357,6 +372,20 @@ const filters = reactive({
   productType: '',
   status: ''
 })
+
+const aiIconOptions = [
+  { value: 'chatgpt', label: 'ChatGPT' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'grok', label: 'Grok' }
+]
+const aiIconUrl = (aiIcon) => ({
+  chatgpt: '/Ai/ChatGPT.svg',
+  claude: '/Ai/Claude.png',
+  gemini: '/Ai/Gemini.svg',
+  grok: '/Ai/grok.png'
+}[aiIcon] || '')
+const aiIconLabel = (aiIcon) => aiIconOptions.find((option) => option.value === aiIcon)?.label || ''
 
 const productSections = computed(() => ([
   {
@@ -443,6 +472,7 @@ const openProductDrawer = (product = null) => {
     bonusQuotaUsd: Number((product.baseBonusQuotaUsd ?? product.bonusQuotaUsd) || 0),
     recommended: Boolean(product.recommended),
     cardBadge: product.cardBadge || '',
+    aiIcon: product.aiIcon || '',
     cardFeaturesText: (product.features || []).join('\n'),
     orderNote: product.orderNote || '',
     sortOrder: Number(product.sortOrder || 0),
@@ -642,6 +672,18 @@ onMounted(fetchProducts)
 .product-table strong,
 .product-table small {
   display: block;
+}
+
+.product-ai-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+}
+
+.product-ai-icon-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .product-table small,

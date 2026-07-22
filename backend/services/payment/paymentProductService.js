@@ -24,6 +24,18 @@ const {
 } = require('./paymentClaimService');
 const { toMysqlDateTime } = require('./paymentUtils');
 
+const AI_ICON_KEYS = new Set(['chatgpt', 'claude', 'gemini', 'grok']);
+
+const normalizeAiIcon = (value = '') => {
+  const aiIcon = String(value || '').trim().toLowerCase();
+  if (aiIcon && !AI_ICON_KEYS.has(aiIcon)) {
+    const error = new Error('AI 图标无效');
+    error.statusCode = 400;
+    throw error;
+  }
+  return aiIcon;
+};
+
 const toDbProduct = (product = {}) => {
   const productType = normalizeProductType(product.productType);
   return {
@@ -45,6 +57,7 @@ const toDbProduct = (product = {}) => {
     bonusQuotaUsd: productType === 'account' ? '0.00' : normalizeQuota(product.bonusQuotaUsd),
     recommended: product.recommended ? 1 : 0,
     cardBadge: String(product.cardBadge || '').trim(),
+    aiIcon: normalizeAiIcon(product.aiIcon),
     cardFeaturesJson: stringifyJsonArray(product.cardFeatures),
     orderNote: String(product.orderNote || '').trim(),
     sortOrder: Number.isInteger(Number(product.sortOrder)) ? Number(product.sortOrder) : 0,
@@ -234,6 +247,7 @@ const mapProductRow = (row = {}, options = {}) => {
     bonusQuotaUsd,
     recommended: Boolean(row.recommended),
     cardBadge: row.card_badge || '',
+    aiIcon: row.ai_icon || '',
     features: parseJsonArray(row.card_features_json),
     orderNote: row.order_note || '',
     serviceText: productType === 'account' ? row.description || '账号与代充服务' : '',
@@ -395,6 +409,7 @@ const copyAdminPaymentProduct = async ({ id } = {}, pool = getPool()) => {
     bonusQuotaUsd: source.bonus_quota_usd,
     recommended: false,
     cardBadge: source.card_badge,
+    aiIcon: source.ai_icon,
     cardFeatures: parseJsonArray(source.card_features_json),
     orderNote: source.order_note,
     sortOrder: Number(source.sort_order || 0) + 1,

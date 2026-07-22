@@ -340,6 +340,7 @@ const ensurePaymentTables = async (pool) => {
           bonus_quota_usd DECIMAL(10,2) NOT NULL DEFAULT 0.00,
           recommended TINYINT(1) NOT NULL DEFAULT 0,
           card_badge VARCHAR(64) DEFAULT NULL,
+          ai_icon VARCHAR(24) DEFAULT NULL,
           card_features_json TEXT,
           order_note VARCHAR(255) DEFAULT NULL,
           sort_order INT NOT NULL DEFAULT 0,
@@ -389,6 +390,11 @@ const ensurePaymentTables = async (pool) => {
       ]);
 
       await pool.execute('ALTER TABLE payment_orders ADD COLUMN expires_at DATETIME DEFAULT NULL')
+        .catch((error) => {
+          if (error?.code === 'ER_DUP_FIELDNAME') return null;
+          throw error;
+        });
+      await pool.execute('ALTER TABLE payment_products ADD COLUMN ai_icon VARCHAR(24) DEFAULT NULL AFTER card_badge')
         .catch((error) => {
           if (error?.code === 'ER_DUP_FIELDNAME') return null;
           throw error;
@@ -593,10 +599,10 @@ const createPaymentProduct = async (executor, product = {}) => executor.execute(
       (
         product_type, sku_id, name, subject, description, base_price,
         currency, base_quota_usd, daily_quota_usd, main_redeem_sku_id,
-        bonus_redeem_sku_id, bonus_quota_usd, recommended, card_badge,
+        bonus_redeem_sku_id, bonus_quota_usd, recommended, card_badge, ai_icon,
         card_features_json, order_note, sort_order, status
       )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   [
     product.productType,
@@ -613,6 +619,7 @@ const createPaymentProduct = async (executor, product = {}) => executor.execute(
     product.bonusQuotaUsd || '0.00',
     product.recommended ? 1 : 0,
     product.cardBadge || null,
+    product.aiIcon || null,
     product.cardFeaturesJson || null,
     product.orderNote || null,
     product.sortOrder || 0,
@@ -636,6 +643,7 @@ const updatePaymentProduct = async (executor, product = {}) => executor.execute(
         bonus_quota_usd = ?,
         recommended = ?,
         card_badge = ?,
+        ai_icon = ?,
         card_features_json = ?,
         order_note = ?,
         sort_order = ?,
@@ -656,6 +664,7 @@ const updatePaymentProduct = async (executor, product = {}) => executor.execute(
     product.bonusQuotaUsd || '0.00',
     product.recommended ? 1 : 0,
     product.cardBadge || null,
+    product.aiIcon || null,
     product.cardFeaturesJson || null,
     product.orderNote || null,
     product.sortOrder || 0,
