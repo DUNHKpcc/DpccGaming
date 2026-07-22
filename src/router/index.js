@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
-import BlueprintRouteShell from '../views/BlueprintRouteShell.vue'
 
 const Games = () => import('../views/Games.vue')
 const Blog = () => import('../views/Blog.vue')
@@ -14,7 +13,6 @@ const OrderManagement = () => import('../admin/views/OrderManagement.vue')
 const PaymentProductManagement = () => import('../admin/views/PaymentProductManagement.vue')
 const CodingMode = () => import('../views/CodingMode.vue')
 const DocsPlaceholder = () => import('../views/DocsPlaceholder.vue')
-const DiscussionMode = () => import('../views/DiscussionMode.vue')
 const CookiePolicy = () => import('../views/CookiePolicy.vue')
 const Payment = () => import('../views/Payment.vue')
 const PaymentOrders = () => import('../views/PaymentOrders.vue')
@@ -36,12 +34,6 @@ const routes = [
     path: '/blog',
     name: 'Blog',
     component: Blog
-  },
-  {
-    path: '/blueprint',
-    name: 'BlueprintMode',
-    component: BlueprintRouteShell,
-    meta: { hideSidebar: true, hideTopbar: true, hideOverlays: true }
   },
   {
     path: '/account',
@@ -96,13 +88,6 @@ const routes = [
     component: CodingMode,
     props: true,
     meta: { hideSidebar: true, hideTopbar: true }
-  },
-  {
-    path: '/discussion/:id?',
-    name: 'DiscussionMode',
-    component: DiscussionMode,
-    props: true,
-    meta: { hideSidebar: true }
   },
   {
     path: '/aidocs',

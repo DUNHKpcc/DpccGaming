@@ -32,35 +32,6 @@
       </div>
     </section>
 
-    <section class="account-history-section">
-      <div class="account-history-head">
-        <div>
-          <h3>蓝图创造历史</h3>
-          <p>最近保存过的蓝图种子</p>
-        </div>
-        <RouterLink to="/blueprint" class="account-history-link">进入蓝图</RouterLink>
-      </div>
-
-      <div class="account-history-list">
-        <div v-if="blueprintsLoading" class="account-history-empty">蓝图加载中...</div>
-        <div v-else-if="blueprintsError" class="account-history-empty">{{ blueprintsError }}</div>
-        <div v-else-if="!recentBlueprints.length" class="account-history-empty">暂无蓝图记录</div>
-        <template v-else>
-          <RouterLink
-            v-for="blueprint in recentBlueprints"
-            :key="blueprint.seed"
-            :to="{ name: 'BlueprintMode', query: { seed: blueprint.seed } }"
-            class="account-history-row"
-          >
-            <span class="account-history-row-main">
-              <strong>{{ blueprint.title || blueprint.name || '未命名蓝图' }}</strong>
-              <small>{{ blueprint.seed }} · {{ formatPaymentDateTime(blueprint.updatedAt || blueprint.createdAt) }}</small>
-            </span>
-            <span class="account-history-chip">{{ blueprint.ownership === 'source' ? '原创' : '副本' }}</span>
-          </RouterLink>
-        </template>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -85,12 +56,8 @@ const props = defineProps({
 const orders = ref([])
 const ordersLoading = ref(false)
 const ordersError = ref('')
-const blueprints = ref([])
-const blueprintsLoading = ref(false)
-const blueprintsError = ref('')
 
 const recentOrders = computed(() => orders.value.slice(0, 5))
-const recentBlueprints = computed(() => blueprints.value.slice(0, 5))
 
 const loadOrders = async () => {
   if (!props.isLoggedIn) {
@@ -114,33 +81,10 @@ const loadOrders = async () => {
   }
 }
 
-const loadBlueprints = async () => {
-  if (!props.isLoggedIn) {
-    blueprints.value = []
-    return
-  }
-
-  blueprintsLoading.value = true
-  blueprintsError.value = ''
-  try {
-    const payload = await apiCall('/blueprints/recent?limit=5', {
-      method: 'GET',
-      suppressErrorLogging: true
-    })
-    blueprints.value = Array.isArray(payload?.blueprints) ? payload.blueprints : []
-  } catch (error) {
-    blueprints.value = []
-    blueprintsError.value = error?.message || '蓝图历史暂时不可用'
-  } finally {
-    blueprintsLoading.value = false
-  }
-}
-
 watch(
   () => props.isLoggedIn,
   () => {
     loadOrders()
-    loadBlueprints()
   },
   { immediate: true }
 )
@@ -152,7 +96,7 @@ watch(
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: clamp(240px, 35vh, 360px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 0.9rem;
 }
 

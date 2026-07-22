@@ -228,22 +228,6 @@
                     <span class="text-xs text-white/80">{{ friends.length }} 人</span>
                     <button
                       type="button"
-                      class="friend-add-open-btn secondary"
-                      @click="openGroupModal"
-                    >
-                      <i class="fa fa-users"></i>
-                      <span>拉群</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="friend-add-open-btn secondary"
-                      @click="openGroupInviteModal"
-                    >
-                      <i class="fa fa-link"></i>
-                      <span>群邀请</span>
-                    </button>
-                    <button
-                      type="button"
                       class="friend-add-open-btn"
                       @click="openFriendModal"
                     >
@@ -261,12 +245,6 @@
                       v-for="friend in friends"
                       :key="friend.id"
                       class="friend-row"
-                      :class="{ 'is-opening': isOpeningFriendChat(friend.id) }"
-                      role="button"
-                      tabindex="0"
-                      @click="openFriendDiscussion(friend)"
-                      @keyup.enter="openFriendDiscussion(friend)"
-                      @keyup.space.prevent="openFriendDiscussion(friend)"
                     >
                       <AccountUserIdentity
                         :avatar-url="getAvatarUrl(friend.avatar_url)"
@@ -275,9 +253,6 @@
                         :subtitle="friend.email || '未设置邮箱'"
                         @avatar-error="handleAvatarError"
                       />
-                      <div class="friend-chat-indicator" :title="isOpeningFriendChat(friend.id) ? '正在打开协作聊天' : '进入协作聊天'">
-                        <i class="fa" :class="isOpeningFriendChat(friend.id) ? 'fa-spinner fa-spin' : 'fa-comments'"></i>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -427,115 +402,6 @@
                   </section>
             </AccountModalShell>
 
-            <AccountModalShell
-              v-if="groupInviteModalVisible"
-              title="填写群邀请链接"
-              modal-class="group-invite-modal"
-              body-class="group-invite-modal-body"
-              @close="closeGroupInviteModal"
-            >
-              <section class="friend-modal-section">
-                <div class="friend-modal-title-row">
-                  <h4>加入群聊</h4>
-                </div>
-                <div class="friend-muted-text">
-                  粘贴完整的群邀请链接后即可加入，对应房间会在验证成功后自动打开。
-                </div>
-                <div class="friend-redeem-row group-invite-redeem-row">
-                  <input
-                    v-model.trim="groupInviteInput"
-                    type="text"
-                    placeholder="输入完整群邀请链接"
-                    @keyup.enter="redeemGroupInvite"
-                  />
-                  <button
-                    type="button"
-                    class="friend-primary-btn"
-                    :disabled="groupInviteRedeeming"
-                    @click="redeemGroupInvite"
-                  >
-                    {{ groupInviteRedeeming ? '加入中...' : '加入群聊' }}
-                  </button>
-                </div>
-              </section>
-            </AccountModalShell>
-
-            <AccountModalShell
-              v-if="groupModalVisible"
-              title="创建多人群聊"
-              modal-class="group-modal"
-              body-class="group-modal-body"
-              @close="closeGroupModal"
-            >
-                  <section class="friend-modal-section">
-                    <div class="friend-modal-title-row">
-                      <h4>群聊信息</h4>
-                      <span class="friend-muted-text">{{ selectedGroupFriendIds.length + 1 }} / 4 人</span>
-                    </div>
-                    <div class="group-modal-field">
-                      <span>群聊名称</span>
-                      <input
-                        v-model.trim="groupTitle"
-                        type="text"
-                        maxlength="40"
-                        placeholder="可选，留空会自动生成"
-                      />
-                    </div>
-                    <div class="friend-muted-text">
-                      创建后会自动把已选好友加入群聊，并跳转到 discussion 页面。
-                    </div>
-                    <div class="group-modal-actions">
-                      <button
-                        type="button"
-                        class="friend-secondary-btn"
-                        @click="closeGroupModal"
-                      >
-                        取消
-                      </button>
-                      <button
-                        type="button"
-                        class="friend-primary-btn"
-                        :disabled="groupCreating || !selectedGroupFriendIds.length"
-                        @click="createGroupDiscussion"
-                      >
-                        {{ groupCreating ? '创建中...' : '立即拉群' }}
-                      </button>
-                    </div>
-                  </section>
-
-                  <section class="friend-modal-section">
-                    <div class="friend-modal-title-row">
-                      <h4>选择好友</h4>
-                      <span class="friend-muted-text">可多选</span>
-                    </div>
-                    <div v-if="friendsLoading" class="friend-muted-text">好友列表加载中...</div>
-                    <div v-else-if="!friends.length" class="friend-muted-text">暂无好友，先添加好友后再拉群</div>
-                    <div v-else class="group-friend-picker-list">
-                      <label
-                        v-for="friend in friends"
-                        :key="`group-friend-${friend.id}`"
-                        class="group-friend-picker-item"
-                        :class="{ active: selectedGroupFriendIds.includes(friend.id) }"
-                      >
-                        <div class="group-friend-picker-main">
-                          <AccountUserIdentity
-                            size="sm"
-                            :avatar-url="getAvatarUrl(friend.avatar_url)"
-                            :avatar-alt="friend.username"
-                            :name="friend.username"
-                            :subtitle="friend.email || '未设置邮箱'"
-                            @avatar-error="handleAvatarError"
-                          />
-                        </div>
-                        <input
-                          type="checkbox"
-                          :checked="selectedGroupFriendIds.includes(friend.id)"
-                          @change="toggleGroupFriend(friend.id)"
-                        />
-                      </label>
-                    </div>
-                  </section>
-            </AccountModalShell>
           </div>
         </div>
 
@@ -671,10 +537,6 @@ const {
   friends,
   friendsLoading,
   friendModalVisible,
-  groupModalVisible,
-  groupInviteModalVisible,
-  groupTitle,
-  selectedGroupFriendIds,
   friendSearchKeyword,
   friendSearching,
   friendSearchResults,
@@ -684,32 +546,19 @@ const {
   generatedInviteLink,
   inviteCodeInput,
   inviteRedeeming,
-  groupInviteInput,
-  groupInviteRedeeming,
   friendRequestsLoading,
   incomingRequests,
   outgoingRequests,
-  groupCreating,
   openFriendModal,
   closeFriendModal,
-  openGroupInviteModal,
-  closeGroupInviteModal,
-  openGroupModal,
-  closeGroupModal,
-  toggleGroupFriend,
   searchFriendUsers,
   sendFriendRequestByUser,
   respondFriendRequest,
   generateFriendInvite,
   copyInviteLink,
-  redeemGroupInvite,
-  redeemFriendInvite,
-  isOpeningFriendChat,
-  createGroupDiscussion,
-  openFriendDiscussion
+  redeemFriendInvite
 } = useAccountFriends({
   route,
-  router,
   isLoggedIn,
   notificationStore,
   openLoginModal

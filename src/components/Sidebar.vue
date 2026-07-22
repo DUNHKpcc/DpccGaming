@@ -148,7 +148,6 @@ import { useModalStore } from '../stores/modal'
 import { useThemeStore } from '../stores/theme'
 import { gsap } from 'gsap'
 import { getAvatarUrl, handleAvatarError } from '../utils/avatar'
-import { prefetchBlueprintMode } from '../utils/blueprintAsync'
 
 const authStore = useAuthStore()
 const modalStore = useModalStore()
@@ -178,18 +177,6 @@ const navItems = ref([
     path: '/games',
     icon: 'fa fa-laptop',
     description: '浏览所有游戏，发现有趣的HTML5游戏'
-  },
-  {
-    name: '蓝图模式',
-    path: '/blueprint',
-    icon: 'fa fa-diagram-project',
-    description: '用节点式逻辑快速搭建玩法蓝图'
-  },
-  {
-    name: '团队讨论',
-    path: '/discussion',
-    icon: 'fa fa-comments',
-    description: '进入多人讨论房间，围绕当前游戏协作交流'
   },
   {
     name: '账户详情',
@@ -317,15 +304,8 @@ const handleNetworkOffline = () => {
   clearUnreadPolling()
 }
 
-const handleNavItemIntent = (item) => {
-  if (item?.path === '/blueprint') {
-    prefetchBlueprintMode()
-  }
-}
-
 // GSAP动画函数
 const expandSidebar = (item, index) => {
-  handleNavItemIntent(item)
   currentDetails.value = item
   isExpanded.value = true
   

@@ -624,49 +624,12 @@
   border: 1px solid var(--account-recent-border);
   border-radius: 5px;
   padding: 0.55rem 0.65rem;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.friend-row:hover {
-  background: color-mix(in srgb, var(--account-card-bg-hover) 88%, var(--account-icon-bg) 12%);
-  border-color: color-mix(in srgb, var(--account-icon-bg) 50%, var(--account-recent-border) 50%);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--account-icon-bg) 24%, transparent);
-}
-
-.friend-row:hover .friend-chat-indicator {
-  color: var(--account-icon-text);
-  background: color-mix(in srgb, var(--account-icon-bg) 24%, transparent);
-}
-
-.friend-row:focus-visible {
-  outline: 2px solid var(--account-icon-bg);
-  outline-offset: 1px;
-}
-
-.friend-row.is-opening {
-  opacity: 0.78;
-  pointer-events: none;
 }
 
 .profile-name-row {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-}
-
-.friend-chat-indicator {
-  flex-shrink: 0;
-  width: 1.7rem;
-  height: 1.7rem;
-  border-radius: 999px;
-  border: 1px solid var(--account-recent-border);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--account-text-soft);
-  font-size: 0.78rem;
-  background: color-mix(in srgb, var(--account-card-bg) 65%, transparent);
 }
 
 .widget-notifications :deep(.notifications-section) {
@@ -802,109 +765,6 @@
   color: var(--account-text-soft);
 }
 
-.group-modal {
-  width: min(760px, 96vw);
-}
-
-.group-invite-modal {
-  width: min(520px, 94vw);
-}
-
-.group-invite-modal-body {
-  grid-template-columns: minmax(0, 1fr);
-  align-items: stretch;
-}
-
-.group-invite-redeem-row {
-  align-items: stretch;
-}
-
-.group-invite-redeem-row input {
-  min-width: 0;
-}
-
-.group-modal-body {
-  grid-template-columns: 0.92fr 1.4fr;
-  align-items: start;
-}
-
-.group-modal-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.group-modal-field span {
-  font-size: 0.76rem;
-  color: var(--account-text-soft);
-}
-
-.group-modal-field input {
-  width: 100%;
-  min-width: 0;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid var(--account-recent-border);
-  background: var(--account-card-bg);
-  color: var(--account-text);
-  padding: 0 0.65rem;
-  font-size: 0.82rem;
-}
-
-.group-modal-actions {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.45rem;
-}
-
-.group-friend-picker-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.38rem;
-  min-height: 0;
-  max-height: 360px;
-  overflow: auto;
-  padding-right: 0.2rem;
-}
-
-.group-friend-picker-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.55rem;
-  padding: 0.48rem 0.6rem;
-  border-radius: 7px;
-  border: 1px solid var(--account-recent-border);
-  background: var(--account-card-bg);
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-}
-
-.group-friend-picker-item:hover {
-  background: color-mix(in srgb, var(--account-card-bg-hover) 88%, var(--account-icon-bg) 12%);
-}
-
-.group-friend-picker-item.active {
-  border-color: color-mix(in srgb, var(--account-icon-bg) 55%, var(--account-recent-border) 45%);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--account-icon-bg) 20%, transparent);
-}
-
-.group-friend-picker-main {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  flex: 1;
-}
-
-.group-friend-picker-item input {
-  margin-left: auto;
-  flex-shrink: 0;
-  accent-color: var(--account-icon-text);
-}
-
 @media (max-width: 1280px) {
   .account-dashboard {
     grid-template-columns: 1fr 1fr;
@@ -931,13 +791,6 @@
     grid-row: 3 / 4;
   }
 
-  .group-modal-body {
-    grid-template-columns: 1fr;
-  }
-
-  .group-friend-picker-list {
-    max-height: 300px;
-  }
 }
 
 @media (max-width: 768px) {

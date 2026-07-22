@@ -434,8 +434,8 @@ const displayNotificationText = (notification) => {
 }
 
 const shouldShowPrimaryAction = (notification) => {
-  if (isFriendRequestNotification(notification)) return false
-  return Boolean(notification?.related_game_id || isDiscussionNotification(notification))
+  if (isFriendRequestNotification(notification) || isDiscussionNotification(notification)) return false
+  return Boolean(notification?.related_game_id)
 }
 
 const hasFriendRequestActions = (notification) => {
@@ -486,11 +486,8 @@ const handleNotificationClick = async (notification, event) => {
   await markAsRead(notification)
 
   if (isDiscussionNotification(notification)) {
-    const roomId = extractDiscussionRoomId(notification.content)
-    if (roomId) {
-      router.push(`/discussion/${roomId}`)
-      return
-    }
+    notificationStore.warning('功能已停用', '讨论页面当前不可用')
+    return
   }
 
   if (notification.type === 'comment_reply') {
@@ -555,12 +552,10 @@ const getActionText = (type) => {
 }
 
 const getNotificationActionIcon = (notification) => {
-  if (isDiscussionNotification(notification)) return 'fa fa-comments'
   return getActionIcon(notification.type)
 }
 
 const getNotificationActionText = (notification) => {
-  if (isDiscussionNotification(notification)) return '进入讨论'
   return getActionText(notification.type)
 }
 
