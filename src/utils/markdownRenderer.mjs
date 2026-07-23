@@ -56,6 +56,28 @@ const normalizeBilibiliUrl = (url = '') => {
   return trimmed
 }
 
+const parseBilibiliStartTime = (rawValue) => {
+  const value = String(rawValue || '').trim()
+  if (!value) return 0
+
+  const pureNumber = Number.parseInt(value, 10)
+  if (!Number.isNaN(pureNumber) && pureNumber >= 0) return pureNumber
+
+  const minuteSecondMatch = value.match(/^(\d+)m(\d+)s$/i)
+  if (minuteSecondMatch) {
+    const [, minutes, seconds] = minuteSecondMatch
+    return (Number(minutes) * 60) + Number(seconds)
+  }
+
+  const minuteMatch = value.match(/^(\d+)m$/i)
+  if (minuteMatch) return Number(minuteMatch[1]) * 60
+
+  const secondMatch = value.match(/^(\d+)s$/i)
+  if (secondMatch) return Number(secondMatch[1])
+
+  return 0
+}
+
 const parseBilibiliEmbed = (rawUrl) => {
   const url = normalizeBilibiliUrl(rawUrl)
   if (!url) return null
@@ -76,7 +98,7 @@ const parseBilibiliEmbed = (rawUrl) => {
     const parsedUrl = new URL(isBareBvid ? `https://www.bilibili.com/video/${url}` : url)
     const pageParam = parseInt(parsedUrl.searchParams.get('p') || parsedUrl.searchParams.get('page'), 10)
     if (Number.isFinite(pageParam) && pageParam > 0) page = pageParam
-    const tParam = parseInt(parsedUrl.searchParams.get('t'), 10)
+    const tParam = parseBilibiliStartTime(parsedUrl.searchParams.get('t'))
     if (Number.isFinite(tParam) && tParam > 0) startTime = tParam
   } catch {
     // Malformed query — fall back to defaults.
