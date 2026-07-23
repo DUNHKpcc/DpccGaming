@@ -44,11 +44,20 @@ export const renderInlineMarkdown = (text = '', options = {}) => {
     ))
 }
 
-const BILIBILI_LINK_RE = /^\s*\[([^\]]*)\]\((https?:\/\/(?:www\.|m\.)?bilibili\.com\/video\/[^)\s]+)\)\s*$/
-const BILIBILI_URL_RE = /^\s*(https?:\/\/(?:www\.|m\.)?bilibili\.com\/video\/\S+|BV[0-9A-Za-z]{10})\s*$/
+const BILIBILI_LINK_RE = /^\s*\[([^\]]*)\]\(([^)\s]+)\)\s*$/
+const BILIBILI_URL_RE = /^\s*(?:(?:https?:)?\/\/(?:www\.|m\.)?bilibili\.com\/video\/\S+|(?:www\.|m\.)?bilibili\.com\/video\/\S+|BV[0-9A-Za-z]{10})\s*$/
+
+const normalizeBilibiliUrl = (url = '') => {
+  const trimmed = String(url || '').trim()
+  if (!trimmed) return ''
+
+  if (/^\/\//.test(trimmed)) return `https:${trimmed}`
+  if (/^(?:www\.|m\.)?bilibili\.com\//i.test(trimmed)) return `https://${trimmed}`
+  return trimmed
+}
 
 const parseBilibiliEmbed = (rawUrl) => {
-  const url = String(rawUrl || '').trim()
+  const url = normalizeBilibiliUrl(rawUrl)
   if (!url) return null
 
   const isBilibiliPage = /^https?:\/\/(?:www\.|m\.)?bilibili\.com\/video\//i.test(url)
