@@ -19,16 +19,11 @@
               </span>
             </a>
 
-            <a :href="switchDownload.href" class="dl-switch-download" target="_blank" rel="noopener noreferrer">
-              <span class="dl-switch-download-icon" aria-hidden="true">
-                <i :class="switchDownload.icon"></i>
-              </span>
-              <span>
-                <strong>下载 DPCC SWITCH</strong>
-                <small>{{ switchDownload.caption }}</small>
-              </span>
-            </a>
           </div>
+          <a :href="MICROSOFT_STORE_URL" class="dl-microsoft-store-link" target="_blank" rel="noopener noreferrer">
+            <img src="/microsoft-store-logo.png" alt="Microsoft Store" />
+            <span>要不要试试微软官方商店下载？PccAgent 已上架 Microsoft Store</span>
+          </a>
           <a class="dl-all-link" href="#all-downloads">查看全部下载</a>
         </div>
 
@@ -330,6 +325,7 @@ import BrandRevealSection from '../components/BrandRevealSection.vue'
 import Footer from '../components/Footer.vue'
 
 const DOWNLOAD_RELEASE_URL = 'https://github.com/DUNHKpcc/dpcc-harness/releases/tag/v2.1.1'
+const MICROSOFT_STORE_URL = 'https://apps.microsoft.com/detail/9pf5ff13cbhp?hl=zh-CN&gl=CN'
 const DOWNLOAD_LINKS = {
   macArm: 'https://dpccgaming.xyz/downloads/harnss/updates/PccAgent-2.1.1-mac-arm64.dmg',
   windowsX64: 'https://dpccgaming.xyz/downloads/harnss/updates/PccAgent-2.1.1-windows-x64-setup.exe'
@@ -379,32 +375,6 @@ const getClientPlatform = () => {
 const primaryDownload = computed(() => {
   const platform = getClientPlatform()
   return PRIMARY_DOWNLOAD_OPTIONS[platform] || PRIMARY_DOWNLOAD_OPTIONS.fallback
-})
-
-const switchDownload = computed(() => {
-  const platform = getClientPlatform()
-
-  if (platform === 'windows') {
-    return {
-      href: SWITCH_DOWNLOAD_LINKS.windows,
-      icon: 'fa-brands fa-windows',
-      caption: '适用于 Windows · Setup'
-    }
-  }
-
-  if (platform === 'mac') {
-    return {
-      href: SWITCH_DOWNLOAD_LINKS.macos,
-      icon: 'fa-brands fa-apple',
-      caption: '适用于 macOS ARM · DMG'
-    }
-  }
-
-  return {
-    href: SWITCH_DOWNLOAD_LINKS.official,
-    icon: 'fa-brands fa-github',
-    caption: '选择适合你系统的版本'
-  }
 })
 
 onMounted(() => {
@@ -480,8 +450,7 @@ body.dl-download-page-active .main-content[style] {
   gap: 12px;
 }
 
-.dl-primary-download,
-.dl-switch-download {
+.dl-primary-download {
   display: inline-flex;
   align-items: center;
   gap: 14px;
@@ -497,14 +466,12 @@ body.dl-download-page-active .main-content[style] {
   transition: transform 0.2s ease, background-color 0.2s ease;
 }
 
-.dl-primary-download:hover,
-.dl-switch-download:hover {
+.dl-primary-download:hover {
   transform: translateY(-2px);
   background: #242424;
 }
 
-.dl-primary-download-icon,
-.dl-switch-download-icon {
+.dl-primary-download-icon {
   width: 36px;
   height: 36px;
   flex: 0 0 36px;
@@ -515,21 +482,18 @@ body.dl-download-page-active .main-content[style] {
   line-height: 1;
 }
 
-.dl-primary-download-icon i,
-.dl-switch-download-icon i {
+.dl-primary-download-icon i {
   line-height: 1;
 }
 
-.dl-primary-download span:last-child,
-.dl-switch-download span:last-child {
+.dl-primary-download span:last-child {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
 
-.dl-primary-download strong,
-.dl-switch-download strong {
+.dl-primary-download strong {
   display: block;
   overflow: hidden;
   font-size: 15px;
@@ -538,14 +502,34 @@ body.dl-download-page-active .main-content[style] {
   white-space: nowrap;
 }
 
-.dl-primary-download small,
-.dl-switch-download small {
+.dl-primary-download small {
   display: block;
   overflow: hidden;
   color: rgba(255, 255, 255, 0.68);
   font-size: 12.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dl-microsoft-store-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 14px;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.dl-microsoft-store-link img {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+.dl-microsoft-store-link:hover {
+  color: #000;
 }
 
 .dl-all-link {
@@ -1228,8 +1212,7 @@ body.dl-download-page-active .main-content[style] {
     font-size: 16px;
   }
 
-  .dl-primary-download,
-  .dl-switch-download {
+  .dl-primary-download {
     width: 100%;
   }
 

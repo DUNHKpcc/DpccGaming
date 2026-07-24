@@ -237,6 +237,10 @@
 }
 
 .account-category-filter {
+  position: absolute;
+  top: -3.65rem;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -244,7 +248,7 @@
   max-width: 100%;
   gap: 0.55rem;
   min-height: 2.65rem;
-  margin: 0 0 0.45rem;
+  margin: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -253,10 +257,6 @@
 
 .account-category-filter::-webkit-scrollbar {
   display: none;
-}
-
-.account-category-filter + .tier-control-bar {
-  margin-top: 0;
 }
 
 .account-category-button {
@@ -955,6 +955,16 @@
 
 }
 
+@media (min-width: 861px) {
+  .tier-scroll-grid {
+    padding-left: 0.72rem;
+  }
+
+  .tier-scroll-grid .plan-card {
+    scroll-margin-inline-start: 0.72rem;
+  }
+}
+
 @media (max-height: 760px) and (min-width: 861px) {
   .payment-page {
     --payment-plan-card-height: 20.5rem;
@@ -1027,6 +1037,8 @@
   }
 
   .account-category-filter {
+    position: static;
+    margin: 0 0 0.45rem;
     justify-content: flex-start;
     padding: 0.1rem 0 0.35rem;
   }

@@ -712,18 +712,6 @@
   border-collapse: collapse;
 }
 
-@media (min-width: 1024px) {
-  .docs-page .content-wrapper {
-    padding-left: 100px;
-  }
-}
-
-@media (min-width: 1536px) {
-  .docs-page .content-wrapper {
-    padding-left: 110px;
-  }
-}
-
 @media (max-width: 1279px) {
   .docs-shell {
     grid-template-columns: 250px minmax(0, 1fr);

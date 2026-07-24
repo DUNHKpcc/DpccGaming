@@ -99,7 +99,8 @@ const routes = [
   {
     path: '/aidocs',
     name: 'AiDocs',
-    component: DocsPlaceholder
+    component: DocsPlaceholder,
+    meta: { hideSidebar: true }
   },
   {
     path: '/docs',
